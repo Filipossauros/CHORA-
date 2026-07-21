@@ -1,0 +1,509 @@
+# Gerado por pnpm docs — não editar à mão.
+openapi: 3.1.0
+info:
+  title: CHORA+ API
+  version: 1.0.0
+  description: API REST do CHORA+ — controlo de horas e registo de atividades. Erros em application/problem+json (ADR-06).
+servers:
+  -
+    url: "http://localhost:7071"
+    description: Desenvolvimento local
+tags:
+  -
+    name: Contratos
+  -
+    name: Registos de tempo
+  -
+    name: Relatórios
+  -
+    name: Alertas
+  -
+    name: Auditoria
+paths:
+  /api/v1/contratos:
+    get:
+      summary: Lista contratos
+      tags:
+        - Contratos
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: estado
+          in: query
+          schema:
+            $ref: "#/components/schemas/EstadoContrato"
+        -
+          name: numero
+          in: query
+          schema:
+            type: string
+        -
+          name: gestorId
+          in: query
+          schema:
+            type: string
+        -
+          name: pagina
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        -
+          name: tamanho
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        200:
+          description: Página de contratos
+        401:
+          description: Não autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+    post:
+      summary: Cria contrato
+      tags:
+        - Contratos
+      security:
+        -
+          bearerAuth: []
+      responses:
+        201:
+          description: Contrato criado
+        403:
+          description: Papel insuficiente
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+        422:
+          description: Violação de regra
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  /api/v1/contratos/{id}:
+    get:
+      summary: Obtém contrato
+      tags:
+        - Contratos
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Contrato
+        404:
+          description: Não encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  /api/v1/contratos/{id}/resumo-execucao:
+    get:
+      summary: Resumo de execução física e financeira
+      tags:
+        - Contratos
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Resumo agregado
+  /api/v1/contratos/{id}/estado:
+    post:
+      summary: Transição de estado do contrato
+      tags:
+        - Contratos
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Estado atualizado
+        409:
+          description: Transição inválida
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  /api/v1/contratos/{id}/excecoes:
+    post:
+      summary: Regista exceção fundamentada a limite legal
+      tags:
+        - Contratos
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        201:
+          description: Exceção registada
+        403:
+          description: Papel insuficiente
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  /api/v1/registos-tempo:
+    get:
+      summary: Lista registos de tempo
+      tags:
+        - Registos de tempo
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: contratoId
+          in: query
+          schema:
+            type: string
+        -
+          name: projetoId
+          in: query
+          schema:
+            type: string
+        -
+          name: recursoId
+          in: query
+          schema:
+            type: string
+        -
+          name: estado
+          in: query
+          schema:
+            $ref: "#/components/schemas/EstadoRegistoTempo"
+        -
+          name: de
+          in: query
+          schema:
+            type: string
+            format: date
+        -
+          name: ate
+          in: query
+          schema:
+            type: string
+            format: date
+        -
+          name: pagina
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        -
+          name: tamanho
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        200:
+          description: Página de registos
+    post:
+      summary: Cria registo (RASCUNHO)
+      tags:
+        - Registos de tempo
+      security:
+        -
+          bearerAuth: []
+      responses:
+        201:
+          description: Registo criado
+        422:
+          description: Violação de regra
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  /api/v1/registos-tempo/{id}/submeter:
+    post:
+      summary: Submete registo
+      tags:
+        - Registos de tempo
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Registo submetido
+  /api/v1/registos-tempo/{id}/anular:
+    post:
+      summary: "Anula registo (lógica, com motivo)"
+      tags:
+        - Registos de tempo
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Registo anulado
+        422:
+          description: Violação de regra
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  "/api/v1/registos-tempo:aprovar":
+    post:
+      summary: Aprova registos em lote
+      tags:
+        - Registos de tempo
+      security:
+        -
+          bearerAuth: []
+      responses:
+        200:
+          description: Resultado por item
+        403:
+          description: Papel insuficiente
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  "/api/v1/registos-tempo:rejeitar":
+    post:
+      summary: Rejeita registos em lote
+      tags:
+        - Registos de tempo
+      security:
+        -
+          bearerAuth: []
+      responses:
+        200:
+          description: Resultado por item
+  /api/v1/registos-tempo/meus:
+    get:
+      summary: Os meus registos (RN-407)
+      tags:
+        - Registos de tempo
+      security:
+        -
+          bearerAuth: []
+      responses:
+        200:
+          description: Lista
+  /api/v1/relatorios/horas-por-perfil:
+    get:
+      summary: Horas por perfil
+      tags:
+        - Relatórios
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: contratoId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Relatório
+  /api/v1/relatorios/execucao-financeira:
+    get:
+      summary: Execução financeira
+      tags:
+        - Relatórios
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: contratoId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Relatório
+  /api/v1/alertas:
+    get:
+      summary: Lista alertas
+      tags:
+        - Alertas
+      security:
+        -
+          bearerAuth: []
+      responses:
+        200:
+          description: Lista de alertas
+  "/api/v1/jobs/alertas:executar":
+    post:
+      summary: Executa o job de alertas (apenas dev)
+      tags:
+        - Alertas
+      security:
+        -
+          bearerAuth: []
+      responses:
+        200:
+          description: Alertas gerados
+  /api/v1/auditoria:
+    get:
+      summary: Consulta a trilha de auditoria
+      tags:
+        - Auditoria
+      security:
+        -
+          bearerAuth: []
+      responses:
+        200:
+          description: Eventos de auditoria
+        403:
+          description: Papel insuficiente
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token via SDK.getAccessToken() do Azure DevOps.
+  schemas:
+    EstadoContrato:
+      type: string
+      enum:
+        - EM_PREPARACAO
+        - AGUARDA_VISTO
+        - EM_VIGOR
+        - SUSPENSO
+        - TERMINADO
+        - RESOLVIDO
+        - CADUCADO
+        - REVOGADO
+    EstadoRegistoTempo:
+      type: string
+      enum:
+        - RASCUNHO
+        - SUBMETIDO
+        - APROVADO
+        - REJEITADO
+        - ANULADO
+    EstadoFatura:
+      type: string
+      enum:
+        - RECEBIDA
+        - EM_CONFERENCIA
+        - VALIDADA
+        - INVALIDADA
+        - DEVOLVIDA
+        - PAGA
+    TipoDotacao:
+      type: string
+      enum:
+        - HORAS_BASE
+        - BOLSA_VALOR
+        - TRABALHOS_COMPLEMENTARES
+    TipoProcedimento:
+      type: string
+      enum:
+        - AJUSTE_DIRETO
+        - CONSULTA_PREVIA
+        - CONCURSO_PUBLICO
+        - CONCURSO_LIMITADO
+        - ACORDO_QUADRO
+        - SISTEMA_AQUISICAO_DINAMICA
+    TipoAlteracao:
+      type: string
+      enum:
+        - PRORROGACAO
+        - SUSPENSAO
+        - SERVICOS_COMPLEMENTARES
+        - REVISAO_PRECOS
+        - CESSAO_POSICAO_CONTRATUAL
+        - SUBSTITUICAO_GESTOR
+        - REFORCO_BOLSA_VALOR
+        - OUTRA
+    UnidadeMedida:
+      type: string
+      enum:
+        - HORA
+        - DIA_HOMEM
+        - FTE_MES
+    PapelAplicacional:
+      type: string
+      enum:
+        - GESTOR_CONTRATO
+        - GESTOR_TECNICO
+        - ELEMENTO_EQUIPA_TECNICA
+    Problema:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        regra:
+          type: string
+        requisito:
+          type: string
+        base:
+          type: string
+        dados:
+          type: object
+          additionalProperties: {}
+        excecaoFundamentavel:
+          type: boolean
+      required:
+        - type
+        - title
+        - status
+        - detail

@@ -1,0 +1,48 @@
+{
+  "manifestVersion": 1,
+  "id": "chora-plus",
+  "version": "1.0.0",
+  "name": "CHORA+",
+  "publisher": "spms",
+  "description": "Controlo de horas e registo de atividades para contratos públicos de outsourcing.",
+  "categories": ["Azure Boards"],
+  "targets": [{ "id": "Microsoft.VisualStudio.Services" }],
+  "scopes": ["vso.work", "vso.project", "vso.profile"],
+  "contributions": [
+    {
+      "id": "registo-tempo-work-item",
+      "type": "ms.vss-work-web.work-item-form-page",
+      "description": "Separador no work item para registo de tempo contextualizado.",
+      "targets": ["ms.vss-work-web.work-item-form"],
+      "properties": {
+        "name": "CHORA+ Registo de tempo",
+        "uri": "static/registo-tempo.html"
+      }
+    },
+    {
+      "id": "chora-hub-group",
+      "type": "ms.vss-web.hub-group",
+      "description": "Grupo de navegação CHORA+.",
+      "targets": ["ms.vss-web.project-hub-groups-collection"],
+      "properties": { "name": "CHORA+", "order": 100 }
+    },
+    {
+      "id": "hub-aprovacoes",
+      "type": "ms.vss-web.hub",
+      "description": "Listagem e aprovação de registos.",
+      "targets": ["chora-hub-group"],
+      "properties": { "name": "Aprovações", "order": 10, "uri": "static/aprovacoes.html" }
+    },
+    {
+      "id": "hub-area-gestor",
+      "type": "ms.vss-web.hub",
+      "description": "Área do Gestor do Contrato.",
+      "targets": ["chora-hub-group"],
+      "properties": { "name": "Área do Gestor", "order": 20, "uri": "static/area-gestor.html" }
+    }
+  ],
+  "files": [
+    { "path": "static", "addressable": true },
+    { "path": "dist", "addressable": true }
+  ]
+}

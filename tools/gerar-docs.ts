@@ -1,0 +1,120 @@
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { CATALOGO_REGRAS, FAMILIAS_REGRAS } from '../packages/domain/src/index.js';
+import { gerarOpenApi } from '../packages/api/src/openapi/documento.js';
+
+/**
+ * `pnpm docs` — regenera a documentação derivada do código (secção 4.3):
+ * catalogo-regras.md, modelo-dados.md e openapi.yaml.
+ */
+
+const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
+const docs = join(raiz, 'docs');
+mkdirSync(join(docs, 'adr'), { recursive: true });
+
+// --- catalogo-regras.md (gerado a partir do código) ---------------------------
+function gerarCatalogo(): string {
+  const linhas: string[] = [
+    '# Catálogo de regras de negócio',
+    '',
+    '> Documento **gerado** a partir de `packages/domain/src/rules/` por `pnpm docs`. Não editar à mão.',
+    '',
+    `Total de regras: **${CATALOGO_REGRAS.length}**.`,
+    '',
+  ];
+  for (const [familia, regras] of Object.entries(FAMILIAS_REGRAS)) {
+    linhas.push(`## ${familia}`, '');
+    linhas.push('| Código | Tipo | Req. | Exceção fundamentável | Descrição | Base legal / nota |');
+    linhas.push('|---|---|---|---|---|---|');
+    for (const r of regras) {
+      const tipo = r.bloqueia === false ? 'aviso' : 'bloqueio';
+      const exc = r.excecaoFundamentavel ? 'sim' : 'não';
+      linhas.push(`| ${r.codigo} | ${tipo} | ${r.requisito} | ${exc} | ${r.descricao} | ${r.base} |`);
+    }
+    linhas.push('');
+  }
+  return linhas.join('\n');
+}
+
+// --- modelo-dados.md ----------------------------------------------------------
+function gerarModeloDados(): string {
+  return `# Modelo de dados (desenho MongoDB para o desenvolvimento final)
+
+> Documento de referência para a implementação da camada de persistência
+> (ADR-04). O protótipo **não** implementa MongoDB; as decisões de *embedding*
+> vs. referência e os índices estão tomados.
+
+## Coleções e índices
+
+| Coleção | Documentos embebidos | Referências | Índices |
+|---|---|---|---|
+| \`procedimentos\` | \`lotes[]\` | \`acordoQuadroId\` | \`{numero:1}\` único |
+| \`contratos\` | \`dotacoes[]\`, \`perfis[]\`, \`gestores[]\`, \`excecoes[]\`, \`portariaExtensaoEncargos\` | \`loteId\` | \`{numero:1}\` único; \`{estado:1, dataTerminoContratual:1}\`; \`{"gestores.utilizadorId":1}\` |
+| \`alteracoes\` | — | \`contratoId\` | \`{contratoId:1, dataEfeito:-1}\` |
+| \`afetacoes\` | — | \`contratoId\`, \`perfilId\`, \`recursoId\` | \`{contratoId:1, ativa:1}\`; \`{recursoId:1, ativa:1}\` |
+| \`registosTempo\` | — | \`afetacaoId\` (+ desnormalizações) | \`{recursoId:1, data:-1}\`; \`{contratoId:1, estado:1, data:-1}\`; \`{workItemId:1}\`; \`{projetoId:1, data:-1}\` |
+| \`faturas\` | \`linhas[]\`, \`deducoes[]\` | \`contratoId\`, \`compromissoId\` | \`{contratoId:1, dataRececao:-1}\`; \`{numero:1, contratoId:1}\` único |
+| \`documentosHabilitacao\` | — | \`contratoId\` | \`{validoAte:1}\` |
+| \`alertas\` | — | \`contratoId\` | \`{destinatarioId:1, lidoEm:1}\` |
+| \`eventosAuditoria\` | — | — | \`{entidade:1, entidadeId:1, ocorridoEm:-1}\`; \`{utilizadorId:1, ocorridoEm:-1}\`; TTL **não aplicar** |
+
+## Mapeamento de tipos para BSON
+
+| Tipo do domínio | BSON | Justificação |
+|---|---|---|
+| \`InstanteISO\` | \`Date\` (UTC) | Ordenação e comparação nativas; é um instante absoluto. |
+| \`DataISO\` | \`string\` \`'YYYY-MM-DD'\` | Guardar como \`Date\` reintroduziria ambiguidade de fuso. A ordenação lexicográfica coincide com a cronológica. |
+| \`MesISO\` | \`string\` \`'YYYY-MM'\` | Idem. |
+| \`Cent\`, \`Minutos\`, \`AnoCivil\` | \`int32\` / \`long\` | Nunca \`double\`. |
+
+\`registosTempo\` é a coleção crítica de volume (2 M/ano, 10 M acumulados):
+manter o documento estreito, sem *arrays*, e servir relatórios por *aggregation
+pipeline*. Recomenda-se um campo \`mes: MesISO\` desnormalizado com índice
+\`{contratoId:1, mes:1}\`.
+`;
+}
+
+// --- openapi.yaml (mini-emissor YAML) -----------------------------------------
+function paraYaml(valor: unknown, indent = 0): string {
+  const pad = '  '.repeat(indent);
+  if (valor === null || valor === undefined) return 'null';
+  if (typeof valor === 'string') {
+    return /[:#{}\[\],&*!|>'"%@`\n]/.test(valor) || valor === '' ? JSON.stringify(valor) : valor;
+  }
+  if (typeof valor === 'number' || typeof valor === 'boolean') return String(valor);
+  if (Array.isArray(valor)) {
+    if (valor.length === 0) return '[]';
+    return valor
+      .map((item) => {
+        const s = paraYaml(item, indent + 1);
+        if (typeof item === 'object' && item !== null) {
+          return `${pad}-\n${s}`;
+        }
+        return `${pad}- ${s}`;
+      })
+      .join('\n');
+  }
+  const entradas = Object.entries(valor as Record<string, unknown>);
+  if (entradas.length === 0) return '{}';
+  return entradas
+    .map(([chave, v]) => {
+      const chaveSegura = /[:#\s]/.test(chave) ? JSON.stringify(chave) : chave;
+      if (typeof v === 'object' && v !== null) {
+        const filho = paraYaml(v, indent + 1);
+        if (Array.isArray(v) && v.length === 0) return `${pad}${chaveSegura}: []`;
+        if (!Array.isArray(v) && Object.keys(v).length === 0) return `${pad}${chaveSegura}: {}`;
+        return `${pad}${chaveSegura}:\n${filho}`;
+      }
+      return `${pad}${chaveSegura}: ${paraYaml(v, indent + 1)}`;
+    })
+    .join('\n');
+}
+
+const openapi = gerarOpenApi();
+writeFileSync(join(docs, 'catalogo-regras.md'), gerarCatalogo(), 'utf8');
+writeFileSync(join(docs, 'modelo-dados.md'), gerarModeloDados(), 'utf8');
+writeFileSync(join(docs, 'openapi.yaml'), `# Gerado por pnpm docs — não editar à mão.\n${paraYaml(openapi)}\n`, 'utf8');
+
+// eslint-disable-next-line no-console
+console.log(`Documentação gerada em docs/: catalogo-regras.md (${CATALOGO_REGRAS.length} regras), modelo-dados.md, openapi.yaml`);
