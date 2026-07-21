@@ -10,3 +10,4 @@ coverage/
 *.tsbuildinfo
 packages/extension/static/js/
 packages/extension/preview-dist/
+packages/extension/pages-dist/

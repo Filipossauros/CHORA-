@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import type { ClienteApi } from '../../comum/cliente-api.js';
+import type { IClienteApi } from '../../comum/cliente-api.js';
 import { useRemoto } from '../../comum/hooks.js';
 import { BarraConsumo } from '../../comum/componentes.js';
 import { formatarMoeda, formatarPercentagem } from '../../comum/formatacao.js';
@@ -9,7 +9,7 @@ import { formatarMoeda, formatarPercentagem } from '../../comum/formatacao.js';
  * V3 — Área do Gestor do Contrato (secção 10.3). Separadores: ficha, estrutura,
  * execução física, execução financeira, alterações, alertas, relatórios.
  */
-interface Props { cliente: ClienteApi }
+interface Props { cliente: IClienteApi }
 
 interface ResumoExecucao {
   contratoId: string; estado: string;

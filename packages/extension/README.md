@@ -46,6 +46,24 @@ aprovação (RN-407, RN-501). Se a API correr noutro endereço, defina
 > O harness (`preview/`) **não** faz parte da extensão distribuída — serve
 > apenas para validação local.
 
+## Demonstração no GitHub Pages (só browser, sem servidor)
+
+A pasta `pages/` contém uma demonstração **estática**: corre o domínio, os
+serviços e o *seed* inteiramente no browser (o `ClienteMemoria` reencaminha os
+pedidos das vistas para os serviços reais, em memória). As regras `RN-xxx` e a
+autorização por papel são as verdadeiras; os dados reiniciam ao recarregar.
+
+O workflow `.github/workflows/pages.yml` faz o build (`pages:build`) e publica no
+GitHub Pages a cada *push*. Para ativar (uma vez): **Settings → Pages → Build and
+deployment → Source: GitHub Actions**. O URL fica em
+`https://<utilizador>.github.io/<repo>/`.
+
+Build local da demo:
+
+```bash
+pnpm --filter @chora/extension pages:build   # → packages/extension/pages-dist/
+```
+
 ## Build e instalação
 
 ```bash

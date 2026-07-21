@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ClienteApi } from './cliente-api.js';
+import type { IClienteApi } from './cliente-api.js';
 import type { Pagina } from './tipos.js';
 
 /** Estado genérico de carregamento de dados. */
@@ -38,7 +38,7 @@ export interface AfetacaoResumo {
   projetoIds: string[];
 }
 
-export function useAfetacoesAtivas(cliente: ClienteApi, recursoId: string, projetoId?: string) {
+export function useAfetacoesAtivas(cliente: IClienteApi, recursoId: string, projetoId?: string) {
   return useRemoto<Pagina<AfetacaoResumo>>(
     () => cliente.get(`/api/v1/afetacoes?recursoId=${recursoId}&ativa=true${projetoId !== undefined ? `&projetoId=${projetoId}` : ''}`),
     [recursoId, projetoId],

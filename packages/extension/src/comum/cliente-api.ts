@@ -29,7 +29,18 @@ export interface OpcoesCliente {
   projetoId?: string;
 }
 
-export class ClienteApi {
+/**
+ * Superfície do cliente usada pelas vistas. Permite duas implementações: a real
+ * (`ClienteApi`, sobre HTTP) e a estática (`ClienteMemoria`, no browser, para o
+ * GitHub Pages), ambas com o mesmo comportamento de erros `problem+json`.
+ */
+export interface IClienteApi {
+  get<T>(caminho: string): Promise<T>;
+  post<T>(caminho: string, corpo?: unknown): Promise<T>;
+  patch<T>(caminho: string, corpo?: unknown): Promise<T>;
+}
+
+export class ClienteApi implements IClienteApi {
   constructor(private readonly opcoes: OpcoesCliente) {}
 
   private async pedir<T>(metodo: string, caminho: string, corpo?: unknown): Promise<T> {

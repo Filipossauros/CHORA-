@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { RN_405, type TipoDotacao } from '@chora/domain';
-import type { ClienteApi } from '../../comum/cliente-api.js';
+import type { IClienteApi } from '../../comum/cliente-api.js';
 import { ErroApi } from '../../comum/cliente-api.js';
 import { useAfetacoesAtivas, useRemoto } from '../../comum/hooks.js';
 import { EtiquetaEstado, PainelViolacoes, type Violacao } from '../../comum/componentes.js';
@@ -13,7 +13,7 @@ import { formatarDuracao } from '../../comum/formatacao.js';
  * servidor). Lista os registos do próprio utilizador naquele work item.
  */
 interface Props {
-  cliente: ClienteApi;
+  cliente: IClienteApi;
   utilizadorId: string;
   projetoId?: string;
   workItemId: number;

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import type { ClienteApi } from '../../comum/cliente-api.js';
+import type { IClienteApi } from '../../comum/cliente-api.js';
 import { useRemoto } from '../../comum/hooks.js';
 import { EtiquetaEstado } from '../../comum/componentes.js';
 import { formatarDuracao } from '../../comum/formatacao.js';
@@ -9,7 +9,7 @@ import { formatarDuracao } from '../../comum/formatacao.js';
  * V2 — Listagem e aprovação (secção 10.3). Tabela com filtros, seleção múltipla,
  * aprovação/rejeição em lote com relatório de resultado por item.
  */
-interface Props { cliente: ClienteApi }
+interface Props { cliente: IClienteApi }
 
 interface RegistoLido {
   id: string; data: string; duracao: number; estado: string; recursoId: string; perfilId: string; contratoId: string;

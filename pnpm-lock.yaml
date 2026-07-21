@@ -61,6 +61,9 @@ importers:
 
   packages/extension:
     dependencies:
+      '@chora/api':
+        specifier: workspace:*
+        version: link:../api
       '@chora/domain':
         specifier: workspace:*
         version: link:../domain

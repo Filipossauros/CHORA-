@@ -4,6 +4,10 @@
   "description": "CHORA+ — API REST (Fastify) com persistência em memória atrás de interfaces de repositório.",
   "type": "module",
   "main": "./src/server.ts",
+  "exports": {
+    ".": "./src/server.ts",
+    "./nucleo": "./src/nucleo.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",

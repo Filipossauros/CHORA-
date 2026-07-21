@@ -1,18 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ClienteApi } from '../src/comum/cliente-api.js';
+import type { Contexto } from '@chora/api/nucleo';
 import { RegistoTempoPage } from '../src/paineis/registo-tempo/RegistoTempoPage.js';
 import { Aprovacoes } from '../src/hubs/aprovacoes/Aprovacoes.js';
 import { AreaGestor } from '../src/hubs/area-gestor/AreaGestor.js';
+import { ClienteMemoria, obterContexto } from './cliente-memoria.js';
 
 /**
- * Harness de PRÉ-VISUALIZAÇÃO local (não faz parte da extensão distribuída).
- * Substitui o SDK do Azure DevOps por um stub: o token é o próprio X-Dev-User,
- * aceite pelo FakeTokenValidator da API. Permite abrir as três vistas num
- * browser normal, contra a API local (porta 7071) com dados de seed.
+ * Demonstração estática do CHORA+ para GitHub Pages. Corre o domínio, os
+ * serviços e o seed inteiramente no browser — sem servidor e sem rede. As
+ * regras de negócio e a autorização por papel são as reais.
  */
-
-const BASE_API = (globalThis as { CHORA_API_BASE?: string }).CHORA_API_BASE ?? 'http://localhost:7071';
 
 const UTILIZADORES = [
   { id: 'oid-gestor-contrato', rotulo: 'Gestor de Contrato' },
@@ -25,20 +23,22 @@ const VISTAS = ['V1 · Registo de tempo', 'V2 · Aprovações', 'V3 · Área do 
 type Vista = (typeof VISTAS)[number];
 
 function App() {
+  const [ctx, setCtx] = useState<Contexto | undefined>(undefined);
   const [utilizadorId, setUtilizadorId] = useState(UTILIZADORES[0]!.id);
   const [vista, setVista] = useState<Vista>('V2 · Aprovações');
   const [workItemId, setWorkItemId] = useState(1001);
 
-  // Um cliente novo por utilizador: o token (Bearer) é o X-Dev-User.
+  useEffect(() => { void obterContexto().then(setCtx); }, []);
+
   const cliente = useMemo(
-    () => new ClienteApi({ baseUrl: BASE_API, obterToken: async () => utilizadorId, projetoId: 'proj-P1' }),
-    [utilizadorId],
+    () => (ctx === undefined ? undefined : new ClienteMemoria(ctx, utilizadorId)),
+    [ctx, utilizadorId],
   );
 
   return (
     <div style={{ fontFamily: 'Segoe UI, sans-serif' }}>
       <header style={{ background: '#0b3b6f', color: '#fff', padding: '10px 16px', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <strong style={{ fontSize: 18 }}>CHORA+ · pré-visualização local</strong>
+        <strong style={{ fontSize: 18 }}>CHORA+ · demonstração</strong>
         <label>Utilizador{' '}
           <select value={utilizadorId} onChange={(e) => setUtilizadorId(e.target.value)}>
             {UTILIZADORES.map((u) => <option key={u.id} value={u.id}>{u.rotulo}</option>)}
@@ -54,16 +54,26 @@ function App() {
             <input type="number" value={workItemId} onChange={(e) => setWorkItemId(Number(e.target.value))} style={{ width: 80 }} />
           </label>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.8 }}>API: {BASE_API}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.85 }}>em memória · sem servidor</span>
       </header>
 
-      <main style={{ padding: 4 }} key={utilizadorId}>
-        {vista === 'V1 · Registo de tempo' && (
-          <RegistoTempoPage cliente={cliente} utilizadorId={utilizadorId} projetoId="proj-P1" workItemId={workItemId} />
+      <main style={{ padding: 4 }}>
+        {cliente === undefined ? (
+          <p style={{ padding: 16 }}>A preparar dados de demonstração…</p>
+        ) : (
+          <div key={utilizadorId}>
+            {vista === 'V1 · Registo de tempo' && (
+              <RegistoTempoPage cliente={cliente} utilizadorId={utilizadorId} projetoId="proj-P1" workItemId={workItemId} />
+            )}
+            {vista === 'V2 · Aprovações' && <Aprovacoes cliente={cliente} />}
+            {vista === 'V3 · Área do Gestor' && <AreaGestor cliente={cliente} />}
+          </div>
         )}
-        {vista === 'V2 · Aprovações' && <Aprovacoes cliente={cliente} />}
-        {vista === 'V3 · Área do Gestor' && <AreaGestor cliente={cliente} />}
       </main>
+
+      <footer style={{ padding: '8px 16px', fontSize: 12, color: '#555', borderTop: '1px solid #ddd' }}>
+        Protótipo CHORA+ — as regras RN-xxx e a autorização por papel correm no browser. Recarregar a página repõe os dados de seed.
+      </footer>
     </div>
   );
 }
