@@ -12,6 +12,12 @@ export { podeExecutar, temPapelGestao, type Operacao } from './auth/permissoes.j
 export type { ContextoUtilizador } from './auth/token-validator.js';
 export { ServicoRegistosTempo, type NovoRegisto, type ResultadoItem } from './servicos/registos-tempo.js';
 export { ServicoContratos } from './servicos/contratos.js';
+export { ServicoProcedimentos, type NovoProcedimento } from './servicos/procedimentos.js';
+export { ServicoEstrutura } from './servicos/estrutura.js';
+export { ServicoAfetacoes, type NovaAfetacao } from './servicos/afetacoes.js';
+export { ServicoFaturas, gerarFraseEvidencia } from './servicos/faturas.js';
+export { ServicoRecursos, ServicoAcessos } from './servicos/recursos-acessos.js';
+export type { Acesso, RelatorioEvidencia } from './repositorios/memoria/index.js';
 export { JobAlertas, NotifierConsola } from './alertas/job-alertas.js';
 export { paraProblema, ErroProibido, ErroNaoEncontrado, type Problema } from './erros/problema.js';
 export { semear, resumoSeed } from './seed/semear.js';

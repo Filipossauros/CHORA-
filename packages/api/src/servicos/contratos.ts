@@ -59,29 +59,48 @@ export class ServicoContratos {
     const alteracoes = await this.ctx.repos.alteracoes.todos((a) => a.contratoId === id);
     const aprovados = await this.ctx.repos.registosTempo.todos((r) => r.contratoId === id && r.estado === 'APROVADO');
 
-    const execucaoPerfis = perfis.map((p) => {
+    // Saldos por perfil: o foco é gerir horas e valor RESTANTES, não analisar a
+    // execução física dos trabalhos (ver feedback de requisitos R3).
+    const saldosPerfis = perfis.map((p) => {
       const consumo = calcularConsumoPerfil(p, aprovados);
+      const valorPrevisto = valorPrevistoPerfil(p);
       return {
-        perfilId: p.id, nome: p.nome,
-        minutosDisponiveis: consumo.minutosDisponiveis,
+        perfilId: p.id,
+        nome: p.nome,
+        // Horas
+        minutosPrevistos: p.quantidadePrevista,
         minutosConsumidos: consumo.minutosConsumidos,
-        minutosPorTipo: consumo.minutosPorTipo,
-        valorPrevisto: valorPrevistoPerfil(p),
+        minutosRestantes: Math.max(0, p.quantidadePrevista - consumo.minutosConsumidos),
+        // Valor
+        valorPrevisto,
         valorConsumido: consumo.valorConsumido,
-        percentagemHoras: consumo.percentagemHoras,
+        valorRestante: Math.max(0, valorPrevisto - consumo.valorConsumido),
       };
     });
 
+    // Estado do limite legal de trabalhos complementares (RN-301): 50% do valor
+    // inicial do contrato.
+    const acumulados = complementaresAcumulados(alteracoes);
+    const limiteComplementares = Math.floor(contrato.precoContratualInicial * 0.5);
+    const complementares = {
+      acumulados,
+      limite: limiteComplementares,
+      percentagem: percentagemComplementares(contrato, alteracoes),
+      atingido: acumulados >= limiteComplementares,
+      disponivel: Math.max(0, limiteComplementares - acumulados),
+    };
+
     const valorImputadoTotal = aprovados.reduce((s, r) => s + r.valorImputado, 0);
     return {
-      contratoId: id, estado: contrato.estado,
-      precoContratualInicial: contrato.precoContratualInicial,
-      precoContratualAtual: contrato.precoContratualAtual,
+      contratoId: id,
+      estado: contrato.estado,
+      // Labels na UI: "Valor inicial do contrato" / "Valor atual do contrato" (R2).
+      valorInicialContrato: contrato.precoContratualInicial,
+      valorAtualContrato: contrato.precoContratualAtual,
       totalDotacoes: totalDotacoes(dotacoes),
-      complementaresAcumulados: complementaresAcumulados(alteracoes),
-      percentagemComplementares: percentagemComplementares(contrato, alteracoes),
       valorImputadoTotal,
-      execucaoFisica: execucaoPerfis,
+      complementares,
+      saldosPerfis,
     };
   }
 }

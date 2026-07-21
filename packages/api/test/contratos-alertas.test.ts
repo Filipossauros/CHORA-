@@ -22,9 +22,10 @@ describe('contratos', () => {
     const contrato = (await ctx.repos.contratos.todos((c) => c.numero === 'C-2026-001'))[0]!;
     const r = await app.inject({ method: 'GET', url: `/api/v1/contratos/${contrato.id}/resumo-execucao`, headers: comoGestor() });
     expect(r.statusCode).toBe(200);
-    const body = r.json() as { execucaoFisica: unknown[]; precoContratualAtual: number };
-    expect(Array.isArray(body.execucaoFisica)).toBe(true);
-    expect(body.precoContratualAtual).toBeGreaterThan(0);
+    const body = r.json() as { saldosPerfis: unknown[]; valorAtualContrato: number; complementares: { atingido: boolean } };
+    expect(Array.isArray(body.saldosPerfis)).toBe(true);
+    expect(body.valorAtualContrato).toBeGreaterThan(0);
+    expect(typeof body.complementares.atingido).toBe('boolean');
   });
 
   it('elemento não pode criar contrato (403)', async () => {
