@@ -15,29 +15,36 @@ import type {
   RegistoTempo,
 } from '@chora/domain';
 import { RepositorioMemoria } from './repositorio-memoria.js';
+import type { Repository } from '../tipos.js';
 
-/** Conjunto de repositórios da aplicação. */
+export type ContratoProjeto = { id: string; contratoId: string; projetoId: string };
+
+/**
+ * Conjunto de repositórios da aplicação. Depende da interface `Repository<T>`
+ * (ADR-03) — a implementação pode ser em memória (servidor), localStorage
+ * (browser) ou MongoDB (produção) sem tocar em serviços nem rotas.
+ */
 export interface Repositorios {
-  procedimentos: RepositorioMemoria<Procedimento>;
-  lotes: RepositorioMemoria<Lote>;
-  contratos: RepositorioMemoria<Contrato>;
-  dotacoes: RepositorioMemoria<Dotacao>;
-  perfis: RepositorioMemoria<PerfilContratual>;
-  alteracoes: RepositorioMemoria<Alteracao>;
-  recursos: RepositorioMemoria<Recurso>;
-  afetacoes: RepositorioMemoria<Afetacao>;
-  registosTempo: RepositorioMemoria<RegistoTempo>;
-  compromissos: RepositorioMemoria<Compromisso>;
-  faturas: RepositorioMemoria<Fatura>;
-  documentosHabilitacao: RepositorioMemoria<DocumentoHabilitacao>;
-  alertas: RepositorioMemoria<Alerta>;
-  eventosAuditoria: RepositorioMemoria<EventoAuditoria>;
+  procedimentos: Repository<Procedimento>;
+  lotes: Repository<Lote>;
+  contratos: Repository<Contrato>;
+  dotacoes: Repository<Dotacao>;
+  perfis: Repository<PerfilContratual>;
+  alteracoes: Repository<Alteracao>;
+  recursos: Repository<Recurso>;
+  afetacoes: Repository<Afetacao>;
+  registosTempo: Repository<RegistoTempo>;
+  compromissos: Repository<Compromisso>;
+  faturas: Repository<Fatura>;
+  documentosHabilitacao: Repository<DocumentoHabilitacao>;
+  alertas: Repository<Alerta>;
+  eventosAuditoria: Repository<EventoAuditoria>;
   /** Associações N:N contrato↔projeto (RN-103). */
-  contratoProjetos: RepositorioMemoria<{ id: string; contratoId: string; projetoId: string }>;
+  contratoProjetos: Repository<ContratoProjeto>;
   /** Papéis aplicacionais por utilizador (secção 9.3). Gerido em "Gestão de acessos". */
-  acessos: RepositorioMemoria<Acesso>;
+  acessos: Repository<Acesso>;
   /** Relatórios de evidência de decisão de fatura (RN-604), imutáveis. */
-  relatoriosEvidencia: RepositorioMemoria<RelatorioEvidencia>;
+  relatoriosEvidencia: Repository<RelatorioEvidencia>;
 }
 
 /** Relatório de evidência gerado na decisão de uma fatura (RN-604, imutável). */

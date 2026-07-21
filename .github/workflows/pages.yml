@@ -37,11 +37,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm --filter @chora/extension pages:build
+      - run: pnpm --filter @chora/web build
+        env:
+          VITE_BASE: /CHORA-/
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: packages/extension/pages-dist
+          path: packages/web/dist
 
   deploy:
     needs: build

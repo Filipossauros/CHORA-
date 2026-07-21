@@ -4,8 +4,10 @@
  * (GitHub Pages). NÃO importar `server.ts` a partir daqui.
  */
 export { criarContexto, CONFIG_OMISSAO, type Contexto, type Config } from './contexto.js';
-export { criarRepositoriosMemoria, type Repositorios } from './repositorios/memoria/index.js';
+export { criarRepositoriosMemoria, type Repositorios, type ContratoProjeto } from './repositorios/memoria/index.js';
+export { RepositorioMemoria } from './repositorios/memoria/repositorio-memoria.js';
 export { normalizarPaginacao } from './repositorios/tipos.js';
+export type { Repository, Filtro, Ordenacao, Pagina, Paginacao } from './repositorios/tipos.js';
 export { criarGeradorSequencial } from './util/id.js';
 export { FakeTokenValidator, type UtilizadorDev } from './auth/fake-token-validator.js';
 export { podeExecutar, temPapelGestao, type Operacao } from './auth/permissoes.js';
