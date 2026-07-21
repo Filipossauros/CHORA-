@@ -1,0 +1,26 @@
+{
+  "name": "@chora/domain",
+  "version": "1.0.0",
+  "description": "CHORA+ — camada de domínio: entidades, invariantes, máquinas de estado e motor de regras. Puro, sem dependências de framework.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "luxon": "^3.5.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.4.2",
+    "@vitest/coverage-v8": "^2.1.8"
+  }
+}

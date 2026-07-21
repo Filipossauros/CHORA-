@@ -1,0 +1,27 @@
+{
+  "name": "chora-plus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CHORA+ — Solução de Controlo de Horas e Registo de Atividades (extensão Azure DevOps). Protótipo.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:run": "pnpm -r test:run",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "dev": "pnpm --filter @chora/api dev",
+    "seed": "pnpm --filter @chora/api seed",
+    "docs": "tsx tools/gerar-docs.ts",
+    "package:ext": "pnpm --filter @chora/extension package"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

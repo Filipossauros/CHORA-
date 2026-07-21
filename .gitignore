@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+coverage/
+*.vsix
+*.log
+.DS_Store
+.env
+.env.local
+*.tsbuildinfo
+packages/extension/static/js/
