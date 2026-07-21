@@ -9,3 +9,4 @@ coverage/
 .env.local
 *.tsbuildinfo
 packages/extension/static/js/
+packages/extension/preview-dist/

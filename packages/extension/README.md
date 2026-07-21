@@ -20,6 +20,32 @@ tradução de `problem+json`), formatadores (cêntimos→EUR, minutos→`Hh MMm`
 - Sem *Data Storage* do ADO e sem `localStorage` para dados de negócio.
 - Tema do host via tokens CSS, não cores fixas.
 
+## Pré-visualização local no browser (sem Azure DevOps)
+
+Para ver e clicar nas três vistas contra a API local com dados de *seed*, sem
+publicar no Marketplace, use o harness de pré-visualização. Este substitui o SDK
+do Azure DevOps por um stub (o token é o `X-Dev-User`, aceite pelo
+`FakeTokenValidator`) e serve as vistas num browser normal.
+
+Em dois terminais:
+
+```bash
+# Terminal 1 — API com dados de seed (porta 7071)
+pnpm dev
+
+# Terminal 2 — harness de pré-visualização (porta 3000)
+pnpm --filter @chora/extension preview
+```
+
+Abra **http://localhost:3000**. No cabeçalho pode trocar de **utilizador**
+(gestor de contrato, gestor técnico, elemento) e de **vista** (V1/V2/V3), e
+observar a autorização a mudar — por exemplo, um elemento não vê as ações de
+aprovação (RN-407, RN-501). Se a API correr noutro endereço, defina
+`window.CHORA_API_BASE` antes de carregar a página.
+
+> O harness (`preview/`) **não** faz parte da extensão distribuída — serve
+> apenas para validação local.
+
 ## Build e instalação
 
 ```bash
