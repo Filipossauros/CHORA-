@@ -15,6 +15,8 @@ export function ContratoDetalhe(): ReactNode {
   const tabPedido = params.get('tab');
   const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Ficha');
   const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
+  // O ciclo de vida do contrato (estado) é competência do gestor de contrato (RN-501).
+  const ehGestorContrato = app.papeisAtuais().includes('GESTOR_CONTRATO');
   const [erro, setErro] = useState<string>();
   const [editar, setEditar] = useState(false);
 
@@ -46,7 +48,7 @@ export function ContratoDetalhe(): ReactNode {
       {erro !== undefined && erro !== '' && <div className="erro-cx">⚠ {erro}</div>}
       <div className="seps">{TABS.filter((t) => t !== 'Capacidade' || c.tipologia === 'BOLSA_HORAS').map((t) => <button key={t} className={`sep${tab === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
 
-      {tab === 'Ficha' && (editar ? <FichaEdicao contrato={c} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
+      {tab === 'Ficha' && (editar ? <FichaEdicao contrato={c} podeAlterarEstado={ehGestorContrato} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
         <div className="cartao">
           {podeGerir && <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}><button className="btn" onClick={() => { setEditar(true); setErro(undefined); }}>Alterar dados</button></div>}
           <div className="corpo g3">
@@ -118,9 +120,10 @@ const ROT_ESTADO: Record<EstadoContrato, string> = {
   EM_PREPARACAO: 'Em preparação', AGUARDA_VISTO: 'Aguarda visto TdC', EM_VIGOR: 'Em vigor',
   SUSPENSO: 'Suspenso', TERMINADO: 'Terminado', RESOLVIDO: 'Resolvido', CADUCADO: 'Caducado', REVOGADO: 'Revogado',
 };
+const ESTADOS_TERMINAIS: EstadoContrato[] = ['TERMINADO', 'RESOLVIDO', 'CADUCADO', 'REVOGADO'];
 
 /** Formulário de alteração dos dados do contrato + alteração livre de estado. */
-function FichaEdicao({ contrato, onGravado, onErro }: { contrato: Contrato; onGravado: () => void; onErro: (m?: string) => void }): ReactNode {
+function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contrato: Contrato; podeAlterarEstado: boolean; onGravado: () => void; onErro: (m?: string) => void }): ReactNode {
   const [f, setF] = useState({
     objeto: contrato.objeto,
     // valor como texto para permitir apagar a célula (não fica "0" preso)
@@ -153,6 +156,12 @@ function FichaEdicao({ contrato, onGravado, onErro }: { contrato: Contrato; onGr
 
   async function alterarEstado(): Promise<void> {
     onErro();
+    // Guarda 2: confirmação ao entrar num estado terminal ou ao reverter a partir dele.
+    const envolveTerminal = ESTADOS_TERMINAIS.includes(novoEstado) || ESTADOS_TERMINAIS.includes(contrato.estado);
+    if (envolveTerminal && !window.confirm(`Vai alterar o estado de "${ROT_ESTADO[contrato.estado]}" para "${ROT_ESTADO[novoEstado]}". Esta é uma operação sensível (estado terminal). Confirmar?`)) return;
+    // Guarda 3: aviso (não bloqueio) ao pôr EM_VIGOR sem visto do TdC necessário.
+    const semVisto = contrato.vistoTribunalContasNecessario && contrato.dataVistoTribunalContas === undefined && (contrato.vistoTacito ?? false) === false;
+    if (novoEstado === 'EM_VIGOR' && semVisto && !window.confirm('O contrato exige visto prévio do Tribunal de Contas e não o tem (nem visto tácito). A execução relevante pode não ser admissível sem visto. Pretende mesmo colocá-lo Em vigor?')) return;
     try {
       await app.contratos.alterarEstado(contrato.id, novoEstado, nota, app.utilizador());
       onGravado();
@@ -175,11 +184,17 @@ function FichaEdicao({ contrato, onGravado, onErro }: { contrato: Contrato; onGr
         <button className="btn pri" onClick={() => void guardar()}>Guardar alterações</button>
       </div></div>
       <div className="cartao"><h3>Alterar estado do contrato</h3><div className="corpo">
-        <div className="aviso" style={{ marginBottom: 12 }}>Permite corrigir/reverter o estado (incluindo reativar de suspenso ou terminado). A alteração fica registada na auditoria e a nota visível na ficha.</div>
-        <div className="campo"><label>Estado atual</label><div style={{ marginTop: 2 }}><Estado v={contrato.estado} /></div></div>
-        <div className="campo"><label>Novo estado</label><select value={novoEstado} onChange={(e) => setNovoEstado(e.target.value as EstadoContrato)}>{ESTADOS_CONTRATO.map((s) => <option key={s} value={s}>{ROT_ESTADO[s]}</option>)}</select></div>
-        <div className="campo"><label>Nota / motivo (obrigatório)</label><textarea rows={3} value={nota} onChange={(e) => setNota(e.target.value)} /></div>
-        <button className="btn" disabled={nota.trim() === '' || novoEstado === contrato.estado} onClick={() => void alterarEstado()}>Aplicar novo estado</button>
+        {podeAlterarEstado ? (
+          <>
+            <div className="aviso" style={{ marginBottom: 12 }}>Permite corrigir/reverter o estado (incluindo reativar de suspenso ou terminado). A alteração fica registada na auditoria e a nota visível na ficha.</div>
+            <div className="campo"><label>Estado atual</label><div style={{ marginTop: 2 }}><Estado v={contrato.estado} /></div></div>
+            <div className="campo"><label>Novo estado</label><select value={novoEstado} onChange={(e) => setNovoEstado(e.target.value as EstadoContrato)}>{ESTADOS_CONTRATO.map((s) => <option key={s} value={s}>{ROT_ESTADO[s]}</option>)}</select></div>
+            <div className="campo"><label>Nota / motivo (obrigatório)</label><textarea rows={3} value={nota} onChange={(e) => setNota(e.target.value)} /></div>
+            <button className="btn" disabled={nota.trim() === '' || novoEstado === contrato.estado} onClick={() => void alterarEstado()}>Aplicar novo estado</button>
+          </>
+        ) : (
+          <div className="sec">A alteração do estado do contrato é competência do <b>Gestor de Contrato</b> (RN-501). Estado atual: <Estado v={contrato.estado} /></div>
+        )}
       </div></div>
     </div>
   );
