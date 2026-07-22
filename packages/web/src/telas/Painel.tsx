@@ -14,10 +14,10 @@ export function Painel(): ReactNode {
     const perfis = await app.ctx.repos.perfis.todos();
     const afetacoes = await app.ctx.repos.afetacoes.todos();
     const resumos = await Promise.all(contratos.map((c) => app.contratos.resumoExecucao(c.id) as Promise<Resumo>));
-    // Capacidade dos contratos chave-na-mão em vigor (afetação-alvo vs. afetos).
+    // Capacidade dos contratos de bolsa de horas em vigor (afetação-alvo vs. afetos).
     const hojeStr = hoje();
     const capacidades = contratos
-      .filter((c) => c.tipologia === 'CHAVE_NA_MAO' && c.estado === 'EM_VIGOR')
+      .filter((c) => c.tipologia === 'BOLSA_HORAS' && c.estado === 'EM_VIGOR')
       .map((c) => ({
         contrato: c,
         cap: calcularCapacidade(
@@ -45,7 +45,7 @@ export function Painel(): ReactNode {
         <div className="kpi"><div className="rot">Registos por aprovar</div><div className="val">{porAprovar}</div></div>
         <div className="kpi"><div className="rot">Valor executado</div><div className="val">{formatarMoeda(executado)}</div></div>
         <div className="kpi"><div className="rot">Alertas críticos</div><div className="val" style={{ color: criticos > 0 ? 'var(--vermelho)' : undefined }}>{criticos}</div></div>
-        {dados.capacidades.length > 0 && <div className="kpi"><div className="rot">Pessoas em falta (chave-na-mão)</div><div className="val" style={{ color: totalFaltaCM > 0 ? 'var(--ambar)' : 'var(--verde)' }}>{totalFaltaCM}</div><div className="sub">face à afetação-alvo</div></div>}
+        {dados.capacidades.length > 0 && <div className="kpi"><div className="rot">Pessoas em falta (bolsa de horas)</div><div className="val" style={{ color: totalFaltaCM > 0 ? 'var(--ambar)' : 'var(--verde)' }}>{totalFaltaCM}</div><div className="sub">face à afetação-alvo</div></div>}
       </div>
       <div className="duas">
         <div className="cartao">
@@ -81,7 +81,7 @@ export function Painel(): ReactNode {
       </div>
       {dados.capacidades.length > 0 && (
         <div className="cartao" style={{ marginTop: 16 }}>
-          <h3>Capacidade — contratos chave-na-mão</h3>
+          <h3>Capacidade — contratos de bolsa de horas</h3>
           <table>
             <thead><tr><th>Contrato</th><th className="num">Dias úteis restantes</th><th className="num">Pessoas afetas</th><th className="num">Afetação-alvo</th><th className="num">Pessoas em falta</th></tr></thead>
             <tbody>

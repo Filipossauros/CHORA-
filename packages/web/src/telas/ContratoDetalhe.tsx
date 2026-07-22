@@ -36,7 +36,7 @@ export function ContratoDetalhe(): ReactNode {
     <>
       <Cabecalho titulo={`${c.numero} · ${c.objeto}`} sub="Detalhe do contrato (fase de execução)" acoes={<Estado v={c.estado} />} />
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
-      <div className="seps">{TABS.filter((t) => t !== 'Capacidade' || c.tipologia === 'CHAVE_NA_MAO').map((t) => <button key={t} className={`sep${tab === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
+      <div className="seps">{TABS.filter((t) => t !== 'Capacidade' || c.tipologia === 'BOLSA_HORAS').map((t) => <button key={t} className={`sep${tab === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
 
       {tab === 'Ficha' && (editar ? <FichaEdicao contrato={c} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
         <div className="cartao">
@@ -52,7 +52,7 @@ export function ContratoDetalhe(): ReactNode {
       ))}
 
       {tab === 'Estrutura' && (
-        <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'CHAVE_NA_MAO' ? ' (chave-na-mão)' : ''}</h3><table>
+        <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'BOLSA_HORAS' ? ' (bolsa de horas)' : ''}</h3><table>
           <thead><tr><th>Perfil</th><th className="num">Horas</th><th className="num">€/hora vigente</th></tr></thead>
           <tbody>{dados.perfis.map((p) => { const ultimo = p.precos[p.precos.length - 1]; return (
             <tr key={p.id}><td><div className="prim">{p.nome}</div>{p.consomeBolsaValor && <div className="sec">consome bolsa de valor</div>}</td><td className="num">{formatarHoras(p.quantidadePrevista)}</td><td className="num">{ultimo ? formatarMoeda(ultimo.valorHora) : '—'}</td></tr>
@@ -89,7 +89,7 @@ export function ContratoDetalhe(): ReactNode {
         </>
       )}
 
-      {tab === 'Capacidade' && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
+      {tab === 'Capacidade' && c.tipologia === 'BOLSA_HORAS' && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
 
       {tab === 'Alterações' && (
         <div className="cartao"><h3>Alterações (histórico imutável)</h3><table>
@@ -168,7 +168,7 @@ function Campo({ k, v }: { k: string; v: string }): ReactNode {
 }
 
 /**
- * Dashboard de capacidade (só chave-na-mão). A partir das horas contratadas por
+ * Dashboard de capacidade (só bolsa de horas). A partir das horas contratadas por
  * perfil, das horas já consumidas e dos dias úteis que faltam até ao término,
  * estima a afetação-alvo (pessoas a tempo inteiro, 8 h/dia × 5 dias/semana) e
  * quantas pessoas ainda faltam afetar face a esse alvo. É um alvo teórico: não

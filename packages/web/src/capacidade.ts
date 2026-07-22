@@ -35,7 +35,7 @@ export interface CapacidadeContrato {
 }
 
 /**
- * Estima a afetação-alvo de um contrato chave-na-mão: pessoas a tempo inteiro
+ * Estima a afetação-alvo de um contrato de bolsa de horas: pessoas a tempo inteiro
  * (8 h/dia × 5 dias/semana) necessárias para consumir as horas por perfil que
  * faltam, no tempo útil que resta até ao término. Alvo teórico (sem feriados,
  * férias, faltas ou ramp-up).

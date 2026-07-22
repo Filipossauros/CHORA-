@@ -54,8 +54,8 @@ export function NovoContrato(): ReactNode {
     };
     try {
       await app.contratos.criar(contrato, u);
-      // Chave-na-mão: identificar os perfis com horas e valor/hora.
-      if (f.tipologia === 'CHAVE_NA_MAO') {
+      // Bolsa de horas: identificar os perfis contratuais (horas + valor/hora).
+      if (f.tipologia === 'BOLSA_HORAS') {
         for (const p of perfis.filter((x) => x.nome.trim() !== '')) {
           await app.estrutura.criarPerfil(contrato.id, { nome: p.nome, quantidadePrevista: horasParaMin(p.horas), consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: false, valorHora: p.valorHora, vigenteDe: f.dataInicio }, u);
         }
@@ -98,9 +98,9 @@ export function NovoContrato(): ReactNode {
           <div className="campo"><label>15 · Tipologia do contrato</label><select value={f.tipologia} onChange={(e) => upd('tipologia', e.target.value)}><option value="BOLSA_HORAS">Bolsa de horas</option><option value="CHAVE_NA_MAO">Chave-na-mão</option></select></div>
         </div>
 
-        {f.tipologia === 'CHAVE_NA_MAO' && (
+        {f.tipologia === 'BOLSA_HORAS' && (
           <div style={{ border: '1px solid var(--linha)', borderRadius: 8, padding: 12, marginTop: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}><b style={{ fontSize: 13 }}>Perfis contratuais (chave-na-mão)</b><button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setPerfis([...perfis, { nome: '', horas: 0, valorHora: 0 }])}>+ Perfil</button></div>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}><b style={{ fontSize: 13 }}>Perfis contratuais (bolsa de horas)</b><button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setPerfis([...perfis, { nome: '', horas: 0, valorHora: 0 }])}>+ Perfil</button></div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 180px 36px', gap: 8, marginBottom: 6, fontSize: 11, color: 'var(--texto-suave)', fontWeight: 600 }}>
               <span>Nome do perfil</span><span>Horas</span><span>Valor/hora (cêntimos)</span><span></span>
             </div>

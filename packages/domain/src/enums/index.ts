@@ -23,8 +23,9 @@ export const zTipoProcedimento = z.enum(TIPOS_PROCEDIMENTO);
 
 /**
  * Tipologia do contrato quanto ao modo de execução:
- * - BOLSA_HORAS: bolsa de horas consumida contra perfis.
- * - CHAVE_NA_MAO: exige a identificação dos perfis, horas e valor/hora.
+ * - BOLSA_HORAS: exige a identificação dos perfis contratuais (horas e
+ *   valor/hora); as horas são consumidas contra esses perfis.
+ * - CHAVE_NA_MAO: empreitada de preço fixo paga pelo resultado; sem perfis.
  */
 export const TIPOLOGIAS_CONTRATO = ['BOLSA_HORAS', 'CHAVE_NA_MAO'] as const;
 export type TipologiaContrato = (typeof TIPOLOGIAS_CONTRATO)[number];
