@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
-import type { EstadoContrato } from '@chora/domain';
+import type { Afetacao, Contrato, EstadoContrato, PerfilContratual, RegistoTempo } from '@chora/domain';
 import { app, nomeAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Barra, Estado, formatarHoras, formatarMoeda, mensagemErro, pct, useAsync } from '../comum.js';
+import { Barra, Estado, formatarHoras, formatarMoeda, hoje, mensagemErro, pct, useAsync } from '../comum.js';
 
-const TABS = ['Ficha', 'Estrutura', 'Afetações', 'Execução financeira', 'Alterações'] as const;
+const TABS = ['Ficha', 'Estrutura', 'Afetações', 'Execução financeira', 'Capacidade', 'Alterações'] as const;
 type Tab = (typeof TABS)[number];
 
 const ESTADOS_INATIVACAO: EstadoContrato[] = ['SUSPENSO', 'TERMINADO', 'RESOLVIDO', 'CADUCADO', 'REVOGADO'];
@@ -22,8 +22,9 @@ export function ContratoDetalhe(): ReactNode {
     const perfis = await app.ctx.repos.perfis.todos((p) => p.contratoId === id);
     const afetacoes = await app.ctx.repos.afetacoes.todos((a) => a.contratoId === id);
     const alteracoes = await app.ctx.repos.alteracoes.todos((a) => a.contratoId === id);
+    const aprovados = await app.ctx.repos.registosTempo.todos((r) => r.contratoId === id && r.estado === 'APROVADO');
     const resumo = await app.contratos.resumoExecucao(id) as ResumoExec;
-    return { contrato, perfis, afetacoes, alteracoes, resumo };
+    return { contrato, perfis, afetacoes, alteracoes, aprovados, resumo };
   }, [id]);
 
   const dados = base.dados;
@@ -32,17 +33,14 @@ export function ContratoDetalhe(): ReactNode {
 
   return (
     <>
-      <Cabecalho titulo={`${c.numero} · ${c.objeto}`} sub="Detalhe do contrato (fase de execução)" acoes={
-        <>
-          <Estado v={c.estado} />
-          {podeGerir && c.estado === 'EM_VIGOR' && <button className="btn" onClick={() => { setEditar(!editar); setErro(undefined); }}>{editar ? 'Fechar' : 'Alterar dados'}</button>}
-        </>
-      } />
+      <Cabecalho titulo={`${c.numero} · ${c.objeto}`} sub="Detalhe do contrato (fase de execução)" acoes={<Estado v={c.estado} />} />
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
-      <div className="seps">{TABS.map((t) => <button key={t} className={`sep${tab === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
+      <div className="seps">{TABS.filter((t) => t !== 'Capacidade' || c.tipologia === 'CHAVE_NA_MAO').map((t) => <button key={t} className={`sep${tab === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
 
       {tab === 'Ficha' && (editar ? <FichaEdicao contrato={c} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
-        <div className="cartao"><div className="corpo g3">
+        <div className="cartao">
+          {podeGerir && c.estado === 'EM_VIGOR' && <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}><button className="btn" onClick={() => { setEditar(true); setErro(undefined); }}>Alterar dados</button></div>}
+          <div className="corpo g3">
           <Campo k="Prestador" v={c.prestador.nome} /><Campo k="NIPC" v={c.prestador.nipc} /><Campo k="Tipologia" v={c.tipologia === 'CHAVE_NA_MAO' ? 'Chave-na-mão' : 'Bolsa de horas'} />
           <Campo k="Nº procedimento de origem" v={c.numeroProcedimento ?? '—'} /><Campo k="Tipo de procedimento" v={(c.tipoProcedimento ?? '—').replace(/_/g, ' ').toLowerCase()} /><Campo k="Nº do lote" v={c.numeroLote !== undefined ? String(c.numeroLote) : '—'} />
           <Campo k="Valor inicial do contrato" v={formatarMoeda(c.precoContratualInicial)} /><Campo k="Valor atual do contrato" v={formatarMoeda(c.precoContratualAtual)} /><Campo k="Vigência" v={`${c.dataInicioVigencia} – ${c.dataTerminoContratual}`} />
@@ -89,6 +87,8 @@ export function ContratoDetalhe(): ReactNode {
           </table></div>
         </>
       )}
+
+      {tab === 'Capacidade' && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
 
       {tab === 'Alterações' && (
         <div className="cartao"><h3>Alterações (histórico imutável)</h3><table>
@@ -164,6 +164,73 @@ function FichaEdicao({ contrato, onGravado, onErro }: { contrato: import('@chora
 
 function Campo({ k, v }: { k: string; v: string }): ReactNode {
   return <div className="campo" style={{ margin: 0 }}><label>{k}</label><div style={{ fontWeight: 600, fontSize: 13.5 }}>{v}</div></div>;
+}
+
+/** Dias úteis (seg–sex) no intervalo (deExclusivo, ateInclusivo]. */
+function diasUteis(deExclusivo: string, ateInclusivo: string): number {
+  const d = new Date(`${deExclusivo}T00:00:00`);
+  const fim = new Date(`${ateInclusivo}T00:00:00`);
+  let n = 0;
+  d.setDate(d.getDate() + 1);
+  while (d <= fim) {
+    const dw = d.getDay();
+    if (dw !== 0 && dw !== 6) n += 1;
+    d.setDate(d.getDate() + 1);
+  }
+  return n;
+}
+
+/**
+ * Dashboard de capacidade (só chave-na-mão). A partir das horas contratadas por
+ * perfil, das horas já consumidas e dos dias úteis que faltam até ao término,
+ * estima a afetação-alvo (pessoas a tempo inteiro, 8 h/dia × 5 dias/semana) e
+ * quantas pessoas ainda faltam afetar face a esse alvo. É um alvo teórico: não
+ * desconta feriados, férias, faltas nem ramp-up.
+ */
+function Capacidade({ contrato, perfis, afetacoes, aprovados }: { contrato: Contrato; perfis: PerfilContratual[]; afetacoes: Afetacao[]; aprovados: RegistoTempo[] }): ReactNode {
+  const hojeStr = hoje();
+  const dias = diasUteis(hojeStr, contrato.dataTerminoContratual);
+  const capacidadePessoaH = 8 * dias; // horas que 1 pessoa a tempo inteiro entrega no tempo que resta
+
+  const linhas = perfis.map((p) => {
+    const contratadasH = p.quantidadePrevista / 60;
+    const consumidasMin = aprovados.filter((r) => r.perfilId === p.id).reduce((s, r) => s + r.duracao, 0);
+    const restantesH = Math.max(0, contratadasH - consumidasMin / 60);
+    const afetas = new Set(afetacoes.filter((a) => a.ativa && a.perfilId === p.id).map((a) => a.recursoId)).size;
+    const alvo = capacidadePessoaH > 0 ? restantesH / capacidadePessoaH : (restantesH > 0 ? Infinity : 0);
+    const alvoTeto = Number.isFinite(alvo) ? Math.ceil(alvo) : Infinity;
+    const emFalta = Number.isFinite(alvoTeto) ? Math.max(0, alvoTeto - afetas) : Infinity;
+    return { p, restantesH, afetas, alvo, alvoTeto, emFalta };
+  });
+
+  const totalFalta = linhas.reduce((s, l) => s + (Number.isFinite(l.emFalta) ? l.emFalta : 0), 0);
+  const algumInfinito = linhas.some((l) => !Number.isFinite(l.emFalta));
+
+  return (
+    <>
+      <div className="grelha-kpi">
+        <div className="kpi"><div className="rot">Data de referência</div><div className="val" style={{ fontSize: 18 }}>{hojeStr}</div><div className="sub">momento da visualização</div></div>
+        <div className="kpi"><div className="rot">Dias úteis até ao término</div><div className="val">{dias}</div><div className="sub">seg–sex até {contrato.dataTerminoContratual}</div></div>
+        <div className="kpi"><div className="rot">Capacidade por pessoa</div><div className="val">{formatarHoras(capacidadePessoaH * 60)}</div><div className="sub">8 h/dia no período restante</div></div>
+        <div className="kpi"><div className="rot">Pessoas em falta (total)</div><div className="val" style={{ color: totalFalta > 0 ? 'var(--ambar)' : 'var(--verde)' }}>{algumInfinito ? '—' : totalFalta}</div><div className="sub">{totalFalta > 0 ? 'abaixo do alvo' : 'afetação suficiente'}</div></div>
+      </div>
+      {dias <= 0 && <div className="aviso" style={{ marginBottom: 16 }}>Não há dias úteis até ao término (prazo esgotado ou término no passado): a afetação-alvo não é calculável.</div>}
+      <div className="cartao"><h3>Afetação-alvo por perfil</h3><table>
+        <thead><tr><th>Perfil</th><th className="num">Horas restantes</th><th className="num">Afetação-alvo (FTE)</th><th className="num">Pessoas afetas</th><th className="num">Pessoas em falta</th></tr></thead>
+        <tbody>{linhas.map((l) => (
+          <tr key={l.p.id}>
+            <td className="prim">{l.p.nome}</td>
+            <td className="num">{formatarHoras(l.restantesH * 60)}</td>
+            <td className="num">{Number.isFinite(l.alvo) ? `${l.alvo.toFixed(2)} → ${l.alvoTeto}` : '—'}</td>
+            <td className="num">{l.afetas}</td>
+            <td className="num" style={{ color: Number.isFinite(l.emFalta) && l.emFalta > 0 ? 'var(--ambar)' : undefined, fontWeight: 600 }}>{Number.isFinite(l.emFalta) ? l.emFalta : '—'}</td>
+          </tr>
+        ))}{linhas.length === 0 && <tr><td colSpan={5} className="vazio">Sem perfis.</td></tr>}</tbody>
+      </table>
+      <div className="aviso" style={{ margin: 12 }}>Afetação-alvo = horas restantes ÷ (8 h × dias úteis até ao término). Assume 8 h/dia, 5 dias/semana; alvo teórico, sem feriados/férias.</div>
+      </div>
+    </>
+  );
 }
 
 interface ResumoExec {

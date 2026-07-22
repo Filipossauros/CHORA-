@@ -101,11 +101,15 @@ export function NovoContrato(): ReactNode {
         {f.tipologia === 'CHAVE_NA_MAO' && (
           <div style={{ border: '1px solid var(--linha)', borderRadius: 8, padding: 12, marginTop: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}><b style={{ fontSize: 13 }}>Perfis contratuais (chave-na-mão)</b><button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setPerfis([...perfis, { nome: '', horas: 0, valorHora: 0 }])}>+ Perfil</button></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 180px 36px', gap: 8, marginBottom: 6, fontSize: 11, color: 'var(--texto-suave)', fontWeight: 600 }}>
+              <span>Nome do perfil</span><span>Horas</span><span>Valor/hora (cêntimos)</span><span></span>
+            </div>
             {perfis.map((p, i) => (
-              <div key={i} className="g3" style={{ marginBottom: 8 }}>
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 180px 36px', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                 <input placeholder="Nome do perfil" value={p.nome} onChange={(e) => setPerfis(perfis.map((x, j) => j === i ? { ...x, nome: e.target.value } : x))} />
                 <input type="number" placeholder="Horas" value={p.horas} onChange={(e) => setPerfis(perfis.map((x, j) => j === i ? { ...x, horas: Number(e.target.value) } : x))} />
                 <input type="number" placeholder="Valor/hora (cêntimos)" value={p.valorHora} onChange={(e) => setPerfis(perfis.map((x, j) => j === i ? { ...x, valorHora: Number(e.target.value) } : x))} />
+                <button className="btn sm" title="Eliminar perfil" disabled={perfis.length === 1} onClick={() => setPerfis(perfis.filter((_, j) => j !== i))} style={{ justifyContent: 'center' }}>✕</button>
               </div>
             ))}
           </div>
