@@ -83,6 +83,15 @@ code{font-family:ui-monospace,Menlo,monospace;background:rgba(127,127,127,.14);p
 .grelha-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:16px}
 .kpi{background:var(--superficie);border:1px solid var(--linha);border-radius:var(--r);padding:14px 16px;box-shadow:var(--sombra)}
 .kpi.click{cursor:pointer;transition:border-color .12s,transform .12s}.kpi.click:hover{border-color:var(--marca);transform:translateY(-1px)}
+.stepper{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.passo{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;border:1px solid var(--linha);background:var(--superficie);font-size:12.5px;color:var(--texto-suave)}
+.passo .n{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--superficie-2);border:1px solid var(--linha-forte)}
+.passo.ativo{border-color:var(--marca);color:var(--texto);font-weight:600}.passo.ativo .n{background:var(--marca);color:#fff;border-color:var(--marca)}
+.passo.feito .n{background:var(--verde);color:#fff;border-color:var(--verde)}
+.dropzone{border:1.5px dashed var(--linha-forte);border-radius:9px;padding:16px;text-align:center;font-size:12.5px;color:var(--texto-suave);background:var(--superficie-2)}
+.dropzone.ok{border-color:var(--verde);background:var(--verde-b);color:var(--verde)}
+.confbadge{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:20px}
+.confbadge.alta{background:var(--verde-b);color:var(--verde)}.confbadge.media{background:var(--ambar-b);color:var(--ambar)}.confbadge.baixa{background:var(--vermelho-b);color:var(--vermelho)}
 .kpi .rot{font-size:12px;color:var(--texto-suave)}.kpi .val{font-size:26px;font-weight:750;margin-top:5px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}.kpi .sub{font-size:11.5px;margin-top:3px;color:var(--texto-fraco)}
 .duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 .campo{margin-bottom:12px;display:flex;flex-direction:column}
