@@ -69,6 +69,32 @@ export async function semear(ctx: Contexto): Promise<void> {
   const contratoAq = contratoBase({ id: ids.novo('ctr'), numero: 'C-2026-AQ1', precoContratualInicial: 50_000_00, precoContratualAtual: 50_000_00 });
   await repos.contratos.guardar(contratoAq);
 
+  // Contrato D — CHAVE-NA-MÃO, para validar o separador Capacidade. Datas
+  // relativas a "hoje" (momento do seed) para garantir uma janela de execução
+  // com dias úteis por consumir.
+  const hojeSeed = new Date(agora);
+  const isoMeses = (meses: number): string => { const d = new Date(hojeSeed); d.setMonth(d.getMonth() + meses); return d.toISOString().slice(0, 10); };
+  const contratoCM = contratoBase({
+    id: ids.novo('ctr'), numero: 'C-2026-CM1', tipologia: 'CHAVE_NA_MAO',
+    objeto: 'Implementação chave-na-mão de plataforma digital',
+    precoContratualInicial: 300_000_00, precoContratualAtual: 300_000_00, numeroLote: 2,
+    dataInicioVigencia: isoMeses(-2), dataTerminoContratual: isoMeses(10), dataTerminoOriginal: isoMeses(10),
+  });
+  await repos.contratos.guardar(contratoCM);
+  const cmPerfis: PerfilContratual[] = [
+    { id: ids.novo('perf'), contratoId: contratoCM.id, nome: 'Consultor Funcional', quantidadePrevista: 105_600, consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: false, precos: [{ valorHora: 4000, vigenteDe: isoMeses(-2) }], ...audit }, // 1760 h
+    { id: ids.novo('perf'), contratoId: contratoCM.id, nome: 'Programador Full-stack', quantidadePrevista: 211_200, consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: false, precos: [{ valorHora: 3500, vigenteDe: isoMeses(-2) }], ...audit }, // 3520 h
+    { id: ids.novo('perf'), contratoId: contratoCM.id, nome: 'Gestor de Projeto', quantidadePrevista: 52_800, consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: true, precos: [{ valorHora: 6000, vigenteDe: isoMeses(-2) }], ...audit }, // 880 h
+  ];
+  for (const pf of cmPerfis) await repos.perfis.guardar(pf);
+  // Só uma pessoa afeta (ao Consultor Funcional): os restantes perfis ficam por
+  // preencher, para o dashboard mostrar "pessoas em falta".
+  const cmConsultor = cmPerfis[0];
+  if (cmConsultor !== undefined) {
+    const afCM: Afetacao = { id: ids.novo('afe'), contratoId: contratoCM.id, perfilId: cmConsultor.id, recursoId: 'oid-recurso-09', projetoIds: [], vigenteDe: isoMeses(-2), ativa: true, ...audit };
+    await repos.afetacoes.guardar(afCM);
+  }
+
   // Contrato A com suspensão (com efeito no prazo de execução).
   const altSuspensao: Alteracao = {
     id: ids.novo('alt'), contratoId: contratoA.id, tipo: 'SUSPENSAO', dataEfeito: '2026-03-01',
@@ -100,6 +126,7 @@ export async function semear(ctx: Contexto): Promise<void> {
     { id: 'oid-recurso-01', entidadeExecutanteNipc: '500000001', ativo: true, ...audit },
     { id: 'oid-recurso-02', entidadeExecutanteNipc: '500000001', ativo: true, ...audit },
     { id: 'oid-recurso-03', entidadeExecutanteNipc: '500000777', ativo: true, ...audit }, // subcontratado
+    { id: 'oid-recurso-09', entidadeExecutanteNipc: '500000001', ativo: true, ...audit }, // afeto ao contrato chave-na-mão
   ];
   for (const r of recursos) await repos.recursos.guardar(r);
 

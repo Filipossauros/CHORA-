@@ -4,6 +4,7 @@ import type { Afetacao, Contrato, EstadoContrato, PerfilContratual, RegistoTempo
 import { app, nomeAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Barra, Estado, formatarHoras, formatarMoeda, hoje, mensagemErro, pct, useAsync } from '../comum.js';
+import { calcularCapacidade } from '../capacidade.js';
 
 const TABS = ['Ficha', 'Estrutura', 'Afetações', 'Execução financeira', 'Capacidade', 'Alterações'] as const;
 type Tab = (typeof TABS)[number];
@@ -166,20 +167,6 @@ function Campo({ k, v }: { k: string; v: string }): ReactNode {
   return <div className="campo" style={{ margin: 0 }}><label>{k}</label><div style={{ fontWeight: 600, fontSize: 13.5 }}>{v}</div></div>;
 }
 
-/** Dias úteis (seg–sex) no intervalo (deExclusivo, ateInclusivo]. */
-function diasUteis(deExclusivo: string, ateInclusivo: string): number {
-  const d = new Date(`${deExclusivo}T00:00:00`);
-  const fim = new Date(`${ateInclusivo}T00:00:00`);
-  let n = 0;
-  d.setDate(d.getDate() + 1);
-  while (d <= fim) {
-    const dw = d.getDay();
-    if (dw !== 0 && dw !== 6) n += 1;
-    d.setDate(d.getDate() + 1);
-  }
-  return n;
-}
-
 /**
  * Dashboard de capacidade (só chave-na-mão). A partir das horas contratadas por
  * perfil, das horas já consumidas e dos dias úteis que faltam até ao término,
@@ -189,22 +176,7 @@ function diasUteis(deExclusivo: string, ateInclusivo: string): number {
  */
 function Capacidade({ contrato, perfis, afetacoes, aprovados }: { contrato: Contrato; perfis: PerfilContratual[]; afetacoes: Afetacao[]; aprovados: RegistoTempo[] }): ReactNode {
   const hojeStr = hoje();
-  const dias = diasUteis(hojeStr, contrato.dataTerminoContratual);
-  const capacidadePessoaH = 8 * dias; // horas que 1 pessoa a tempo inteiro entrega no tempo que resta
-
-  const linhas = perfis.map((p) => {
-    const contratadasH = p.quantidadePrevista / 60;
-    const consumidasMin = aprovados.filter((r) => r.perfilId === p.id).reduce((s, r) => s + r.duracao, 0);
-    const restantesH = Math.max(0, contratadasH - consumidasMin / 60);
-    const afetas = new Set(afetacoes.filter((a) => a.ativa && a.perfilId === p.id).map((a) => a.recursoId)).size;
-    const alvo = capacidadePessoaH > 0 ? restantesH / capacidadePessoaH : (restantesH > 0 ? Infinity : 0);
-    const alvoTeto = Number.isFinite(alvo) ? Math.ceil(alvo) : Infinity;
-    const emFalta = Number.isFinite(alvoTeto) ? Math.max(0, alvoTeto - afetas) : Infinity;
-    return { p, restantesH, afetas, alvo, alvoTeto, emFalta };
-  });
-
-  const totalFalta = linhas.reduce((s, l) => s + (Number.isFinite(l.emFalta) ? l.emFalta : 0), 0);
-  const algumInfinito = linhas.some((l) => !Number.isFinite(l.emFalta));
+  const { dias, capacidadePessoaH, linhas, totalFalta, algumInfinito } = calcularCapacidade(contrato.dataTerminoContratual, hojeStr, perfis, afetacoes, aprovados);
 
   return (
     <>
@@ -218,8 +190,8 @@ function Capacidade({ contrato, perfis, afetacoes, aprovados }: { contrato: Cont
       <div className="cartao"><h3>Afetação-alvo por perfil</h3><table>
         <thead><tr><th>Perfil</th><th className="num">Horas restantes</th><th className="num">Afetação-alvo (FTE)</th><th className="num">Pessoas afetas</th><th className="num">Pessoas em falta</th></tr></thead>
         <tbody>{linhas.map((l) => (
-          <tr key={l.p.id}>
-            <td className="prim">{l.p.nome}</td>
+          <tr key={l.perfilId}>
+            <td className="prim">{l.nome}</td>
             <td className="num">{formatarHoras(l.restantesH * 60)}</td>
             <td className="num">{Number.isFinite(l.alvo) ? `${l.alvo.toFixed(2)} → ${l.alvoTeto}` : '—'}</td>
             <td className="num">{l.afetas}</td>
