@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
@@ -7,6 +7,7 @@ import { calcularCapacidade } from '../capacidade.js';
 
 export function Painel(): ReactNode {
   const navegar = useNavigate();
+  const [capAberta, setCapAberta] = useState(false);
   const { dados } = useAsync(async () => {
     const contratos = await app.ctx.repos.contratos.todos();
     const registos = await app.ctx.repos.registosTempo.todos();
@@ -81,22 +82,30 @@ export function Painel(): ReactNode {
       </div>
       {dados.capacidades.length > 0 && (
         <div className="cartao" style={{ marginTop: 16 }}>
-          <h3>Capacidade — contratos de bolsa de horas</h3>
-          <table>
-            <thead><tr><th>Contrato</th><th className="num">Dias úteis restantes</th><th className="num">Pessoas afetas</th><th className="num">Afetação-alvo</th><th className="num">Pessoas em falta</th></tr></thead>
-            <tbody>
-              {dados.capacidades.map(({ contrato, cap }) => (
-                <tr key={contrato.id} className="click" onClick={() => navegar(`/contratos/${contrato.id}?tab=Capacidade`)}>
-                  <td><div className="prim">{contrato.numero}</div><div className="sec">{contrato.objeto}</div></td>
-                  <td className="num">{cap.dias}</td>
-                  <td className="num">{cap.totalAfetas}</td>
-                  <td className="num">{cap.algumInfinito ? '—' : cap.totalAlvo}</td>
-                  <td className="num" style={{ color: cap.totalFalta > 0 ? 'var(--ambar)' : undefined, fontWeight: 600 }}>{cap.algumInfinito ? '—' : cap.totalFalta}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="aviso" style={{ margin: 12 }}>Afetação-alvo = horas restantes por perfil ÷ (8 h × dias úteis até ao término), à data de hoje. Alvo teórico (8 h/dia, 5 dias/semana; sem feriados/férias).</div>
+          <h3 className="click" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => setCapAberta((v) => !v)}>
+            <span style={{ display: 'inline-block', width: 16, transform: capAberta ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }}>▸</span>
+            Capacidade — contratos de bolsa de horas
+            <span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>({dados.capacidades.length}{totalFaltaCM > 0 ? ` · ${totalFaltaCM} em falta` : ''})</span>
+          </h3>
+          {capAberta && (
+            <>
+              <table>
+                <thead><tr><th>Contrato</th><th className="num">Dias úteis restantes</th><th className="num">Pessoas afetas</th><th className="num">Afetação-alvo</th><th className="num">Pessoas em falta</th></tr></thead>
+                <tbody>
+                  {dados.capacidades.map(({ contrato, cap }) => (
+                    <tr key={contrato.id} className="click" onClick={() => navegar(`/contratos/${contrato.id}?tab=Capacidade`)}>
+                      <td><div className="prim">{contrato.numero}</div><div className="sec">{contrato.objeto}</div></td>
+                      <td className="num">{cap.dias}</td>
+                      <td className="num">{cap.totalAfetas}</td>
+                      <td className="num">{cap.algumInfinito ? '—' : cap.totalAlvo}</td>
+                      <td className="num" style={{ color: cap.totalFalta > 0 ? 'var(--ambar)' : undefined, fontWeight: 600 }}>{cap.algumInfinito ? '—' : cap.totalFalta}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="aviso" style={{ margin: 12 }}>Afetação-alvo = horas restantes por perfil ÷ (8 h × dias úteis até ao término), à data de hoje. Alvo teórico (8 h/dia, 5 dias/semana; sem feriados/férias).</div>
+            </>
+          )}
         </div>
       )}
     </>
