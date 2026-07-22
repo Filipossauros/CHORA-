@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { zDataISO } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import { exigirUtilizador } from '../servidor/seguranca.js';
 import { normalizarPaginacao } from '../repositorios/tipos.js';
@@ -8,12 +7,9 @@ import { podeExecutar } from '../auth/permissoes.js';
 import { ErroProibido, ErroValidacao } from '../erros/problema.js';
 import { ServicoAfetacoes } from '../servicos/afetacoes.js';
 
-const zNova = z.object({
-  contratoId: z.string().min(1), perfilId: z.string().min(1), recursoId: z.string().min(1),
-  projetoIds: z.array(z.string().min(1)).min(1), vigenteDe: zDataISO, vigenteAte: zDataISO.optional(),
-});
-const zPatch = z.object({ projetoIds: z.array(z.string()).optional(), vigenteAte: zDataISO.optional(), ativa: z.boolean().optional() });
-const zSubstituir = z.object({ novoRecursoId: z.string().min(1), vigenteDe: zDataISO });
+const zNova = z.object({ contratoId: z.string().min(1), perfilId: z.string().min(1), recursoId: z.string().min(1) });
+const zPatch = z.object({ ativa: z.boolean() });
+const zSubstituir = z.object({ novoRecursoId: z.string().min(1) });
 
 function parse<T>(s: z.ZodType<T>, corpo: unknown): T {
   const r = s.safeParse(corpo);
@@ -54,14 +50,13 @@ export function rotasAfetacoes(app: FastifyInstance, ctx: Contexto): void {
     const u = exigirUtilizador(req);
     if (!podeExecutar(u.papeis, 'gerir.afetacoes')) throw new ErroProibido('Sem competência.');
     const { id } = req.params as { id: string };
-    return servico.atualizar(id, parse(zPatch, req.body), u);
+    return servico.definirAtiva(id, parse(zPatch, req.body).ativa, u);
   });
 
   app.post('/api/v1/afetacoes/:id/substituir', async (req) => {
     const u = exigirUtilizador(req);
     if (!podeExecutar(u.papeis, 'gerir.afetacoes')) throw new ErroProibido('Sem competência.');
     const { id } = req.params as { id: string };
-    const { novoRecursoId, vigenteDe } = parse(zSubstituir, req.body);
-    return servico.substituir(id, novoRecursoId, vigenteDe, u);
+    return servico.substituir(id, parse(zSubstituir, req.body).novoRecursoId, u);
   });
 }

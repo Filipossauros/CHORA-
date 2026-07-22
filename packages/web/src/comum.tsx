@@ -4,10 +4,15 @@ import { ErroApi } from './erro-api.js';
 export function formatarMoeda(cent: number): string {
   return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(cent / 100);
 }
-export function formatarDuracao(minutos: number): string {
-  const h = Math.floor(minutos / 60); const m = minutos % 60;
-  return h === 0 ? `${m}m` : `${h}h ${String(m).padStart(2, '0')}m`;
+/** Horas (unidade de maior granularidade — sem minutos). Recebe minutos internos. */
+export function formatarHoras(minutos: number): string {
+  return `${Math.round(minutos / 60)} h`;
 }
+/** Compat: formata em horas. */
+export const formatarDuracao = formatarHoras;
+/** Converte horas ↔ minutos (armazenamento interno em minutos). */
+export const horasParaMin = (h: number): number => Math.round(h) * 60;
+export const minParaHoras = (m: number): number => Math.round(m / 60);
 export function pct(fracao: number): string { return `${Math.round(fracao * 100)}%`; }
 export function hoje(): string { return new Date().toISOString().slice(0, 10); }
 

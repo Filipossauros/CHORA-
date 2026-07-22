@@ -5,7 +5,7 @@ import { app, UTILIZADORES } from '../porta/aplicacao-local.js';
 const NAV = [
   { grupo: 'Painel', itens: [{ to: '/', rot: 'Visão geral', fim: true }] },
   { grupo: 'Gestão', itens: [
-    { to: '/procedimentos', rot: 'Procedimentos' }, { to: '/contratos', rot: 'Contratos' },
+    { to: '/contratos', rot: 'Contratos' },
     { to: '/afetacoes', rot: 'Afetações' }, { to: '/recursos', rot: 'Recursos' },
   ] },
   { grupo: 'Operação', itens: [{ to: '/registos', rot: 'Registos de tempo' }, { to: '/aprovacoes', rot: 'Aprovações' }] },

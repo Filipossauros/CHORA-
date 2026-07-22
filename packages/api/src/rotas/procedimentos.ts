@@ -40,7 +40,7 @@ export function rotasProcedimentos(app: FastifyInstance, ctx: Contexto): void {
   app.get('/api/v1/procedimentos/:id/lotes', async (req) => {
     exigirUtilizador(req);
     const { id } = req.params as { id: string };
-    return { dados: await servico.lotesComContratos(id) };
+    return { dados: await servico.lotes(id) };
   });
 
   app.post('/api/v1/procedimentos/:id/lotes', async (req, reply) => {

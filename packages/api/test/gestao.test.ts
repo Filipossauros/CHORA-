@@ -41,11 +41,10 @@ describe('afetações — estado só ativa/inativa e substituição (RN-701)', (
     const af = (await ctx.repos.afetacoes.todos((a) => a.ativa && a.recursoId === 'oid-recurso-01'))[0]!;
     // Novo recurso na mesma entidade executante.
     await app.inject({ method: 'POST', url: '/api/v1/recursos', headers: comoGestor(), payload: { id: 'oid-recurso-09', entidadeExecutanteNipc: '500000001' } });
-    const r = await app.inject({ method: 'POST', url: `/api/v1/afetacoes/${af.id}/substituir`, headers: comoGestor(), payload: { novoRecursoId: 'oid-recurso-09', vigenteDe: '2026-08-01' } });
+    const r = await app.inject({ method: 'POST', url: `/api/v1/afetacoes/${af.id}/substituir`, headers: comoGestor(), payload: { novoRecursoId: 'oid-recurso-09' } });
     expect(r.statusCode).toBe(200);
-    const { anterior, sucessora } = r.json() as { anterior: { ativa: boolean; vigenteAte: string }; sucessora: { ativa: boolean; substituiAfetacaoId: string } };
-    expect(anterior.ativa).toBe(false);
-    expect(anterior.vigenteAte).toBe('2026-07-31');
+    const { anterior, sucessora } = r.json() as { anterior: { ativa: boolean }; sucessora: { ativa: boolean; substituiAfetacaoId: string } };
+    expect(anterior.ativa).toBe(false); // estado só ativa/inativa
     expect(sucessora.ativa).toBe(true);
     expect(sucessora.substituiAfetacaoId).toBe(af.id);
   });
@@ -55,7 +54,7 @@ describe('afetações — estado só ativa/inativa e substituição (RN-701)', (
     fechar = () => app.close();
     const af = (await ctx.repos.afetacoes.todos((a) => a.ativa && a.recursoId === 'oid-recurso-01'))[0]!;
     await app.inject({ method: 'POST', url: '/api/v1/recursos', headers: comoGestor(), payload: { id: 'oid-outra', entidadeExecutanteNipc: '999999999' } });
-    const r = await app.inject({ method: 'POST', url: `/api/v1/afetacoes/${af.id}/substituir`, headers: comoGestor(), payload: { novoRecursoId: 'oid-outra', vigenteDe: '2026-08-01' } });
+    const r = await app.inject({ method: 'POST', url: `/api/v1/afetacoes/${af.id}/substituir`, headers: comoGestor(), payload: { novoRecursoId: 'oid-outra' } });
     expect(r.statusCode).toBe(422);
     expect((r.json() as { regra: string }).regra).toBe('RN-701');
   });

@@ -66,12 +66,16 @@ export class ServicoRegistosTempo {
     recursoId: string,
   ): Promise<void> {
     exigir(RN_208, { estado: contrato.estado });
-    exigir(RN_405, { duracao: novo.duracao });
+    // Consumo de horas: unidade de maior granularidade é a hora (sem minutos).
+    exigir(RN_405, { duracao: novo.duracao, minima: 60, incremento: 60 });
     exigir(RN_409, { data: novo.data, agora: this.ctx.relogio.agora() });
+    // Projeto desacoplado da afetação (ronda 2): a validação de afetação incide
+    // sobre recurso/contrato/perfil/estado, não sobre o projeto.
+    const projetoUsado = novo.projetoIdWorkItem ?? 'azure-devops';
     exigir(RN_401, {
-      afetacao: afetacaoParaContexto(afetacao),
+      afetacao: { ...afetacaoParaContexto(afetacao), projetoIds: [projetoUsado] },
       recursoId, contratoId: contrato.id, perfilId: perfil.id,
-      projetoId: afetacao.projetoIds[0] ?? '', data: novo.data,
+      projetoId: projetoUsado, data: novo.data,
     });
     exigir(RN_408, {
       data: novo.data,
@@ -124,7 +128,7 @@ export class ServicoRegistosTempo {
       contratoId: contrato.id,
       perfilId: perfil.id,
       recursoId,
-      projetoId: afetacao.projetoIds[0] ?? '',
+      projetoId: novo.projetoIdWorkItem ?? afetacao.projetoIds[0] ?? 'azure-devops',
       workItemId: novo.workItemId,
       data: novo.data,
       duracao: novo.duracao,

@@ -15,6 +15,22 @@ export const UTILIZADORES = [
   { id: 'oid-recurso-02', nome: 'Elemento — recurso 02', papeis: ['ELEMENTO_EQUIPA_TECNICA'] as PapelAplicacional[] },
 ];
 
+/**
+ * Diretório de utilizadores do workspace Azure (simulado). Todos os utilizadores
+ * têm conta Azure — não se criam manualmente. Serve para selecionar o gestor do
+ * contrato e para apresentar o nome/prestador dos recursos.
+ */
+export const AZURE_USERS: Array<{ id: string; nome: string; prestador?: string }> = [
+  { id: 'oid-gestor-contrato', nome: 'Ana Gestora (Contraente)' },
+  { id: 'oid-gestor-tecnico', nome: 'Bruno Técnico (Contraente)' },
+  { id: 'oid-recurso-01', nome: 'Carla Andrade', prestador: 'Prestador Alfa, Lda.' },
+  { id: 'oid-recurso-02', nome: 'Diogo Marques', prestador: 'Prestador Alfa, Lda.' },
+  { id: 'oid-recurso-03', nome: 'Eva Nogueira', prestador: 'Subcontratado Beta, S.A.' },
+  { id: 'oid-recurso-09', nome: 'Filipe Costa', prestador: 'Prestador Alfa, Lda.' },
+];
+export const nomeAzure = (id: string): string => AZURE_USERS.find((u) => u.id === id)?.nome ?? id;
+export const prestadorAzure = (id: string): string | undefined => AZURE_USERS.find((u) => u.id === id)?.prestador;
+
 function criarReposLocais(): Repositorios {
   const r = <T extends { id: string }>(nome: string) => new RepositorioLocalStorage<T>(nome);
   return {

@@ -5,7 +5,6 @@ import './estilo.css';
 import { app } from './porta/aplicacao-local.js';
 import { Shell } from './app/Shell.js';
 import { Painel } from './telas/Painel.js';
-import { Procedimentos } from './telas/Procedimentos.js';
 import { Contratos } from './telas/Contratos.js';
 import { ContratoDetalhe } from './telas/ContratoDetalhe.js';
 import { NovoContrato } from './telas/NovoContrato.js';
@@ -21,7 +20,6 @@ import { Acessos } from './telas/Acessos.js';
 
 const rotas = [
   { path: '/', element: <Painel /> },
-  { path: '/procedimentos', element: <Procedimentos /> },
   { path: '/contratos', element: <Contratos /> },
   { path: '/contratos/novo', element: <NovoContrato /> },
   { path: '/contratos/:id', element: <ContratoDetalhe /> },

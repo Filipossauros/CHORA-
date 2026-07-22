@@ -48,14 +48,24 @@ export function rotasContratos(app: FastifyInstance, ctx: Contexto): void {
       criadoEm: agora, criadoPor: u.utilizadorId, atualizadoEm: agora, atualizadoPor: u.utilizadorId,
     });
     if (!candidato.success) throw new ErroValidacao('Contrato inválido.', candidato.error.issues);
-    const contrato = candidato.data as Contrato;
-    await servico.validar(contrato);
-    await ctx.repos.contratos.guardar(contrato);
-    await ctx.auditoria.registar({
-      utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: contrato.id,
-      operacao: 'CRIAR', resultado: 'PERMITIDO', depois: contrato,
-    });
+    const contrato = await servico.criar(candidato.data as Contrato, u);
     await reply.status(201).send(contrato);
+  });
+
+  app.patch('/api/v1/contratos/:id', async (req) => {
+    const u = exigirUtilizador(req);
+    if (!podeExecutar(u.papeis, 'gerir.contratos')) throw new ErroProibido('Sem competência.');
+    const { id } = req.params as { id: string };
+    return servico.atualizar(id, req.body as Partial<Contrato>, u);
+  });
+
+  app.post('/api/v1/contratos/:id/inativar', async (req) => {
+    const u = exigirUtilizador(req);
+    if (!podeExecutar(u.papeis, 'gerir.contratos')) throw new ErroProibido('Sem competência.');
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ estado: zEstadoContrato, motivo: z.string().min(1) }).safeParse(req.body);
+    if (!parsed.success) throw new ErroValidacao('Dados de inativação inválidos.', parsed.error.issues);
+    return servico.inativar(id, parsed.data.estado, parsed.data.motivo, u);
   });
 
   app.get('/api/v1/contratos/:id', async (req) => {

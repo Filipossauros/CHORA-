@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zEstadoContrato, zUnidadeMedida } from '../enums/index.js';
+import { zEstadoContrato, zUnidadeMedida, zTipoProcedimento, zTipologiaContrato } from '../enums/index.js';
 import {
   zAnoCivil,
   zAuditavel,
@@ -26,10 +26,10 @@ const zPortariaExtensaoEncargos = z.object({
 });
 
 const zGestorContrato = z.object({
-  utilizadorId: z.string().min(1),
+  utilizadorId: z.string().min(1), // oid do utilizador Azure selecionado
   principal: z.boolean(),
-  funcoes: z.string().optional(), // delimitação quando há mais do que um gestor
-  designadoEm: zDataISO,
+  funcoes: z.string().optional(),
+  designadoEm: zDataISO.optional(),
   cessouEm: zDataISO.optional(),
   declaracaoConflitoInteressesEm: zDataISO.optional(),
 });
@@ -46,15 +46,21 @@ export type ExcecaoContrato = z.infer<typeof zExcecaoContrato>;
 
 export const zContrato = zAuditavel.extend({
   id: z.string().min(1),
-  loteId: z.string().min(1),
   numero: z.string().min(1), // obrigatório, único
+
+  // Origem pré-contratual (apenas referência; o CHORA+ incide na execução)
+  numeroProcedimento: z.string().optional(),
+  tipoProcedimento: zTipoProcedimento.optional(),
+  numeroLote: z.number().int().nonnegative().optional(), // valor numérico, não obrigatório
+
   objeto: z.string().min(1),
   estado: zEstadoContrato,
+  tipologia: zTipologiaContrato.optional(), // BOLSA_HORAS | CHAVE_NA_MAO
 
-  // Financeiro
+  // Financeiro — preço contratual total
   precoContratualInicial: zCentNaoNegativo, // IMUTÁVEL após entrada em vigor (RN-104)
   precoContratualAtual: zCentNaoNegativo,
-  unidadeMedida: zUnidadeMedida,
+  unidadeMedida: zUnidadeMedida.optional(),
 
   // Prestador
   prestador: zPrestador,
@@ -62,10 +68,10 @@ export const zContrato = zAuditavel.extend({
   // Datas
   dataAssinaturaCA: zDataISO,
   dataInicioVigencia: zDataISO,
-  dataTerminoContratual: zDataISO, // valor atual
-  dataTerminoOriginal: zDataISO, // congelado à entrada em vigor
+  dataTerminoContratual: zDataISO,
+  dataTerminoOriginal: zDataISO.optional(),
 
-  // Fiscalização prévia
+  // Fiscalização prévia (Tribunal de Contas)
   vistoTribunalContasNecessario: z.boolean(),
   dataRemessaTribunalContas: zDataISO.optional(),
   dataVistoTribunalContas: zDataISO.optional(),
@@ -73,9 +79,13 @@ export const zContrato = zAuditavel.extend({
 
   // Encargos plurianuais
   portariaExtensaoEncargos: zPortariaExtensaoEncargos.optional(),
+  numeroPortariaExtensaoEncargos: z.string().optional(),
 
   // Gestão
   gestores: z.array(zGestorContrato),
+
+  // Inativação com motivo
+  motivoInativacao: z.string().optional(),
 
   // Exceções fundamentadas a limites legais (ADR-10)
   excecoes: z.array(zExcecaoContrato),

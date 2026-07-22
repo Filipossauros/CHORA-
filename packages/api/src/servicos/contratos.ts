@@ -1,24 +1,24 @@
 import {
-  RN_101, RN_102, RN_106, RN_107, RN_108, RN_201, RN_202, exigir,
+  RN_101, RN_201, RN_202, exigir,
   maquinaContrato, complementaresAcumulados, percentagemComplementares,
-  calcularConsumoPerfil, valorPrevistoPerfil, totalDotacoes,
+  calcularConsumoPerfil, valorPrevistoPerfil,
   type Contrato, type EstadoContrato,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
-import { ErroConflitoEstado, ErroNaoEncontrado } from '../erros/problema.js';
+import { ErroConflitoEstado, ErroNaoEncontrado, ErroValidacao } from '../erros/problema.js';
 import type { ContextoUtilizador } from '../auth/token-validator.js';
 
 export class ServicoContratos {
   constructor(private readonly ctx: Contexto) {}
 
-  /** Valida as invariantes estruturais de um contrato a criar/atualizar. */
+  /**
+   * Valida as invariantes de um contrato a criar/atualizar. O CHORA+ incide na
+   * fase de execução: o lote não é obrigatório e não há dependência de unicidade
+   * de lote (RN-102 deixa de se aplicar). Não há dotações.
+   */
   async validar(contrato: Contrato): Promise<void> {
     const existentes = (await this.ctx.repos.contratos.todos()).filter((c) => c.id !== contrato.id);
     exigir(RN_101, { numero: contrato.numero, numerosExistentes: existentes.map((c) => c.numero) });
-    exigir(RN_102, {
-      loteId: contrato.loteId,
-      contratosNoLote: existentes.filter((c) => c.loteId === contrato.loteId).map((c) => c.id),
-    });
     exigir(RN_201, {
       dataInicioVigencia: contrato.dataInicioVigencia,
       dataTerminoContratual: contrato.dataTerminoContratual,
@@ -28,12 +28,39 @@ export class ServicoContratos {
       dataTerminoContratual: contrato.dataTerminoContratual,
       temExcecao: contrato.excecoes.some((e) => e.regra === 'RN-202'),
     });
-    exigir(RN_107, { gestores: contrato.gestores, dataInicioVigencia: contrato.dataInicioVigencia });
-    exigir(RN_108, { gestores: contrato.gestores });
-    const dotacoes = await this.ctx.repos.dotacoes.todos((d) => d.contratoId === contrato.id);
-    if (dotacoes.length > 0) {
-      exigir(RN_106, { dotacoes });
+    if (contrato.gestores.length === 0) {
+      throw new ErroValidacao('O contrato tem de ter um gestor designado.');
     }
+  }
+
+  /** Cria um contrato após validação. */
+  async criar(contrato: Contrato, u: ContextoUtilizador): Promise<Contrato> {
+    await this.validar(contrato);
+    await this.ctx.repos.contratos.guardar(contrato);
+    await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: contrato.id, operacao: 'CRIAR', resultado: 'PERMITIDO', depois: contrato });
+    return contrato;
+  }
+
+  /** Atualiza os dados editáveis de um contrato já carregado. */
+  async atualizar(id: string, campos: Partial<Contrato>, u: ContextoUtilizador): Promise<Contrato> {
+    const atual = await this.ctx.repos.contratos.obter(id);
+    if (atual === null) throw new ErroNaoEncontrado(`Contrato ${id} inexistente.`);
+    const atualizado: Contrato = { ...atual, ...campos, id: atual.id, atualizadoEm: this.ctx.relogio.agora(), atualizadoPor: u.utilizadorId };
+    await this.validar(atualizado);
+    await this.ctx.repos.contratos.guardar(atualizado);
+    await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: id, operacao: 'ATUALIZAR', resultado: 'PERMITIDO', antes: atual, depois: atualizado });
+    return atualizado;
+  }
+
+  /** Inativa um contrato com motivo obrigatório (estado terminal). */
+  async inativar(id: string, estado: EstadoContrato, motivo: string, u: ContextoUtilizador): Promise<Contrato> {
+    if (motivo.trim().length === 0) throw new ErroValidacao('A inativação exige a indicação do motivo.');
+    const atual = await this.ctx.repos.contratos.obter(id);
+    if (atual === null) throw new ErroNaoEncontrado(`Contrato ${id} inexistente.`);
+    const atualizado: Contrato = { ...atual, estado, motivoInativacao: motivo, atualizadoEm: this.ctx.relogio.agora(), atualizadoPor: u.utilizadorId };
+    await this.ctx.repos.contratos.guardar(atualizado);
+    await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: id, operacao: `INATIVAR:${estado}`, resultado: 'PERMITIDO', antes: atual, depois: atualizado });
+    return atualizado;
   }
 
   async transitarEstado(id: string, novo: EstadoContrato, utilizador: ContextoUtilizador): Promise<Contrato> {
@@ -55,7 +82,6 @@ export class ServicoContratos {
     const contrato = await this.ctx.repos.contratos.obter(id);
     if (contrato === null) throw new ErroNaoEncontrado(`Contrato ${id} inexistente.`);
     const perfis = await this.ctx.repos.perfis.todos((p) => p.contratoId === id);
-    const dotacoes = await this.ctx.repos.dotacoes.todos((d) => d.contratoId === id);
     const alteracoes = await this.ctx.repos.alteracoes.todos((a) => a.contratoId === id);
     const aprovados = await this.ctx.repos.registosTempo.todos((r) => r.contratoId === id && r.estado === 'APROVADO');
 
@@ -90,15 +116,15 @@ export class ServicoContratos {
       disponivel: Math.max(0, limiteComplementares - acumulados),
     };
 
-    const valorImputadoTotal = aprovados.reduce((s, r) => s + r.valorImputado, 0);
+    // Terminologia CCP: "valor executado" (execução financeira do contrato).
+    const valorExecutado = aprovados.reduce((s, r) => s + r.valorImputado, 0);
     return {
       contratoId: id,
       estado: contrato.estado,
-      // Labels na UI: "Valor inicial do contrato" / "Valor atual do contrato" (R2).
       valorInicialContrato: contrato.precoContratualInicial,
       valorAtualContrato: contrato.precoContratualAtual,
-      totalDotacoes: totalDotacoes(dotacoes),
-      valorImputadoTotal,
+      valorExecutado,
+      valorDisponivel: Math.max(0, contrato.precoContratualAtual - valorExecutado),
       complementares,
       saldosPerfis,
     };

@@ -89,6 +89,15 @@ export class JobAlertas {
         }
       }
 
+      // AL-VALOR-DISPONIVEL — o contrato tem 40% (ou menos) do valor por executar.
+      // Sinaliza a necessidade de ponderar trabalhos complementares (secção 11).
+      const valorExecutado = aprovados.reduce((s, r) => s + r.valorImputado, 0);
+      const valorDisponivel = Math.max(0, contrato.precoContratualAtual - valorExecutado);
+      if (contrato.precoContratualAtual > 0 && valorDisponivel <= contrato.precoContratualAtual * 0.4) {
+        const pctDisp = valorDisponivel / contrato.precoContratualAtual;
+        gerados.push(this.novoAlerta(contrato.id, 'AL-VALOR-DISPONIVEL', pctDisp <= 0.2 ? 'CRITICO' : 'AVISO', 'Valor disponível reduzido', `O contrato tem apenas ${(pctDisp * 100).toFixed(0)}% do valor disponível.`, destinatario));
+      }
+
       // AL-VISTO-PENDENTE
       if (contrato.vistoTribunalContasNecessario && contrato.dataVistoTribunalContas === undefined && (contrato.vistoTacito ?? false) === false) {
         gerados.push(this.novoAlerta(contrato.id, 'AL-VISTO-PENDENTE', 'CRITICO', 'Visto do TdC pendente', 'Contrato em execução sem visto do Tribunal de Contas.', destinatario));

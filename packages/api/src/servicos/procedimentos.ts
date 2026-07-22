@@ -1,4 +1,4 @@
-import { RN_102, exigir, type Lote, type Procedimento, type TipoProcedimento, type Cent } from '@chora/domain';
+import type { Lote, Procedimento, TipoProcedimento, Cent } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import { ErroNaoEncontrado } from '../erros/problema.js';
 import type { ContextoUtilizador } from '../auth/token-validator.js';
@@ -44,16 +44,8 @@ export class ServicoProcedimentos {
     return lote;
   }
 
-  /** Lotes de um procedimento com contagem de contratos (RN-102: 0..1 por lote). */
-  async lotesComContratos(procedimentoId: string): Promise<Array<Lote & { temContrato: boolean }>> {
-    const lotes = await this.ctx.repos.lotes.todos((l) => l.procedimentoId === procedimentoId);
-    const contratos = await this.ctx.repos.contratos.todos();
-    return lotes.map((l) => ({ ...l, temContrato: contratos.some((c) => c.loteId === l.id) }));
-  }
-
-  /** Valida a associação lote→contrato (RN-102) antes de criar um contrato. */
-  async validarLoteLivre(loteId: string): Promise<void> {
-    const contratos = await this.ctx.repos.contratos.todos((c) => c.loteId === loteId);
-    exigir(RN_102, { loteId, contratosNoLote: contratos.map((c) => c.id) });
+  /** Lotes de um procedimento (referência; o lote não vincula contratos). */
+  async lotes(procedimentoId: string): Promise<Lote[]> {
+    return this.ctx.repos.lotes.todos((l) => l.procedimentoId === procedimentoId);
   }
 }

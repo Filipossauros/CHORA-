@@ -142,7 +142,7 @@ export const RN_107: Regra<{
     if (gestores.length === 0) {
       return violada('O contrato tem de ter pelo menos um gestor designado.');
     }
-    const tardios = gestores.filter((g) => g.designadoEm > dataInicioVigencia);
+    const tardios = gestores.filter((g) => g.designadoEm !== undefined && g.designadoEm > dataInicioVigencia);
     if (tardios.length === gestores.length) {
       return violada(
         'Nenhum gestor foi designado antes do início de vigência do contrato.',

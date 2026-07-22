@@ -17,7 +17,7 @@ export function Painel(): ReactNode {
   if (dados === undefined) return <p className="vazio">A carregar…</p>;
   const emVigor = dados.contratos.filter((c) => c.estado === 'EM_VIGOR').length;
   const porAprovar = dados.registos.filter((r) => r.estado === 'SUBMETIDO').length;
-  const imputado = dados.resumos.reduce((s, r) => s + r.valorImputadoTotal, 0);
+  const executado = dados.resumos.reduce((s, r) => s + r.valorExecutado, 0);
   const criticos = dados.alertas.filter((a) => a.severidade === 'CRITICO').length;
 
   return (
@@ -26,18 +26,18 @@ export function Painel(): ReactNode {
       <div className="grelha-kpi">
         <div className="kpi"><div className="rot">Contratos em vigor</div><div className="val">{emVigor} <span style={{ fontSize: 14, color: 'var(--texto-suave)' }}>/ {dados.contratos.length}</span></div></div>
         <div className="kpi"><div className="rot">Registos por aprovar</div><div className="val">{porAprovar}</div></div>
-        <div className="kpi"><div className="rot">Valor imputado</div><div className="val">{formatarMoeda(imputado)}</div></div>
+        <div className="kpi"><div className="rot">Valor executado</div><div className="val">{formatarMoeda(executado)}</div></div>
         <div className="kpi"><div className="rot">Alertas críticos</div><div className="val" style={{ color: criticos > 0 ? 'var(--vermelho)' : undefined }}>{criticos}</div></div>
       </div>
       <div className="duas">
         <div className="cartao">
           <h3>Execução por contrato</h3>
           <table>
-            <thead><tr><th>Contrato</th><th>Estado</th><th style={{ width: 180 }}>Valor imputado / atual</th></tr></thead>
+            <thead><tr><th>Contrato</th><th>Estado</th><th style={{ width: 180 }}>Valor executado / atual</th></tr></thead>
             <tbody>
               {dados.contratos.map((c) => {
                 const r = dados.resumos.find((x) => x.contratoId === c.id);
-                const frac = r !== undefined && r.valorAtualContrato > 0 ? r.valorImputadoTotal / r.valorAtualContrato : 0;
+                const frac = r !== undefined && r.valorAtualContrato > 0 ? r.valorExecutado / r.valorAtualContrato : 0;
                 return (
                   <tr key={c.id} className="click" onClick={() => navegar(`/contratos/${c.id}`)}>
                     <td><div className="prim">{c.numero}</div><div className="sec">{c.objeto}</div></td>
@@ -65,4 +65,4 @@ export function Painel(): ReactNode {
   );
 }
 
-interface Resumo { contratoId: string; valorImputadoTotal: number; valorAtualContrato: number }
+interface Resumo { contratoId: string; valorExecutado: number; valorAtualContrato: number }

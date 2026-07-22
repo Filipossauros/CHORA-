@@ -6,16 +6,29 @@ import { z } from 'zod';
  * mantidos lado a lado para impedir divergência.
  */
 
+/** Figuras pré-contratuais previstas no CCP (art. 16.º e ss.). */
 export const TIPOS_PROCEDIMENTO = [
   'AJUSTE_DIRETO',
   'CONSULTA_PREVIA',
   'CONCURSO_PUBLICO',
   'CONCURSO_LIMITADO',
+  'PROCEDIMENTO_NEGOCIACAO',
+  'DIALOGO_CONCORRENCIAL',
+  'PARCERIA_INOVACAO',
   'ACORDO_QUADRO',
   'SISTEMA_AQUISICAO_DINAMICA',
 ] as const;
 export type TipoProcedimento = (typeof TIPOS_PROCEDIMENTO)[number];
 export const zTipoProcedimento = z.enum(TIPOS_PROCEDIMENTO);
+
+/**
+ * Tipologia do contrato quanto ao modo de execução:
+ * - BOLSA_HORAS: bolsa de horas consumida contra perfis.
+ * - CHAVE_NA_MAO: exige a identificação dos perfis, horas e valor/hora.
+ */
+export const TIPOLOGIAS_CONTRATO = ['BOLSA_HORAS', 'CHAVE_NA_MAO'] as const;
+export type TipologiaContrato = (typeof TIPOLOGIAS_CONTRATO)[number];
+export const zTipologiaContrato = z.enum(TIPOLOGIAS_CONTRATO);
 
 export const TIPOS_DOTACAO = ['HORAS_BASE', 'BOLSA_VALOR', 'TRABALHOS_COMPLEMENTARES'] as const;
 export type TipoDotacao = (typeof TIPOS_DOTACAO)[number];

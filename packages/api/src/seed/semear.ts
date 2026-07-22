@@ -1,5 +1,5 @@
 import type {
-  Afetacao, Alteracao, Compromisso, Contrato, DocumentoHabilitacao, Dotacao,
+  Afetacao, Alteracao, Compromisso, Contrato, DocumentoHabilitacao,
   Fatura, Lote, PerfilContratual, Procedimento, Recurso, RegistoTempo,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
@@ -32,10 +32,12 @@ export async function semear(ctx: Contexto): Promise<void> {
   const loteAq: Lote = { id: ids.novo('lote'), procedimentoId: procAq.id, numero: 'L1', designacao: 'Lote único AQ', ...audit };
   await repos.lotes.guardar(loteAq);
 
-  function contratoBase(over: Partial<Contrato> & Pick<Contrato, 'id' | 'loteId' | 'numero'>): Contrato {
+  function contratoBase(over: Partial<Contrato> & Pick<Contrato, 'id' | 'numero'>): Contrato {
     return {
       objeto: 'Prestação de serviços em outsourcing', estado: 'EM_VIGOR',
-      precoContratualInicial: 100_000_00, precoContratualAtual: 100_000_00, unidadeMedida: 'HORA',
+      tipologia: 'BOLSA_HORAS',
+      numeroProcedimento: proc.numero, tipoProcedimento: 'CONCURSO_PUBLICO', numeroLote: 1,
+      precoContratualInicial: 100_000_00, precoContratualAtual: 100_000_00,
       prestador: { nome: 'Prestador Alfa, Lda.', nipc: '500000001' },
       dataAssinaturaCA: '2025-12-15', dataInicioVigencia: '2026-01-01',
       dataTerminoContratual: '2027-12-31', dataTerminoOriginal: '2027-12-31',
@@ -45,15 +47,15 @@ export async function semear(ctx: Contexto): Promise<void> {
   }
 
   // Contrato A — EM_VIGOR, 2 projetos, com revisão de preços a meio da vigência.
-  const contratoA = contratoBase({ id: ids.novo('ctr'), loteId: lotes[0]!.id, numero: 'C-2026-001', dataVistoTribunalContas: undefined });
+  const contratoA = contratoBase({ id: ids.novo('ctr'), numero: 'C-2026-001', dataVistoTribunalContas: undefined });
   await repos.contratos.guardar(contratoA);
 
   // Contrato B — visto do TdC pendente (AGUARDA_VISTO).
-  const contratoB = contratoBase({ id: ids.novo('ctr'), loteId: lotes[1]!.id, numero: 'C-2026-002', estado: 'AGUARDA_VISTO', vistoTribunalContasNecessario: true, dataRemessaTribunalContas: '2026-01-10' });
+  const contratoB = contratoBase({ id: ids.novo('ctr'), numero: 'C-2026-002', estado: 'AGUARDA_VISTO', vistoTribunalContasNecessario: true, dataRemessaTribunalContas: '2026-01-10' });
   await repos.contratos.guardar(contratoB);
 
   // Contrato C — bolsa de valor + serviços complementares a 42%.
-  const contratoC = contratoBase({ id: ids.novo('ctr'), loteId: lotes[2]!.id, numero: 'C-2026-003', precoContratualAtual: 142_000_00 });
+  const contratoC = contratoBase({ id: ids.novo('ctr'), numero: 'C-2026-003', precoContratualAtual: 142_000_00 });
   await repos.contratos.guardar(contratoC);
   const altComplementar: Alteracao = {
     id: ids.novo('alt'), contratoId: contratoC.id, tipo: 'SERVICOS_COMPLEMENTARES', dataEfeito: '2026-06-01',
@@ -64,7 +66,7 @@ export async function semear(ctx: Contexto): Promise<void> {
   await repos.alteracoes.guardar(altComplementar);
 
   // Contrato ao abrigo de AQ.
-  const contratoAq = contratoBase({ id: ids.novo('ctr'), loteId: loteAq.id, numero: 'C-2026-AQ1', precoContratualInicial: 50_000_00, precoContratualAtual: 50_000_00 });
+  const contratoAq = contratoBase({ id: ids.novo('ctr'), numero: 'C-2026-AQ1', precoContratualInicial: 50_000_00, precoContratualAtual: 50_000_00 });
   await repos.contratos.guardar(contratoAq);
 
   // Contrato A com suspensão (com efeito no prazo de execução).
@@ -76,14 +78,7 @@ export async function semear(ctx: Contexto): Promise<void> {
   };
   await repos.alteracoes.guardar(altSuspensao);
 
-  // Dotações (contrato A).
-  const dotA: Dotacao[] = [
-    { id: ids.novo('dot'), contratoId: contratoA.id, tipo: 'HORAS_BASE', valor: 80_000_00, horasTotais: 96_000, ...audit },
-    { id: ids.novo('dot'), contratoId: contratoA.id, tipo: 'BOLSA_VALOR', valor: 20_000_00, ...audit },
-  ];
-  for (const d of dotA) await repos.dotacoes.guardar(d);
-
-  // Perfis (contrato A) — um com revisão de preços (ADR-09).
+  // Perfis (contrato A) — um com revisão de preços (ADR-09). Sem dotações.
   const perfilSenior: PerfilContratual = {
     id: ids.novo('perf'), contratoId: contratoA.id, nome: 'Arquiteto de Software Sénior',
     quantidadePrevista: 60_000, consomeBolsaValor: true, consomeTrabalhosComplementares: false, perfilDeGestao: true,

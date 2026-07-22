@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { zTipoDotacao, zTipoAlteracao, zTipoDocumentoHabilitacao, zCent, zCentNaoNegativo, zMinutos, zDataISO } from '@chora/domain';
+import { zTipoAlteracao, zTipoDocumentoHabilitacao, zCent, zCentNaoNegativo, zMinutos, zDataISO } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import { exigirUtilizador } from '../servidor/seguranca.js';
 import { ErroProibido, ErroValidacao } from '../erros/problema.js';
@@ -12,7 +12,6 @@ function exigirGestao(papeis: import('@chora/domain').PapelAplicacional[]): void
   if (!podeExecutar(papeis, 'gerir.perfis.dotacoes')) throw new ErroProibido('Sem competência para gerir a estrutura contratual.');
 }
 
-const zDotacao = z.object({ tipo: zTipoDotacao, valor: zCent, horasTotais: zMinutos.optional() });
 const zPerfil = z.object({ nome: z.string().min(1), quantidadePrevista: zMinutos, consomeBolsaValor: z.boolean(), consomeTrabalhosComplementares: z.boolean(), perfilDeGestao: z.boolean(), valorHora: zCentNaoNegativo, vigenteDe: zDataISO });
 const zPreco = z.object({ valorHora: zCentNaoNegativo, vigenteDe: zDataISO });
 const zAlteracao = z.object({
@@ -25,16 +24,6 @@ const zHabilitacao = z.object({ tipo: zTipoDocumentoHabilitacao, emitidoEm: zDat
 
 export function rotasEstrutura(app: FastifyInstance, ctx: Contexto): void {
   const servico = new ServicoEstrutura(ctx);
-
-  app.get('/api/v1/contratos/:id/dotacoes', async (req) => {
-    exigirUtilizador(req); const { id } = req.params as { id: string };
-    return { dados: await ctx.repos.dotacoes.todos((d) => d.contratoId === id) };
-  });
-  app.post('/api/v1/contratos/:id/dotacoes', async (req, reply) => {
-    const u = exigirUtilizador(req); exigirGestao(u.papeis);
-    const { id } = req.params as { id: string }; const d = parse(zDotacao, req.body);
-    await reply.status(201).send(await servico.criarDotacao(id, d.tipo, d.valor, d.horasTotais, u));
-  });
 
   app.get('/api/v1/contratos/:id/perfis', async (req) => {
     exigirUtilizador(req); const { id } = req.params as { id: string };
