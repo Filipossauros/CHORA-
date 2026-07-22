@@ -93,8 +93,6 @@ function sugestaoIA(a: Alerta, ctx: Contexto): string {
     'AL-COMPLEMENTARES-40': 'Acompanhe o acumulado de trabalhos complementares face ao limite legal de 50% (RN-301).',
     'AL-COMPLEMENTARES-45': 'Está próximo do limite de 50% de trabalhos complementares; evite novos acréscimos sem análise.',
     'AL-VISTO-PENDENTE': 'Confirme a submissão ao Tribunal de Contas; não deve haver execução relevante sem visto (salvo visto tácito).',
-    'AL-HABILITACAO': 'Solicite ao prestador a renovação do documento de habilitação antes de expirar.',
-    'AL-PUBLICITACAO': 'Publicite a alteração no Portal BASE dentro do prazo legal.',
     'AL-FATURA-PRAZO': 'Priorize a conferência e o pagamento da fatura para cumprir o prazo.',
   };
   return MAPA[a.codigo] ?? 'Reveja a situação do contrato e atue conforme o enquadramento aplicável do CCP.';

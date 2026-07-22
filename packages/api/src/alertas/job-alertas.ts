@@ -1,5 +1,5 @@
 import {
-  RN_302, RN_505, RN_703,
+  RN_302, RN_505,
   calcularConsumoPerfil, valorPrevistoPerfil, mesesAteTermino, excedeLimiteVigencia,
   diaDeInstante,
   type Alerta, type SeveridadeAlerta,
@@ -103,22 +103,6 @@ export class JobAlertas {
         gerados.push(this.novoAlerta(contrato.id, 'AL-VISTO-PENDENTE', 'CRITICO', 'Visto do TdC pendente', 'Contrato em execução sem visto do Tribunal de Contas.', destinatario));
       }
 
-      // AL-HABILITACAO (RN-703 consultiva)
-      const docs = await this.ctx.repos.documentosHabilitacao.todos((d) => d.contratoId === contrato.id);
-      for (const d of docs) {
-        const rh = RN_703.avaliar({ validoAte: d.validoAte, hoje });
-        if (!rh.ok) {
-          gerados.push(this.novoAlerta(contrato.id, 'AL-HABILITACAO', 'AVISO', 'Documento de habilitação a expirar', `${d.tipo} válido até ${d.validoAte}.`, destinatario));
-        }
-      }
-
-      // AL-PUBLICITACAO (alteração por publicitar há > 10 dias)
-      for (const a of alteracoes) {
-        const pub = a.publicitacaoPortalBase;
-        if (pub !== undefined && pub.obrigatoria && pub.efetuadaEm === undefined) {
-          gerados.push(this.novoAlerta(contrato.id, 'AL-PUBLICITACAO', 'AVISO', 'Alteração por publicitar', `Alteração ${a.id} por publicitar no Portal BASE.`, destinatario));
-        }
-      }
     }
 
     // AL-FATURA-PRAZO

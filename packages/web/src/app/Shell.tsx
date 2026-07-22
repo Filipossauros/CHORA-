@@ -51,14 +51,12 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
         ))}
       </aside>
       <div className="principal">
-        <div className="conteudo" key={uid} style={{ paddingTop: 30 }}>{children}</div>
+        <div className="conteudo" key={uid} style={{ paddingTop: 30 }}>
+          {!naRaiz && <div style={{ marginBottom: 14 }}><button className="btn sm" onClick={() => navegar(-1)} title="Voltar ao ecrã anterior">← Voltar</button></div>}
+          {children}
+        </div>
       </div>
       {/* Barra de sessão fixa no topo (renderizada por portal simplificado) */}
-      {!naRaiz && (
-        <div style={{ position: 'fixed', top: 10, left: 250, zIndex: 20 }}>
-          <button className="btn sm" onClick={() => navegar(-1)} title="Voltar ao ecrã anterior">← Voltar</button>
-        </div>
-      )}
       <div style={{ position: 'fixed', top: 10, right: 18, display: 'flex', gap: 10, zIndex: 20, alignItems: 'center' }}>
         <button className="btn sm" onClick={alternarTema} title="Alternar tema">◑</button>
         <button className="btn sm" onClick={() => void app.reporSeed()} title="Repor dados de demonstração">Repor seed</button>

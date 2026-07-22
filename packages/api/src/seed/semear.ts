@@ -106,6 +106,33 @@ export async function semear(ctx: Contexto): Promise<void> {
   });
   await repos.contratos.guardar(contratoCM);
 
+  // Contrato F — BOLSA DE HORAS com um perfil quase esgotado (~95 %), para
+  // acionar o alerta AL-PERFIL-90 e demonstrar a sugestão de IA: existe um
+  // perfil idêntico ("Consultor Funcional") com disponibilidade no C-2026-BH2.
+  const contratoBH3 = contratoBase({
+    id: ids.novo('ctr'), numero: 'C-2026-BH3', tipologia: 'BOLSA_HORAS',
+    objeto: 'Bolsa de horas para manutenção aplicacional',
+    precoContratualInicial: 200_000_00, precoContratualAtual: 200_000_00, numeroLote: 4,
+    dataInicioVigencia: isoMeses(-6), dataTerminoContratual: isoMeses(9), dataTerminoOriginal: isoMeses(9),
+  });
+  await repos.contratos.guardar(contratoBH3);
+  const perfilQuaseEsgotado: PerfilContratual = {
+    id: ids.novo('perf'), contratoId: contratoBH3.id, nome: 'Consultor Funcional',
+    quantidadePrevista: 12_000, consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: false,
+    precos: [{ valorHora: 4000, vigenteDe: isoMeses(-6) }], ...audit, // 200 h contratadas
+  };
+  await repos.perfis.guardar(perfilQuaseEsgotado);
+  const afBH3: Afetacao = { id: ids.novo('afe'), contratoId: contratoBH3.id, perfilId: perfilQuaseEsgotado.id, recursoId: 'oid-recurso-09', projetoIds: [], vigenteDe: isoMeses(-6), ativa: true, ...audit };
+  await repos.afetacoes.guardar(afBH3);
+  // Registo aprovado que consome ~95 % das horas (190 h de 200 h).
+  await repos.registosTempo.guardar({
+    id: ids.novo('rt'), afetacaoId: afBH3.id, contratoId: contratoBH3.id, perfilId: perfilQuaseEsgotado.id, recursoId: 'oid-recurso-09',
+    projetoId: 'azure-devops', workItemId: 2001, data: isoMeses(-1), duracao: 11_400, descricaoAtividade: 'Manutenção aplicacional',
+    tipoDotacaoConsumida: 'HORAS_BASE', valorHoraAplicado: 4000, valorImputado: Math.round((11_400 / 60) * 4000),
+    estado: 'APROVADO', aprovadoPor: 'oid-gestor-contrato', aprovadoEm: agora,
+    criadoEm: agora, criadoPor: 'oid-recurso-09', atualizadoEm: agora, atualizadoPor: 'oid-recurso-09',
+  });
+
   // Contrato A com suspensão (com efeito no prazo de execução).
   const altSuspensao: Alteracao = {
     id: ids.novo('alt'), contratoId: contratoA.id, tipo: 'SUSPENSAO', dataEfeito: '2026-03-01',

@@ -53,7 +53,10 @@ describe('alertas e auditoria', () => {
     const codigos = new Set(((r.json() as { alertas: Array<{ codigo: string }> }).alertas).map((a) => a.codigo));
     expect(codigos.has('AL-VISTO-PENDENTE')).toBe(false); // contrato B está AGUARDA_VISTO, não EM_VIGOR
     expect(codigos.has('AL-COMPLEMENTARES-40')).toBe(true);
-    expect(codigos.has('AL-HABILITACAO')).toBe(true);
+    expect(codigos.has('AL-PERFIL-90')).toBe(true); // C-2026-BH3 tem um perfil quase esgotado
+    // Alertas pré-contratuais removidos (só execução):
+    expect(codigos.has('AL-HABILITACAO')).toBe(false);
+    expect(codigos.has('AL-PUBLICITACAO')).toBe(false);
   });
 
   it('só o gestor de contrato consulta auditoria (403 para técnico)', async () => {
