@@ -141,19 +141,6 @@ export class ServicoFaturas {
     return { fatura: atualizada, relatorio };
   }
 
-  /** Devolve a fatura ao fornecedor (EM_CONFERENCIA → DEVOLVIDA), com motivo. */
-  async devolver(faturaId: string, motivo: string, u: ContextoUtilizador): Promise<Fatura> {
-    const fatura = await this.carregar(faturaId);
-    const t = maquinaFatura.transicaoPermitida(fatura.estado, 'DEVOLVIDA', 'GESTOR_CONTRATO');
-    if (!t.permitida) throw new ErroConflitoEstado(t.motivo ?? 'Transição inválida.');
-    if (motivo.trim().length === 0) throw new ViolacaoRegra(RN_604, 'A devolução exige a indicação do motivo.');
-    const agora = this.ctx.relogio.agora();
-    const atualizada: Fatura = { ...fatura, estado: 'DEVOLVIDA', deducoes: [...(fatura.deducoes ?? []), { motivo, montante: 0 }], atualizadoEm: agora, atualizadoPor: u.utilizadorId };
-    await this.ctx.repos.faturas.guardar(atualizada);
-    await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Fatura', entidadeId: faturaId, operacao: 'DECIDIR:DEVOLVIDA', resultado: 'PERMITIDO', depois: { numero: fatura.numero, motivo } });
-    return atualizada;
-  }
-
   private async saldoCompromisso(compromisso: Compromisso, faturaAtualId: string): Promise<Cent> {
     const faturas = await this.ctx.repos.faturas.todos((f) => f.compromissoId === compromisso.id && f.id !== faturaAtualId && (f.estado === 'VALIDADA' || f.estado === 'PAGA'));
     const usado = faturas.reduce((s, f) => s + (f.montanteAprovado ?? 0), 0);

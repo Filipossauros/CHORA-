@@ -86,12 +86,6 @@ export function rotasFaturas(app: FastifyInstance, ctx: Contexto): void {
     const { decisao, motivo } = parse(zDecidir, req.body);
     return servico.decidir(id, decisao, motivo, u);
   });
-  app.post('/api/v1/faturas/:id/devolver', async (req) => {
-    const u = exigirUtilizador(req); exigirGestorFaturas(u.papeis);
-    const { id } = req.params as { id: string };
-    const { motivo } = parse(z.object({ motivo: z.string().min(1) }), req.body);
-    return servico.devolver(id, motivo, u);
-  });
   app.get('/api/v1/faturas/:id/relatorio-evidencia', async (req) => {
     exigirUtilizador(req);
     const { id } = req.params as { id: string };
