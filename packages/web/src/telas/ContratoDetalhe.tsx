@@ -1,22 +1,30 @@
-import { useState, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
-import type { Afetacao, Contrato, EstadoContrato, PerfilContratual, RegistoTempo } from '@chora/domain';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { ESTADOS_CONTRATO, type Afetacao, type Contrato, type EstadoContrato, type PerfilContratual, type RegistoTempo } from '@chora/domain';
 import { app, nomeAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Barra, Estado, formatarHoras, formatarMoeda, hoje, mensagemErro, pct, useAsync } from '../comum.js';
+import { Barra, Estado, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
 import { calcularCapacidade } from '../capacidade.js';
 
 const TABS = ['Ficha', 'Estrutura', 'Afetações', 'Execução financeira', 'Capacidade', 'Alterações'] as const;
 type Tab = (typeof TABS)[number];
 
-const ESTADOS_INATIVACAO: EstadoContrato[] = ['SUSPENSO', 'TERMINADO', 'RESOLVIDO', 'CADUCADO', 'REVOGADO'];
-
 export function ContratoDetalhe(): ReactNode {
   const { id = '' } = useParams();
-  const [tab, setTab] = useState<Tab>('Ficha');
+  const [params] = useSearchParams();
+  const tabPedido = params.get('tab');
+  const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Ficha');
   const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
   const [erro, setErro] = useState<string>();
   const [editar, setEditar] = useState(false);
+
+  // A mesma rota /contratos/:id é reutilizada entre contratos (não remonta):
+  // ao mudar de contrato, repõe o separador pedido no URL (ou a Ficha) e fecha a edição.
+  useEffect(() => {
+    setTab((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Ficha');
+    setEditar(false);
+    setErro(undefined);
+  }, [id, tabPedido]);
 
   const base = useAsync(async () => {
     const contrato = await app.ctx.repos.contratos.obter(id);
@@ -35,29 +43,33 @@ export function ContratoDetalhe(): ReactNode {
   return (
     <>
       <Cabecalho titulo={`${c.numero} · ${c.objeto}`} sub="Detalhe do contrato (fase de execução)" acoes={<Estado v={c.estado} />} />
-      {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
+      {erro !== undefined && erro !== '' && <div className="erro-cx">⚠ {erro}</div>}
       <div className="seps">{TABS.filter((t) => t !== 'Capacidade' || c.tipologia === 'BOLSA_HORAS').map((t) => <button key={t} className={`sep${tab === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
 
       {tab === 'Ficha' && (editar ? <FichaEdicao contrato={c} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
         <div className="cartao">
-          {podeGerir && c.estado === 'EM_VIGOR' && <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}><button className="btn" onClick={() => { setEditar(true); setErro(undefined); }}>Alterar dados</button></div>}
+          {podeGerir && <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}><button className="btn" onClick={() => { setEditar(true); setErro(undefined); }}>Alterar dados</button></div>}
           <div className="corpo g3">
           <Campo k="Prestador" v={c.prestador.nome} /><Campo k="NIPC" v={c.prestador.nipc} /><Campo k="Tipologia" v={c.tipologia === 'CHAVE_NA_MAO' ? 'Chave-na-mão' : 'Bolsa de horas'} />
           <Campo k="Nº procedimento de origem" v={c.numeroProcedimento ?? '—'} /><Campo k="Tipo de procedimento" v={(c.tipoProcedimento ?? '—').replace(/_/g, ' ').toLowerCase()} /><Campo k="Nº do lote" v={c.numeroLote !== undefined ? String(c.numeroLote) : '—'} />
           <Campo k="Valor inicial do contrato" v={formatarMoeda(c.precoContratualInicial)} /><Campo k="Valor atual do contrato" v={formatarMoeda(c.precoContratualAtual)} /><Campo k="Vigência" v={`${c.dataInicioVigencia} – ${c.dataTerminoContratual}`} />
-          <Campo k="Visto prévio do TdC necessário" v={c.vistoTribunalContasNecessario ? 'Sim' : 'Não'} /><Campo k="Data de obtenção do visto" v={c.dataVistoTribunalContas ?? '—'} /><Campo k="Nº portaria de extensão de encargos" v={c.numeroPortariaExtensaoEncargos ?? '—'} />
+          <Campo k="Visto prévio do TdC necessário" v={c.vistoTribunalContasNecessario ? 'Sim' : 'Não'} /><Campo k="Data de obtenção do visto do TdC" v={c.dataVistoTribunalContas ?? '—'} /><Campo k="Nº portaria de extensão de encargos" v={c.numeroPortariaExtensaoEncargos ?? '—'} />
           <Campo k="Gestor do contrato" v={c.gestores.map((g) => nomeAzure(g.utilizadorId)).join(', ')} />
           {c.motivoInativacao !== undefined && <Campo k="Motivo de inativação" v={c.motivoInativacao} />}
+          {c.notaAlteracaoEstado !== undefined && <Campo k="Nota da última alteração de estado" v={c.notaAlteracaoEstado} />}
         </div></div>
       ))}
 
       {tab === 'Estrutura' && (
-        <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'BOLSA_HORAS' ? ' (bolsa de horas)' : ''}</h3><table>
-          <thead><tr><th>Perfil</th><th className="num">Horas</th><th className="num">€/hora vigente</th></tr></thead>
-          <tbody>{dados.perfis.map((p) => { const ultimo = p.precos[p.precos.length - 1]; return (
-            <tr key={p.id}><td><div className="prim">{p.nome}</div>{p.consomeBolsaValor && <div className="sec">consome bolsa de valor</div>}</td><td className="num">{formatarHoras(p.quantidadePrevista)}</td><td className="num">{ultimo ? formatarMoeda(ultimo.valorHora) : '—'}</td></tr>
-          ); })}{dados.perfis.length === 0 && <tr><td colSpan={3} className="vazio">Sem perfis.</td></tr>}</tbody>
-        </table></div>
+        <div style={{ display: 'grid', gridTemplateColumns: podeGerir && c.tipologia === 'BOLSA_HORAS' ? '1fr 320px' : '1fr', gap: 16 }}>
+          <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'BOLSA_HORAS' ? ' (bolsa de horas)' : ''}</h3><table>
+            <thead><tr><th>Perfil</th><th className="num">Horas</th><th className="num">€/hora vigente</th></tr></thead>
+            <tbody>{dados.perfis.map((p) => { const ultimo = p.precos[p.precos.length - 1]; return (
+              <tr key={p.id}><td><div className="prim">{p.nome}</div>{p.consomeBolsaValor && <div className="sec">consome bolsa de valor</div>}</td><td className="num">{formatarHoras(p.quantidadePrevista)}</td><td className="num">{ultimo ? formatarMoeda(ultimo.valorHora) : '—'}</td></tr>
+            ); })}{dados.perfis.length === 0 && <tr><td colSpan={3} className="vazio">{c.tipologia === 'CHAVE_NA_MAO' ? 'Contrato chave-na-mão: sem perfis contratuais.' : 'Sem perfis.'}</td></tr>}</tbody>
+          </table></div>
+          {podeGerir && c.tipologia === 'BOLSA_HORAS' && <NovoPerfil contrato={c} onCriado={() => base.recarregar()} onErro={setErro} />}
+        </div>
       )}
 
       {tab === 'Afetações' && (
@@ -102,25 +114,34 @@ export function ContratoDetalhe(): ReactNode {
   );
 }
 
-/** Formulário de alteração dos dados do contrato + inativação com motivo. */
-function FichaEdicao({ contrato, onGravado, onErro }: { contrato: import('@chora/domain').Contrato; onGravado: () => void; onErro: (m: string) => void }): ReactNode {
+const ROT_ESTADO: Record<EstadoContrato, string> = {
+  EM_PREPARACAO: 'Em preparação', AGUARDA_VISTO: 'Aguarda visto TdC', EM_VIGOR: 'Em vigor',
+  SUSPENSO: 'Suspenso', TERMINADO: 'Terminado', RESOLVIDO: 'Resolvido', CADUCADO: 'Caducado', REVOGADO: 'Revogado',
+};
+
+/** Formulário de alteração dos dados do contrato + alteração livre de estado. */
+function FichaEdicao({ contrato, onGravado, onErro }: { contrato: Contrato; onGravado: () => void; onErro: (m?: string) => void }): ReactNode {
   const [f, setF] = useState({
     objeto: contrato.objeto,
-    precoContratualAtual: contrato.precoContratualAtual,
+    // valor como texto para permitir apagar a célula (não fica "0" preso)
+    precoContratualAtual: String(contrato.precoContratualAtual),
     dataTerminoContratual: contrato.dataTerminoContratual,
     vistoTribunalContasNecessario: contrato.vistoTribunalContasNecessario,
     dataVistoTribunalContas: contrato.dataVistoTribunalContas ?? '',
     numeroPortariaExtensaoEncargos: contrato.numeroPortariaExtensaoEncargos ?? '',
   });
-  const [inativarEstado, setInativarEstado] = useState<EstadoContrato>('TERMINADO');
-  const [motivo, setMotivo] = useState('');
+  const [novoEstado, setNovoEstado] = useState<EstadoContrato>(contrato.estado);
+  const [nota, setNota] = useState('');
 
   async function guardar(): Promise<void> {
-    onErro('');
+    onErro();
+    if (f.precoContratualAtual.trim() === '') { onErro('O valor atual do contrato não pode ficar vazio.'); return; }
+    const valor = Number(f.precoContratualAtual);
+    if (!Number.isFinite(valor) || valor < 0) { onErro('O valor atual do contrato tem de ser um número não negativo.'); return; }
     try {
       await app.contratos.atualizar(contrato.id, {
         objeto: f.objeto,
-        precoContratualAtual: f.precoContratualAtual,
+        precoContratualAtual: valor,
         dataTerminoContratual: f.dataTerminoContratual,
         vistoTribunalContasNecessario: f.vistoTribunalContasNecessario,
         ...(f.dataVistoTribunalContas !== '' ? { dataVistoTribunalContas: f.dataVistoTribunalContas } : {}),
@@ -130,10 +151,10 @@ function FichaEdicao({ contrato, onGravado, onErro }: { contrato: import('@chora
     } catch (e) { onErro(mensagemErro(e)); }
   }
 
-  async function inativar(): Promise<void> {
-    onErro('');
+  async function alterarEstado(): Promise<void> {
+    onErro();
     try {
-      await app.contratos.inativar(contrato.id, inativarEstado, motivo, app.utilizador());
+      await app.contratos.alterarEstado(contrato.id, novoEstado, nota, app.utilizador());
       onGravado();
     } catch (e) { onErro(mensagemErro(e)); }
   }
@@ -143,23 +164,50 @@ function FichaEdicao({ contrato, onGravado, onErro }: { contrato: import('@chora
       <div className="cartao"><h3>Alterar dados do contrato</h3><div className="corpo">
         <div className="campo"><label>Objeto</label><input value={f.objeto} onChange={(e) => setF({ ...f, objeto: e.target.value })} /></div>
         <div className="g2">
-          <div className="campo"><label>Valor atual do contrato (cêntimos)</label><input type="number" value={f.precoContratualAtual} onChange={(e) => setF({ ...f, precoContratualAtual: Number(e.target.value) })} /></div>
+          <div className="campo"><label>Valor atual do contrato (cêntimos)</label><input type="number" min={0} value={f.precoContratualAtual} onChange={(e) => setF({ ...f, precoContratualAtual: e.target.value })} placeholder="ex.: 10000000" /></div>
           <div className="campo"><label>Término do contrato</label><input type="date" value={f.dataTerminoContratual} onChange={(e) => setF({ ...f, dataTerminoContratual: e.target.value })} /></div>
         </div>
         <div className="campo"><label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={f.vistoTribunalContasNecessario} onChange={(e) => setF({ ...f, vistoTribunalContasNecessario: e.target.checked })} /> Visto prévio do Tribunal de Contas necessário</label></div>
         <div className="g2">
-          <div className="campo"><label>Data de obtenção do visto</label><input type="date" value={f.dataVistoTribunalContas} onChange={(e) => setF({ ...f, dataVistoTribunalContas: e.target.value })} /></div>
+          <div className="campo"><label>Data de obtenção do visto do TdC</label><input type="date" value={f.dataVistoTribunalContas} onChange={(e) => setF({ ...f, dataVistoTribunalContas: e.target.value })} /></div>
           <div className="campo"><label>Nº portaria de extensão de encargos</label><input value={f.numeroPortariaExtensaoEncargos} onChange={(e) => setF({ ...f, numeroPortariaExtensaoEncargos: e.target.value })} /></div>
         </div>
         <button className="btn pri" onClick={() => void guardar()}>Guardar alterações</button>
       </div></div>
-      <div className="cartao"><h3>Inativar contrato</h3><div className="corpo">
-        <div className="aviso" style={{ marginBottom: 12 }}>A inativação regista o estado terminal e o motivo. É uma operação de execução (não pré-contratual).</div>
-        <div className="campo"><label>Estado terminal</label><select value={inativarEstado} onChange={(e) => setInativarEstado(e.target.value as EstadoContrato)}>{ESTADOS_INATIVACAO.map((s) => <option key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</option>)}</select></div>
-        <div className="campo"><label>Motivo (obrigatório)</label><textarea rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} /></div>
-        <button className="btn" style={{ color: 'var(--vermelho)' }} disabled={motivo.trim() === ''} onClick={() => void inativar()}>Inativar contrato</button>
+      <div className="cartao"><h3>Alterar estado do contrato</h3><div className="corpo">
+        <div className="aviso" style={{ marginBottom: 12 }}>Permite corrigir/reverter o estado (incluindo reativar de suspenso ou terminado). A alteração fica registada na auditoria e a nota visível na ficha.</div>
+        <div className="campo"><label>Estado atual</label><div style={{ marginTop: 2 }}><Estado v={contrato.estado} /></div></div>
+        <div className="campo"><label>Novo estado</label><select value={novoEstado} onChange={(e) => setNovoEstado(e.target.value as EstadoContrato)}>{ESTADOS_CONTRATO.map((s) => <option key={s} value={s}>{ROT_ESTADO[s]}</option>)}</select></div>
+        <div className="campo"><label>Nota / motivo (obrigatório)</label><textarea rows={3} value={nota} onChange={(e) => setNota(e.target.value)} /></div>
+        <button className="btn" disabled={nota.trim() === '' || novoEstado === contrato.estado} onClick={() => void alterarEstado()}>Aplicar novo estado</button>
       </div></div>
     </div>
+  );
+}
+
+/** Criação manual de um perfil contratual (bolsa de horas) no detalhe. */
+function NovoPerfil({ contrato, onCriado, onErro }: { contrato: Contrato; onCriado: () => void; onErro: (m?: string) => void }): ReactNode {
+  const [p, setP] = useState({ nome: '', horas: '', valorHora: '' });
+  async function criar(): Promise<void> {
+    onErro();
+    const horas = Number(p.horas); const valorHora = Number(p.valorHora);
+    if (p.nome.trim() === '' || !Number.isFinite(horas) || horas <= 0 || !Number.isFinite(valorHora) || valorHora <= 0) {
+      onErro('Indique nome, horas (> 0) e valor/hora (> 0) do perfil.'); return;
+    }
+    try {
+      await app.estrutura.criarPerfil(contrato.id, { nome: p.nome.trim(), quantidadePrevista: horasParaMin(horas), consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: false, valorHora, vigenteDe: contrato.dataInicioVigencia }, app.utilizador());
+      setP({ nome: '', horas: '', valorHora: '' });
+      onCriado();
+    } catch (e) { onErro(mensagemErro(e)); }
+  }
+  return (
+    <div className="cartao"><h3>Novo perfil</h3><div className="corpo">
+      <div className="campo"><label>Nome do perfil</label><input value={p.nome} onChange={(e) => setP({ ...p, nome: e.target.value })} placeholder="ex.: Programador Sénior" /></div>
+      <div className="campo"><label>Horas contratadas</label><input type="number" min={1} value={p.horas} onChange={(e) => setP({ ...p, horas: e.target.value })} /></div>
+      <div className="campo"><label>Valor/hora (cêntimos)</label><input type="number" min={1} value={p.valorHora} onChange={(e) => setP({ ...p, valorHora: e.target.value })} /></div>
+      <div className="aviso" style={{ marginBottom: 10 }}>O total dos perfis não pode exceder o valor do contrato <code>RN-105</code>.</div>
+      <button className="btn pri" style={{ width: '100%', justifyContent: 'center' }} onClick={() => void criar()}>Criar perfil</button>
+    </div></div>
   );
 }
 

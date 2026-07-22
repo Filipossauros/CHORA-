@@ -24,6 +24,13 @@ export function rotasRecursos(app: FastifyInstance, ctx: Contexto): void {
     const d = parse(zRecurso, req.body);
     await reply.status(201).send(await servico.criar(d.id, d.entidadeExecutanteNipc, u));
   });
+  app.patch('/api/v1/recursos/:id', async (req) => {
+    const u = exigirUtilizador(req);
+    if (!podeExecutar(u.papeis, 'gerir.afetacoes')) throw new ErroProibido('Sem competência.');
+    const { id } = req.params as { id: string };
+    const d = parse(z.object({ ativo: z.boolean() }), req.body);
+    return servico.definirAtivo(id, d.ativo, u);
+  });
 }
 
 export function rotasAcessos(app: FastifyInstance, ctx: Contexto): void {

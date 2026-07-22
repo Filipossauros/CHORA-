@@ -91,6 +91,15 @@ export function rotasContratos(app: FastifyInstance, ctx: Contexto): void {
     return servico.transitarEstado(id, parsed.data.estado, u);
   });
 
+  app.post('/api/v1/contratos/:id/alterar-estado', async (req) => {
+    const u = exigirUtilizador(req);
+    if (!podeExecutar(u.papeis, 'gerir.contratos')) throw new ErroProibido('Sem competência.');
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ estado: zEstadoContrato, nota: z.string().min(1) }).safeParse(req.body);
+    if (!parsed.success) throw new ErroValidacao('Alteração de estado inválida.', parsed.error.issues);
+    return servico.alterarEstado(id, parsed.data.estado, parsed.data.nota, u);
+  });
+
   app.post('/api/v1/contratos/:id/excecoes', async (req, reply) => {
     const u = exigirUtilizador(req);
     if (!podeExecutar(u.papeis, 'registar.excecoes')) throw new ErroProibido('Só o gestor de contrato regista exceções.');

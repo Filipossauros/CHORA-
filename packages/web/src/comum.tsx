@@ -22,9 +22,24 @@ const CORES_ESTADO: Record<string, string> = {
   RECEBIDA: 'p-ard', EM_CONFERENCIA: 'p-azul', VALIDADA: 'p-verde', INVALIDADA: 'p-verm', DEVOLVIDA: 'p-ambar', PAGA: 'p-verde',
   Ativa: 'p-verde', Inativa: 'p-ard',
 };
+/** Rótulos explícitos para estados cujo nome, por si só, seria ambíguo. */
+const ROTULOS_ESTADO: Record<string, string> = {
+  AGUARDA_VISTO: 'Aguarda visto TdC',
+};
 export function Estado({ v }: { v: string }): ReactNode {
-  const rot = v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');
+  const rot = ROTULOS_ESTADO[v] ?? v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');
   return <span className={`pill ${CORES_ESTADO[v] ?? 'p-ard'}`}>{rot}</span>;
+}
+
+/** Severidade de alerta (secção 11) — não reutiliza pills de estado de contrato. */
+export function Severidade({ v }: { v: string }): ReactNode {
+  const mapa: Record<string, { cor: string; rot: string }> = {
+    CRITICO: { cor: 'p-verm', rot: 'Crítico' },
+    AVISO: { cor: 'p-ambar', rot: 'Aviso' },
+    INFO: { cor: 'p-azul', rot: 'Informativo' },
+  };
+  const s = mapa[v] ?? { cor: 'p-ard', rot: v };
+  return <span className={`pill ${s.cor}`}>{s.rot}</span>;
 }
 
 export function Barra({ fracao }: { fracao: number }): ReactNode {

@@ -86,6 +86,8 @@ export const zContrato = zAuditavel.extend({
 
   // Inativação com motivo
   motivoInativacao: z.string().optional(),
+  // Nota da última alteração de estado (correção/rollback), para histórico visível
+  notaAlteracaoEstado: z.string().optional(),
 
   // Exceções fundamentadas a limites legais (ADR-10)
   excecoes: z.array(zExcecaoContrato),

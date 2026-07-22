@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Barra, Estado, formatarMoeda, hoje, useAsync } from '../comum.js';
+import { Barra, Estado, Severidade, formatarMoeda, hoje, useAsync } from '../comum.js';
 import { calcularCapacidade } from '../capacidade.js';
 
 export function Painel(): ReactNode {
@@ -41,11 +41,11 @@ export function Painel(): ReactNode {
     <>
       <Cabecalho titulo="Visão geral" sub="Estado da execução dos contratos" />
       <div className="grelha-kpi">
-        <div className="kpi"><div className="rot">Contratos em vigor</div><div className="val">{emVigor} <span style={{ fontSize: 14, color: 'var(--texto-suave)' }}>/ {dados.contratos.length}</span></div></div>
-        <div className="kpi"><div className="rot">Registos por aprovar</div><div className="val">{porAprovar}</div></div>
-        <div className="kpi"><div className="rot">Valor executado</div><div className="val">{formatarMoeda(executado)}</div></div>
-        <div className="kpi"><div className="rot">Alertas críticos</div><div className="val" style={{ color: criticos > 0 ? 'var(--vermelho)' : undefined }}>{criticos}</div></div>
-        {dados.capacidades.length > 0 && <div className="kpi"><div className="rot">Pessoas em falta (bolsa de horas)</div><div className="val" style={{ color: totalFaltaCM > 0 ? 'var(--ambar)' : 'var(--verde)' }}>{totalFaltaCM}</div><div className="sub">face à afetação-alvo</div></div>}
+        <div className="kpi click" onClick={() => navegar('/contratos')}><div className="rot">Contratos em vigor</div><div className="val">{emVigor} <span style={{ fontSize: 14, color: 'var(--texto-suave)' }}>/ {dados.contratos.length}</span></div></div>
+        <div className="kpi click" onClick={() => navegar('/aprovacoes')}><div className="rot">Registos por aprovar</div><div className="val">{porAprovar}</div><div className="sub">abrir aprovações →</div></div>
+        <div className="kpi click" onClick={() => navegar('/relatorios')}><div className="rot">Valor executado</div><div className="val">{formatarMoeda(executado)}</div></div>
+        <div className="kpi click" onClick={() => navegar('/alertas')}><div className="rot">Alertas críticos</div><div className="val" style={{ color: criticos > 0 ? 'var(--vermelho)' : undefined }}>{criticos}</div><div className="sub">abrir alertas →</div></div>
+        {dados.capacidades.length > 0 && <div className="kpi click" onClick={() => navegar(`/contratos/${dados.capacidades[0]!.contrato.id}?tab=Capacidade`)}><div className="rot">Pessoas em falta (bolsa de horas)</div><div className="val" style={{ color: totalFaltaCM > 0 ? 'var(--ambar)' : 'var(--verde)' }}>{totalFaltaCM}</div><div className="sub">face à afetação-alvo →</div></div>}
       </div>
       <div className="duas">
         <div className="cartao">
@@ -72,7 +72,7 @@ export function Painel(): ReactNode {
           <table>
             <tbody>
               {dados.alertas.slice(0, 8).map((a) => (
-                <tr key={a.id}><td><div className="prim" style={{ fontSize: 13 }}>{a.titulo}</div><div className="sec">{a.detalhe}</div></td><td style={{ textAlign: 'right' }}><Estado v={a.severidade === 'CRITICO' ? 'REJEITADO' : 'AGUARDA_VISTO'} /></td></tr>
+                <tr key={a.id}><td><div className="prim" style={{ fontSize: 13 }}>{a.titulo}</div><div className="sec">{a.detalhe}</div></td><td style={{ textAlign: 'right' }}><Severidade v={a.severidade} /></td></tr>
               ))}
               {dados.alertas.length === 0 && <tr><td className="vazio">Sem alertas.</td></tr>}
             </tbody>
@@ -86,7 +86,7 @@ export function Painel(): ReactNode {
             <thead><tr><th>Contrato</th><th className="num">Dias úteis restantes</th><th className="num">Pessoas afetas</th><th className="num">Afetação-alvo</th><th className="num">Pessoas em falta</th></tr></thead>
             <tbody>
               {dados.capacidades.map(({ contrato, cap }) => (
-                <tr key={contrato.id} className="click" onClick={() => navegar(`/contratos/${contrato.id}`)}>
+                <tr key={contrato.id} className="click" onClick={() => navegar(`/contratos/${contrato.id}?tab=Capacidade`)}>
                   <td><div className="prim">{contrato.numero}</div><div className="sec">{contrato.objeto}</div></td>
                   <td className="num">{cap.dias}</td>
                   <td className="num">{cap.totalAfetas}</td>

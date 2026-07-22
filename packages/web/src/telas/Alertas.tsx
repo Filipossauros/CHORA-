@@ -1,13 +1,22 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { JobAlertas } from '@chora/api/nucleo';
-import type { Alerta } from '@chora/domain';
+import type { Alerta, Contrato, PerfilContratual, RegistoTempo } from '@chora/domain';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Estado, useAsync } from '../comum.js';
+import { Severidade, formatarHoras, formatarMoeda, useAsync } from '../comum.js';
+import { perfisIdenticosDisponiveis, SALVAGUARDA_JURIDICA } from '../sugestoes.js';
+
+interface Contexto { contratos: Contrato[]; perfis: PerfilContratual[]; aprovados: RegistoTempo[] }
 
 export function Alertas(): ReactNode {
   const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
-  const base = useAsync(() => app.ctx.repos.alertas.todos(), []);
+  const base = useAsync(async () => {
+    const alertas = await app.ctx.repos.alertas.todos();
+    const contratos = await app.ctx.repos.contratos.todos();
+    const perfis = await app.ctx.repos.perfis.todos();
+    const aprovados = await app.ctx.repos.registosTempo.todos((r) => r.estado === 'APROVADO');
+    return { alertas, ctx: { contratos, perfis, aprovados } as Contexto };
+  }, []);
   const [aberto, setAberto] = useState<string>();
   const [sugestao, setSugestao] = useState<Record<string, string>>({});
 
@@ -16,60 +25,66 @@ export function Alertas(): ReactNode {
     base.recarregar();
   }
 
-  /** Stub de recurso a IA: propõe uma ação de execução a partir do alerta. */
-  async function sugerir(a: Alerta): Promise<void> {
-    setAberto(a.id);
-    if (sugestao[a.id] === undefined) {
-      const texto = await sugestaoIA(a);
-      setSugestao((s) => ({ ...s, [a.id]: texto }));
+  function sugerir(a: Alerta): void {
+    setAberto(aberto === a.id ? undefined : a.id);
+    if (sugestao[a.id] === undefined && base.dados !== undefined) {
+      setSugestao((s) => ({ ...s, [a.id]: sugestaoIA(a, base.dados!.ctx) }));
     }
   }
 
-  const sev = (s: string): string => (s === 'CRITICO' ? 'REJEITADO' : s === 'AVISO' ? 'AGUARDA_VISTO' : 'RECEBIDA');
   return (
     <>
       <Cabecalho titulo="Alertas" sub="Preocupações de execução do contrato (secção 11)" acoes={podeGerir ? <button className="btn" onClick={() => void executar()}>Executar job de alertas</button> : undefined} />
       <div className="cartao"><table>
         <thead><tr><th>Severidade</th><th>Código</th><th>Título</th><th>Detalhe</th><th></th></tr></thead>
-        <tbody>{(base.dados ?? []).map((a) => (
+        <tbody>{(base.dados?.alertas ?? []).map((a) => (
           <Fragment key={a.id}>
             <tr>
-              <td><Estado v={sev(a.severidade)} /></td>
+              <td><Severidade v={a.severidade} /></td>
               <td><code>{a.codigo}</code></td>
               <td className="prim">{a.titulo}</td>
               <td>{a.detalhe}</td>
-              <td style={{ whiteSpace: 'nowrap' }}><button className="btn sm" onClick={() => void sugerir(a)}>✨ Sugestão (IA)</button></td>
+              <td style={{ whiteSpace: 'nowrap' }}><button className="btn sm" onClick={() => sugerir(a)}>✨ Sugestão (IA)</button></td>
             </tr>
             {aberto === a.id && (
               <tr>
                 <td colSpan={5}>
                   <div className="aviso" style={{ margin: 0 }}>
                     <b>Sugestão (IA · protótipo):</b> {sugestao[a.id] ?? 'A analisar…'}
-                    <div className="sec" style={{ marginTop: 4 }}>Sugestão gerada por stub determinístico; não constitui parecer jurídico.</div>
+                    <div className="sec" style={{ marginTop: 4 }}>{SALVAGUARDA_JURIDICA}</div>
                   </div>
                 </td>
               </tr>
             )}
           </Fragment>
         ))}
-        {base.dados?.length === 0 && <tr><td colSpan={5} className="vazio">Sem alertas.</td></tr>}</tbody>
+        {base.dados?.alertas.length === 0 && <tr><td colSpan={5} className="vazio">Sem alertas.</td></tr>}</tbody>
       </table></div>
     </>
   );
 }
 
 /**
- * Stub de IA (secção 14 — ponto de extensão). Devolve uma sugestão de ação de
- * execução consoante o código do alerta. Para o valor disponível reduzido,
- * verifica se já existe pedido de trabalhos complementares.
+ * Recurso a IA (stub determinístico, secção 14). Devolve uma sugestão de ação a
+ * partir do código do alerta. Para o esgotamento de um perfil, faz a verificação
+ * determinística de perfis idênticos disponíveis noutros contratos.
  */
-async function sugestaoIA(a: Alerta): Promise<string> {
+function sugestaoIA(a: Alerta, ctx: Contexto): string {
+  if (a.codigo === 'AL-PERFIL-80' || a.codigo === 'AL-PERFIL-90') {
+    const emRisco = perfisIdenticosDisponiveis(a.contratoId, ctx.contratos, ctx.perfis, ctx.aprovados);
+    const alt = emRisco.flatMap((r) => r.alternativas)[0];
+    if (alt !== undefined) {
+      return `O perfil está a esgotar-se. Existe um perfil idêntico disponível no contrato ${alt.contratoNumero} (${formatarHoras(alt.horasDisponiveis * 60)} · ${formatarMoeda(alt.valorDisponivel)} disponíveis) — pondere mobilizar aí a execução.`;
+    }
+    return 'O perfil aproxima-se do esgotamento e não há perfil idêntico com disponibilidade noutro contrato. Reequilibre afetações, reveja o planeamento de horas ou pondere reforço/trabalhos complementares dentro do contrato.';
+  }
   if (a.codigo === 'AL-VALOR-DISPONIVEL') {
-    const alteracoes = await app.ctx.repos.alteracoes.todos((x) => x.contratoId === a.contratoId);
-    const jaPediu = alteracoes.some((x) => x.tipo === 'SERVICOS_COMPLEMENTARES');
-    return jaPediu
-      ? 'Já existe um pedido de trabalhos complementares registado. Acompanhe a tramitação e, se necessário, o visto prévio do Tribunal de Contas antes de novo consumo.'
-      : 'Pondere solicitar trabalhos complementares (dentro do limite de 50% do valor inicial, RN-301), fundamentando a necessidade, antes que o saldo se esgote.';
+    const emRisco = perfisIdenticosDisponiveis(a.contratoId, ctx.contratos, ctx.perfis, ctx.aprovados);
+    const alt = emRisco.flatMap((r) => r.alternativas)[0];
+    if (alt !== undefined) {
+      return `O valor disponível está reduzido. Existe um perfil idêntico com saldo no contrato ${alt.contratoNumero} (${formatarMoeda(alt.valorDisponivel)} disponíveis); em alternativa, pondere trabalhos complementares (limite de 50%, RN-301).`;
+    }
+    return 'Pondere solicitar trabalhos complementares (dentro do limite de 50% do valor inicial, RN-301), fundamentando a necessidade, antes que o saldo se esgote.';
   }
   const MAPA: Record<string, string> = {
     'AL-TERMINO-3M': 'Prepare a caducidade ou uma eventual prorrogação/novo procedimento em tempo útil; confirme entregáveis pendentes.',
@@ -77,8 +92,6 @@ async function sugestaoIA(a: Alerta): Promise<string> {
     'AL-VIGENCIA-36M': 'Reveja o prazo de vigência e fundamente a exceção ao limite (RN-202) se aplicável.',
     'AL-COMPLEMENTARES-40': 'Acompanhe o acumulado de trabalhos complementares face ao limite legal de 50% (RN-301).',
     'AL-COMPLEMENTARES-45': 'Está próximo do limite de 50% de trabalhos complementares; evite novos acréscimos sem análise.',
-    'AL-PERFIL-80': 'O perfil aproxima-se do esgotamento; reequilibre afetações ou reveja o planeamento de horas.',
-    'AL-PERFIL-90': 'O perfil está quase esgotado; suspenda novos registos ou pondere reforço dentro do contrato.',
     'AL-VISTO-PENDENTE': 'Confirme a submissão ao Tribunal de Contas; não deve haver execução relevante sem visto (salvo visto tácito).',
     'AL-HABILITACAO': 'Solicite ao prestador a renovação do documento de habilitação antes de expirar.',
     'AL-PUBLICITACAO': 'Publicite a alteração no Portal BASE dentro do prazo legal.',

@@ -2,6 +2,7 @@ import type { PapelAplicacional, Recurso } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import type { Acesso } from '../repositorios/memoria/index.js';
 import type { ContextoUtilizador } from '../auth/token-validator.js';
+import { ErroNaoEncontrado } from '../erros/problema.js';
 
 /** Recursos (colaboradores externos). O nome não é persistido (secção 9.4). */
 export class ServicoRecursos {
@@ -16,6 +17,19 @@ export class ServicoRecursos {
     await this.ctx.repos.recursos.guardar(recurso);
     await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Recurso', entidadeId: id, operacao: 'CRIAR', resultado: 'PERMITIDO', depois: recurso });
     return recurso;
+  }
+
+  /**
+   * Ativa/inativa um recurso. A inativação não remove as afetações a
+   * contratos/perfis (preserva o histórico); só filtra a vista por omissão.
+   */
+  async definirAtivo(id: string, ativo: boolean, u: ContextoUtilizador): Promise<Recurso> {
+    const atual = await this.ctx.repos.recursos.obter(id);
+    if (atual === null) throw new ErroNaoEncontrado(`Recurso ${id} inexistente.`);
+    const atualizado: Recurso = { ...atual, ativo, atualizadoEm: this.ctx.relogio.agora(), atualizadoPor: u.utilizadorId };
+    await this.ctx.repos.recursos.guardar(atualizado);
+    await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Recurso', entidadeId: id, operacao: ativo ? 'ATIVAR' : 'INATIVAR', resultado: 'PERMITIDO', antes: atual, depois: atualizado });
+    return atualizado;
   }
 }
 

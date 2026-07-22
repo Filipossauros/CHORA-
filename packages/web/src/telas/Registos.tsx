@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { app } from '../porta/aplicacao-local.js';
+import { app, nomeAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Estado, formatarHoras, horasParaMin, hoje, mensagemErro, useAsync } from '../comum.js';
 
@@ -7,6 +7,7 @@ export function Registos(): ReactNode {
   const u = app.utilizador();
   const podeVerTodos = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
   const [erro, setErro] = useState<string>();
+  const [mostrarAnulados, setMostrarAnulados] = useState(false);
   // Por omissão: hoje e 8 horas de trabalho (unidade = hora, sem minutos).
   const [form, setForm] = useState({ afetacaoId: '', data: hoje(), horas: 8, descricao: '', workItemId: 1001, tipo: '' });
 
@@ -21,12 +22,14 @@ export function Registos(): ReactNode {
   const { afetacoes, registos, perfis } = base.dados;
   const afSel = afetacoes.find((a) => a.id === form.afetacaoId);
   const perfilSel = perfis.find((p) => p.id === afSel?.perfilId);
+  // Sem estado "Rascunho": o registo é submetido de imediato. Anulados escondidos por omissão.
+  const registosVis = registos.filter((r) => mostrarAnulados || r.estado !== 'ANULADO');
 
-  async function registar(submeter: boolean): Promise<void> {
+  async function registar(): Promise<void> {
     setErro(undefined);
     try {
       const criado = await app.registos.criar({ afetacaoId: form.afetacaoId, workItemId: form.workItemId, data: form.data, duracao: horasParaMin(form.horas), descricaoAtividade: form.descricao, ...(form.tipo !== '' ? { tipoDotacaoConsumida: form.tipo as never } : {}) }, app.utilizador());
-      if (submeter) await app.registos.submeter(criado.id, app.utilizador());
+      await app.registos.submeter(criado.id, app.utilizador());
       setForm({ ...form, descricao: '' });
       base.recarregar();
     } catch (e) { setErro(mensagemErro(e)); }
@@ -48,14 +51,17 @@ export function Registos(): ReactNode {
           )}
           <div className="campo"><label>Work item</label><input type="number" value={form.workItemId} onChange={(e) => setForm({ ...form, workItemId: Number(e.target.value) })} /></div>
           <div className="campo"><label>Descrição da atividade</label><textarea rows={2} value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} /></div>
-          <div className="aviso" style={{ marginBottom: 10 }}>Não é permitido registar tempo em datas futuras <code>RN-409</code>.</div>
-          <div style={{ display: 'flex', gap: 8 }}><button className="btn pri" style={{ flex: 1, justifyContent: 'center' }} disabled={form.afetacaoId === '' || form.descricao === ''} onClick={() => void registar(false)}>Registar</button><button className="btn" disabled={form.afetacaoId === '' || form.descricao === ''} onClick={() => void registar(true)}>Registar e submeter</button></div>
+          <div className="aviso" style={{ marginBottom: 10 }}>O registo é submetido de imediato (sem rascunho). Não é permitido registar tempo em datas futuras <code>RN-409</code>.</div>
+          <button className="btn pri" style={{ width: '100%', justifyContent: 'center' }} disabled={form.afetacaoId === '' || form.descricao === ''} onClick={() => void registar()}>Registar e submeter</button>
         </div></div>
 
-        <div className="cartao"><h3>Registos</h3><table>
+        <div className="cartao">
+          <h3>Registos</h3>
+          <div style={{ padding: '0 2px 8px' }}><label className="papel-chip" style={{ cursor: 'pointer' }}><input type="checkbox" checked={mostrarAnulados} onChange={(e) => setMostrarAnulados(e.target.checked)} /> Mostrar anulados</label></div>
+          <table>
           <thead><tr><th>Data</th>{podeVerTodos && <th>Recurso</th>}<th>Duração</th><th>Atividade</th><th>Estado</th></tr></thead>
-          <tbody>{registos.slice(0, 40).map((r) => <tr key={r.id}><td className="tabnum">{r.data}</td>{podeVerTodos && <td>{r.recursoId}</td>}<td className="num">{formatarHoras(r.duracao)}</td><td>{r.descricaoAtividade}</td><td><Estado v={r.estado} /></td></tr>)}
-          {registos.length === 0 && <tr><td colSpan={5} className="vazio">Sem registos.</td></tr>}</tbody>
+          <tbody>{registosVis.slice(0, 40).map((r) => <tr key={r.id}><td className="tabnum">{r.data}</td>{podeVerTodos && <td>{nomeAzure(r.recursoId)}</td>}<td className="num">{formatarHoras(r.duracao)}</td><td>{r.descricaoAtividade}</td><td><Estado v={r.estado} /></td></tr>)}
+          {registosVis.length === 0 && <tr><td colSpan={5} className="vazio">Sem registos.</td></tr>}</tbody>
         </table></div>
       </div>
     </>

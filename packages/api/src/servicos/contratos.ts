@@ -63,6 +63,22 @@ export class ServicoContratos {
     return atualizado;
   }
 
+  /**
+   * Altera o estado do contrato para qualquer outro estado (correção/rollback),
+   * mesmo a partir de estados terminais, com nota obrigatória. Não passa pela
+   * máquina de estados: destina-se a corrigir enganos, ficando o histórico
+   * registado na auditoria e a nota visível na ficha (feedback ronda 3).
+   */
+  async alterarEstado(id: string, novo: EstadoContrato, nota: string, u: ContextoUtilizador): Promise<Contrato> {
+    if (nota.trim().length === 0) throw new ErroValidacao('A alteração de estado exige uma nota (motivo).');
+    const atual = await this.ctx.repos.contratos.obter(id);
+    if (atual === null) throw new ErroNaoEncontrado(`Contrato ${id} inexistente.`);
+    const atualizado: Contrato = { ...atual, estado: novo, notaAlteracaoEstado: nota, atualizadoEm: this.ctx.relogio.agora(), atualizadoPor: u.utilizadorId };
+    await this.ctx.repos.contratos.guardar(atualizado);
+    await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: id, operacao: `ALTERAR_ESTADO:${atual.estado}->${novo}`, resultado: 'PERMITIDO', antes: atual, depois: atualizado });
+    return atualizado;
+  }
+
   async transitarEstado(id: string, novo: EstadoContrato, utilizador: ContextoUtilizador): Promise<Contrato> {
     const contrato = await this.ctx.repos.contratos.obter(id);
     if (contrato === null) throw new ErroNaoEncontrado(`Contrato ${id} inexistente.`);
