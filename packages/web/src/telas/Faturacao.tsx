@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { jsPDF } from 'jspdf';
 import { app, nomeAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Estado, formatarHoras, formatarMoeda, horasParaMin, hoje, mensagemErro, useAsync } from '../comum.js';
+import { Estado, eurosParaCent, formatarHoras, formatarMoeda, horasParaMin, hoje, mensagemErro, useAsync } from '../comum.js';
 
 interface LinhaConf { perfilId?: string; recursoId?: string; quantidadeFatura: number; quantidadeAprovada: number; valorFatura: number; valorAprovado: number }
 interface Relatorio { decisao: string; motivo?: string; frase: string; geradoEm: string }
@@ -73,9 +73,9 @@ export function Faturacao(): ReactNode {
 
   async function criarConferencia(): Promise<void> {
     setErro(undefined);
-    const semIva = Number(nova.montanteSemIva); const iva = Number(nova.montanteIva);
-    if (nova.numero.trim() === '' || nova.periodoDe === '' || nova.periodoAte === '' || !Number.isFinite(semIva) || semIva <= 0) {
-      setErro('Indique o nº da fatura, o período e o montante s/ IVA (> 0).'); return;
+    const semIva = eurosParaCent(nova.montanteSemIva); const iva = eurosParaCent(nova.montanteIva);
+    if (nova.numero.trim() === '' || nova.periodoDe === '' || nova.periodoAte === '' || semIva <= 0) {
+      setErro('Indique o nº da fatura, o período e o montante s/ IVA (€ > 0).'); return;
     }
     try {
       const u = app.utilizador();
@@ -188,8 +188,8 @@ export function Faturacao(): ReactNode {
               <div className="campo"><label>Período até *</label><input type="date" value={nova.periodoAte} onChange={(e) => setNova({ ...nova, periodoAte: e.target.value })} /></div>
             </div>
             <div className="g2">
-              <div className="campo"><label>Montante s/ IVA (cêntimos) *</label><input type="number" min={0} value={nova.montanteSemIva} onChange={(e) => setNova({ ...nova, montanteSemIva: e.target.value })} /></div>
-              <div className="campo"><label>IVA (cêntimos)</label><input type="number" min={0} value={nova.montanteIva} onChange={(e) => setNova({ ...nova, montanteIva: e.target.value })} /></div>
+              <div className="campo"><label>Montante s/ IVA (€) *</label><input type="number" min={0} step="0.01" value={nova.montanteSemIva} onChange={(e) => setNova({ ...nova, montanteSemIva: e.target.value })} /></div>
+              <div className="campo"><label>IVA (€)</label><input type="number" min={0} step="0.01" value={nova.montanteIva} onChange={(e) => setNova({ ...nova, montanteIva: e.target.value })} /></div>
             </div>
             <div className="g2">
               {TIPOS_DOC.map(({ tipo, rot }) => (

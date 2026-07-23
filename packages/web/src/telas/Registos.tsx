@@ -9,7 +9,7 @@ export function Registos(): ReactNode {
   const [erro, setErro] = useState<string>();
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
   // Por omissão: hoje e 8 horas de trabalho (unidade = hora, sem minutos).
-  const [form, setForm] = useState({ afetacaoId: '', data: hoje(), horas: 8, descricao: '', workItemId: 1001, tipo: '' });
+  const [form, setForm] = useState({ afetacaoId: '', data: hoje(), horas: '8', descricao: '', workItemId: '1001', tipo: '' });
 
   const base = useAsync(async () => {
     const afetacoes = await app.ctx.repos.afetacoes.todos((a) => a.ativa && (podeVerTodos || a.recursoId === u.utilizadorId));
@@ -27,8 +27,10 @@ export function Registos(): ReactNode {
 
   async function registar(): Promise<void> {
     setErro(undefined);
+    const horas = Number(form.horas);
+    if (!Number.isFinite(horas) || horas < 1) { setErro('Indique as horas (inteiras, ≥ 1).'); return; }
     try {
-      const criado = await app.registos.criar({ afetacaoId: form.afetacaoId, workItemId: form.workItemId, data: form.data, duracao: horasParaMin(form.horas), descricaoAtividade: form.descricao, ...(form.tipo !== '' ? { tipoDotacaoConsumida: form.tipo as never } : {}) }, app.utilizador());
+      const criado = await app.registos.criar({ afetacaoId: form.afetacaoId, workItemId: Number(form.workItemId) || 0, data: form.data, duracao: horasParaMin(horas), descricaoAtividade: form.descricao, ...(form.tipo !== '' ? { tipoDotacaoConsumida: form.tipo as never } : {}) }, app.utilizador());
       await app.registos.submeter(criado.id, app.utilizador());
       setForm({ ...form, descricao: '' });
       base.recarregar();
@@ -43,13 +45,13 @@ export function Registos(): ReactNode {
         <div className="cartao"><h3>Registar tempo</h3><div className="corpo">
           <div className="g2">
             <div className="campo"><label>Data</label><input type="date" max={hoje()} value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} /></div>
-            <div className="campo"><label>Horas (inteiras)</label><input type="number" min={1} step={1} value={form.horas} onChange={(e) => setForm({ ...form, horas: Number(e.target.value) })} /></div>
+            <div className="campo"><label>Horas (inteiras)</label><input type="number" min={1} step={1} value={form.horas} onChange={(e) => setForm({ ...form, horas: e.target.value })} /></div>
           </div>
           <div className="campo"><label>Afetação (perfil)</label><select value={form.afetacaoId} onChange={(e) => setForm({ ...form, afetacaoId: e.target.value })}><option value="">— selecionar —</option>{afetacoes.map((a) => <option key={a.id} value={a.id}>{perfis.find((p) => p.id === a.perfilId)?.nome ?? a.perfilId}</option>)}</select></div>
           {perfilSel !== undefined && (perfilSel.consomeBolsaValor || perfilSel.consomeTrabalhosComplementares) && (
             <div className="campo"><label>Tipo de dotação</label><select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}><option value="">Automático</option><option value="HORAS_BASE">Horas base</option>{perfilSel.consomeBolsaValor && <option value="BOLSA_VALOR">Bolsa de valor</option>}{perfilSel.consomeTrabalhosComplementares && <option value="TRABALHOS_COMPLEMENTARES">Trabalhos complementares</option>}</select></div>
           )}
-          <div className="campo"><label>Work item</label><input type="number" value={form.workItemId} onChange={(e) => setForm({ ...form, workItemId: Number(e.target.value) })} /></div>
+          <div className="campo"><label>Work item</label><input type="number" value={form.workItemId} onChange={(e) => setForm({ ...form, workItemId: e.target.value })} /></div>
           <div className="campo"><label>Descrição da atividade</label><textarea rows={2} value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} /></div>
           <div className="aviso" style={{ marginBottom: 10 }}>O registo é submetido de imediato (sem rascunho). Não é permitido registar tempo em datas futuras <code>RN-409</code>.</div>
           <button className="btn pri" style={{ width: '100%', justifyContent: 'center' }} disabled={form.afetacaoId === '' || form.descricao === ''} onClick={() => void registar()}>Registar e submeter</button>

@@ -1,7 +1,7 @@
 import {
   RN_101, RN_201, RN_202, exigir,
   maquinaContrato, complementaresAcumulados, percentagemComplementares,
-  calcularConsumoPerfil, valorPrevistoPerfil,
+  calcularConsumoPerfil, valorPrevistoPerfil, vistoAssegurado, diaDeInstante,
   type Contrato, type EstadoContrato,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
@@ -33,9 +33,17 @@ export class ServicoContratos {
     }
   }
 
+  /** Um contrato que exija visto prévio do TdC só pode estar EM_VIGOR com o visto assegurado. */
+  private exigirVistoParaVigor(contrato: Contrato): void {
+    if (contrato.estado === 'EM_VIGOR' && !vistoAssegurado(contrato, diaDeInstante(this.ctx.relogio.agora()))) {
+      throw new ErroValidacao('O contrato exige visto prévio do Tribunal de Contas e este não está assegurado (sem data de obtenção, visto tácito, nem data prevista já atingida): não pode estar em vigor.');
+    }
+  }
+
   /** Cria um contrato após validação. */
   async criar(contrato: Contrato, u: ContextoUtilizador): Promise<Contrato> {
     await this.validar(contrato);
+    this.exigirVistoParaVigor(contrato);
     await this.ctx.repos.contratos.guardar(contrato);
     await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: contrato.id, operacao: 'CRIAR', resultado: 'PERMITIDO', depois: contrato });
     return contrato;
@@ -74,6 +82,7 @@ export class ServicoContratos {
     const atual = await this.ctx.repos.contratos.obter(id);
     if (atual === null) throw new ErroNaoEncontrado(`Contrato ${id} inexistente.`);
     const atualizado: Contrato = { ...atual, estado: novo, notaAlteracaoEstado: nota, atualizadoEm: this.ctx.relogio.agora(), atualizadoPor: u.utilizadorId };
+    this.exigirVistoParaVigor(atualizado);
     await this.ctx.repos.contratos.guardar(atualizado);
     await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: id, operacao: `ALTERAR_ESTADO:${atual.estado}->${novo}`, resultado: 'PERMITIDO', antes: atual, depois: atualizado });
     return atualizado;

@@ -13,6 +13,9 @@ export const formatarDuracao = formatarHoras;
 /** Converte horas ↔ minutos (armazenamento interno em minutos). */
 export const horasParaMin = (h: number): number => Math.round(h) * 60;
 export const minParaHoras = (m: number): number => Math.round(m / 60);
+/** Converte euros (texto do formulário) ↔ cêntimos (armazenamento interno). */
+export const eurosParaCent = (s: string | number): number => Math.round((parseFloat(String(s).replace(',', '.')) || 0) * 100);
+export const centParaEuros = (c: number): string => String(c / 100);
 export function pct(fracao: number): string { return `${Math.round(fracao * 100)}%`; }
 export function hoje(): string { return new Date().toISOString().slice(0, 10); }
 

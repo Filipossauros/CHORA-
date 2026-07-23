@@ -6,11 +6,11 @@ const NAV = [
   { grupo: 'Painel', itens: [{ to: '/', rot: 'Visão geral', fim: true }] },
   { grupo: 'Gestão', itens: [
     { to: '/contratos', rot: 'Contratos' },
-    { to: '/afetacoes', rot: 'Afetações' }, { to: '/recursos', rot: 'Recursos' },
   ] },
   { grupo: 'Operação', itens: [{ to: '/registos', rot: 'Registos de tempo' }, { to: '/aprovacoes', rot: 'Aprovações' }] },
   { grupo: 'Financeiro', itens: [{ to: '/faturacao', rot: 'Faturação' }] },
   { grupo: 'Análise', itens: [
+    { to: '/recursos', rot: 'Recursos' },
     { to: '/relatorios', rot: 'Relatórios' }, { to: '/alertas', rot: 'Alertas' },
     { to: '/auditoria', rot: 'Auditoria' }, { to: '/acessos', rot: 'Acessos' },
   ] },

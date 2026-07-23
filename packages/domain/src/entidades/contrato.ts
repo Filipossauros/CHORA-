@@ -74,6 +74,7 @@ export const zContrato = zAuditavel.extend({
   // Fiscalização prévia (Tribunal de Contas)
   vistoTribunalContasNecessario: z.boolean(),
   dataRemessaTribunalContas: zDataISO.optional(),
+  dataPrevistaVistoTribunalContas: zDataISO.optional(), // data prevista de obtenção do visto
   dataVistoTribunalContas: zDataISO.optional(),
   vistoTacito: z.boolean().optional(),
 

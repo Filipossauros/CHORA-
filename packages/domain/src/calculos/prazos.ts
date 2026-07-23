@@ -48,6 +48,20 @@ export function excedeLimiteVigencia(contrato: Contrato): boolean {
   return vigenciaEmMeses(contrato) > LIMITE_VIGENCIA_MESES;
 }
 
+/**
+ * Visto prévio do Tribunal de Contas assegurado para efeitos de EXECUÇÃO.
+ * Um contrato que exija visto prévio só pode iniciar execução (estar EM_VIGOR)
+ * quando o visto está assegurado: obtido (data de obtenção preenchida), tácito,
+ * ou já ultrapassada/coincidente a data prevista de obtenção do visto.
+ */
+export function vistoAssegurado(contrato: Contrato, hoje: DataISO): boolean {
+  if (!contrato.vistoTribunalContasNecessario) return true;
+  if (contrato.dataVistoTribunalContas !== undefined) return true;
+  if (contrato.vistoTacito === true) return true;
+  if (contrato.dataPrevistaVistoTribunalContas !== undefined && hoje >= contrato.dataPrevistaVistoTribunalContas) return true;
+  return false;
+}
+
 /** Total de dias suspensos que deslocam o prazo de execução (RN-204). */
 export function diasSuspensaoExecucao(
   alteracoes: ReadonlyArray<Alteracao>,

@@ -1,12 +1,29 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { ESTADOS_CONTRATO, type Afetacao, type Contrato, type EstadoContrato, type PerfilContratual, type RegistoTempo } from '@chora/domain';
-import { app, nomeAzure } from '../porta/aplicacao-local.js';
+import { app, AZURE_USERS, nomeAzure, prestadorAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Barra, Estado, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
+import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
 import { calcularCapacidade } from '../capacidade.js';
 
-const TABS = ['Ficha', 'Estrutura', 'Afetações', 'Execução financeira', 'Capacidade', 'Alterações'] as const;
+const RECURSOS_AZURE = AZURE_USERS.filter((u) => u.prestador !== undefined);
+function rotularOperacao(op: string): string {
+  if (op.startsWith('ALTERAR_ESTADO')) return 'Alteração de estado';
+  if (op.startsWith('ESTADO:')) return 'Transição de estado';
+  if (op.startsWith('INATIVAR')) return 'Inativação';
+  const m: Record<string, string> = { CRIAR: 'Criação', ATUALIZAR: 'Atualização de dados', EXCECAO: 'Exceção fundamentada' };
+  return m[op] ?? op;
+}
+function resumirEvento(e: { operacao: string; regraViolada?: string; depois?: unknown }): string {
+  const dep = e.depois as { notaAlteracaoEstado?: string; motivoInativacao?: string } | undefined;
+  if (e.operacao.startsWith('ALTERAR_ESTADO:')) return `${e.operacao.slice('ALTERAR_ESTADO:'.length).replace('->', ' → ')}${dep?.notaAlteracaoEstado !== undefined ? ` · ${dep.notaAlteracaoEstado}` : ''}`;
+  if (e.operacao.startsWith('INATIVAR')) return dep?.motivoInativacao ?? 'Inativação do contrato';
+  if (e.operacao === 'ATUALIZAR') return 'Dados do contrato atualizados';
+  if (e.operacao === 'CRIAR') return 'Contrato criado';
+  return e.regraViolada ?? '—';
+}
+
+const TABS = ['Ficha', 'Estrutura', 'Afetações', 'Execução financeira', 'Capacidade', 'Histórico de alterações'] as const;
 type Tab = (typeof TABS)[number];
 
 export function ContratoDetalhe(): ReactNode {
@@ -34,8 +51,10 @@ export function ContratoDetalhe(): ReactNode {
     const afetacoes = await app.ctx.repos.afetacoes.todos((a) => a.contratoId === id);
     const alteracoes = await app.ctx.repos.alteracoes.todos((a) => a.contratoId === id);
     const aprovados = await app.ctx.repos.registosTempo.todos((r) => r.contratoId === id && r.estado === 'APROVADO');
+    const eventos = (await app.ctx.repos.eventosAuditoria.todos((e) => e.entidade === 'Contrato' && e.entidadeId === id)).sort((a, b) => (a.ocorridoEm < b.ocorridoEm ? 1 : -1));
+    const recursos = await app.ctx.repos.recursos.todos();
     const resumo = await app.contratos.resumoExecucao(id) as ResumoExec;
-    return { contrato, perfis, afetacoes, alteracoes, aprovados, resumo };
+    return { contrato, perfis, afetacoes, alteracoes, aprovados, eventos, recursos, resumo };
   }, [id]);
 
   const dados = base.dados;
@@ -75,11 +94,7 @@ export function ContratoDetalhe(): ReactNode {
       )}
 
       {tab === 'Afetações' && (
-        <div className="cartao"><h3>Afetações (ativa/inativa)</h3><table>
-          <thead><tr><th>Recurso</th><th>Perfil</th><th>Estado</th></tr></thead>
-          <tbody>{dados.afetacoes.map((a) => <tr key={a.id}><td>{nomeAzure(a.recursoId)}</td><td>{dados.perfis.find((p) => p.id === a.perfilId)?.nome ?? a.perfilId}</td><td><Estado v={a.ativa ? 'Ativa' : 'Inativa'} /></td></tr>)}
-          {dados.afetacoes.length === 0 && <tr><td colSpan={3} className="vazio">Sem afetações.</td></tr>}</tbody>
-        </table></div>
+        <GestaoAfetacoes contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} podeGerir={podeGerir} onMudou={() => base.recarregar()} onErro={setErro} />
       )}
 
       {tab === 'Execução financeira' && (
@@ -105,12 +120,19 @@ export function ContratoDetalhe(): ReactNode {
 
       {tab === 'Capacidade' && c.tipologia === 'BOLSA_HORAS' && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
 
-      {tab === 'Alterações' && (
-        <div className="cartao"><h3>Alterações (histórico imutável)</h3><table>
-          <thead><tr><th>Data efeito</th><th>Tipo</th><th>Fundamentação</th><th className="num">Valor</th><th>Publicitação</th></tr></thead>
-          <tbody>{dados.alteracoes.map((a) => <tr key={a.id}><td className="tabnum">{a.dataEfeito}</td><td>{a.tipo.replace(/_/g, ' ').toLowerCase()}</td><td>{a.fundamentacao}</td><td className="num">{a.valorAcrescido !== undefined ? formatarMoeda(a.valorAcrescido) : '—'}</td><td>{a.publicitacaoPortalBase?.efetuadaEm !== undefined ? <Estado v="VALIDADA" /> : a.publicitacaoPortalBase?.obrigatoria ? <Estado v="INVALIDADA" /> : '—'}</td></tr>)}
-          {dados.alteracoes.length === 0 && <tr><td colSpan={5} className="vazio">Sem alterações.</td></tr>}</tbody>
-        </table></div>
+      {tab === 'Histórico de alterações' && (
+        <>
+          <div className="cartao" style={{ marginBottom: 16 }}><h3>Registo de alterações (auditoria do contrato)</h3><table>
+            <thead><tr><th>Quando</th><th>Operação</th><th>Detalhe</th><th>Autor</th></tr></thead>
+            <tbody>{dados.eventos.map((e) => <tr key={e.id}><td className="tabnum">{e.ocorridoEm.replace('T', ' ').slice(0, 16)}</td><td>{rotularOperacao(e.operacao)}</td><td className="sec">{resumirEvento(e)}</td><td>{nomeAzure(e.utilizadorId)}</td></tr>)}
+            {dados.eventos.length === 0 && <tr><td colSpan={4} className="vazio">Sem alterações registadas.</td></tr>}</tbody>
+          </table></div>
+          <div className="cartao"><h3>Alterações contratuais formais (complementares, suspensões)</h3><table>
+            <thead><tr><th>Data efeito</th><th>Tipo</th><th>Fundamentação</th><th className="num">Valor</th><th>Publicitação</th></tr></thead>
+            <tbody>{dados.alteracoes.map((a) => <tr key={a.id}><td className="tabnum">{a.dataEfeito}</td><td>{a.tipo.replace(/_/g, ' ').toLowerCase()}</td><td>{a.fundamentacao}</td><td className="num">{a.valorAcrescido !== undefined ? formatarMoeda(a.valorAcrescido) : '—'}</td><td>{a.publicitacaoPortalBase?.efetuadaEm !== undefined ? <Estado v="VALIDADA" /> : a.publicitacaoPortalBase?.obrigatoria ? <Estado v="INVALIDADA" /> : '—'}</td></tr>)}
+            {dados.alteracoes.length === 0 && <tr><td colSpan={5} className="vazio">Sem alterações contratuais formais.</td></tr>}</tbody>
+          </table></div>
+        </>
       )}
     </>
   );
@@ -126,11 +148,12 @@ const ESTADOS_TERMINAIS: EstadoContrato[] = ['TERMINADO', 'RESOLVIDO', 'CADUCADO
 function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contrato: Contrato; podeAlterarEstado: boolean; onGravado: () => void; onErro: (m?: string) => void }): ReactNode {
   const [f, setF] = useState({
     objeto: contrato.objeto,
-    // valor como texto para permitir apagar a célula (não fica "0" preso)
-    precoContratualAtual: String(contrato.precoContratualAtual),
+    // valor em euros como texto para permitir apagar a célula (não fica "0" preso)
+    precoContratualAtual: centParaEuros(contrato.precoContratualAtual),
     dataTerminoContratual: contrato.dataTerminoContratual,
     vistoTribunalContasNecessario: contrato.vistoTribunalContasNecessario,
     dataVistoTribunalContas: contrato.dataVistoTribunalContas ?? '',
+    dataPrevistaVistoTribunalContas: contrato.dataPrevistaVistoTribunalContas ?? '',
     numeroPortariaExtensaoEncargos: contrato.numeroPortariaExtensaoEncargos ?? '',
   });
   const [novoEstado, setNovoEstado] = useState<EstadoContrato>(contrato.estado);
@@ -139,8 +162,8 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
   async function guardar(): Promise<void> {
     onErro();
     if (f.precoContratualAtual.trim() === '') { onErro('O valor atual do contrato não pode ficar vazio.'); return; }
-    const valor = Number(f.precoContratualAtual);
-    if (!Number.isFinite(valor) || valor < 0) { onErro('O valor atual do contrato tem de ser um número não negativo.'); return; }
+    const valor = eurosParaCent(f.precoContratualAtual);
+    if (valor < 0) { onErro('O valor atual do contrato tem de ser um número não negativo.'); return; }
     try {
       await app.contratos.atualizar(contrato.id, {
         objeto: f.objeto,
@@ -148,6 +171,7 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
         dataTerminoContratual: f.dataTerminoContratual,
         vistoTribunalContasNecessario: f.vistoTribunalContasNecessario,
         ...(f.dataVistoTribunalContas !== '' ? { dataVistoTribunalContas: f.dataVistoTribunalContas } : {}),
+        ...(f.dataPrevistaVistoTribunalContas !== '' ? { dataPrevistaVistoTribunalContas: f.dataPrevistaVistoTribunalContas } : {}),
         ...(f.numeroPortariaExtensaoEncargos !== '' ? { numeroPortariaExtensaoEncargos: f.numeroPortariaExtensaoEncargos } : {}),
       }, app.utilizador());
       onGravado();
@@ -156,12 +180,10 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
 
   async function alterarEstado(): Promise<void> {
     onErro();
-    // Guarda 2: confirmação ao entrar num estado terminal ou ao reverter a partir dele.
+    // Confirmação ao entrar num estado terminal ou ao reverter a partir dele.
     const envolveTerminal = ESTADOS_TERMINAIS.includes(novoEstado) || ESTADOS_TERMINAIS.includes(contrato.estado);
     if (envolveTerminal && !window.confirm(`Vai alterar o estado de "${ROT_ESTADO[contrato.estado]}" para "${ROT_ESTADO[novoEstado]}". Esta é uma operação sensível (estado terminal). Confirmar?`)) return;
-    // Guarda 3: aviso (não bloqueio) ao pôr EM_VIGOR sem visto do TdC necessário.
-    const semVisto = contrato.vistoTribunalContasNecessario && contrato.dataVistoTribunalContas === undefined && (contrato.vistoTacito ?? false) === false;
-    if (novoEstado === 'EM_VIGOR' && semVisto && !window.confirm('O contrato exige visto prévio do Tribunal de Contas e não o tem (nem visto tácito). A execução relevante pode não ser admissível sem visto. Pretende mesmo colocá-lo Em vigor?')) return;
+    // O bloqueio de EM_VIGOR sem visto assegurado é aplicado no serviço (erro visível).
     try {
       await app.contratos.alterarEstado(contrato.id, novoEstado, nota, app.utilizador());
       onGravado();
@@ -173,14 +195,15 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
       <div className="cartao"><h3>Alterar dados do contrato</h3><div className="corpo">
         <div className="campo"><label>Objeto</label><input value={f.objeto} onChange={(e) => setF({ ...f, objeto: e.target.value })} /></div>
         <div className="g2">
-          <div className="campo"><label>Valor atual do contrato (cêntimos)</label><input type="number" min={0} value={f.precoContratualAtual} onChange={(e) => setF({ ...f, precoContratualAtual: e.target.value })} placeholder="ex.: 10000000" /></div>
-          <div className="campo"><label>Término do contrato</label><input type="date" value={f.dataTerminoContratual} onChange={(e) => setF({ ...f, dataTerminoContratual: e.target.value })} /></div>
+          <div className="campo"><label>Valor atual do contrato (€)</label><input type="number" min={0} step="0.01" value={f.precoContratualAtual} onChange={(e) => setF({ ...f, precoContratualAtual: e.target.value })} placeholder="ex.: 100000" /></div>
+          <div className="campo"><label>Data de término do contrato</label><input type="date" value={f.dataTerminoContratual} onChange={(e) => setF({ ...f, dataTerminoContratual: e.target.value })} /></div>
         </div>
         <div className="campo"><label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={f.vistoTribunalContasNecessario} onChange={(e) => setF({ ...f, vistoTribunalContasNecessario: e.target.checked })} /> Visto prévio do Tribunal de Contas necessário</label></div>
         <div className="g2">
-          <div className="campo"><label>Data de obtenção do visto do TdC</label><input type="date" value={f.dataVistoTribunalContas} onChange={(e) => setF({ ...f, dataVistoTribunalContas: e.target.value })} /></div>
-          <div className="campo"><label>Nº portaria de extensão de encargos</label><input value={f.numeroPortariaExtensaoEncargos} onChange={(e) => setF({ ...f, numeroPortariaExtensaoEncargos: e.target.value })} /></div>
+          <div className="campo"><label>Data de obtenção do visto do TdC</label><input type="date" value={f.dataVistoTribunalContas} onChange={(e) => setF({ ...f, dataVistoTribunalContas: e.target.value })} disabled={!f.vistoTribunalContasNecessario} /></div>
+          <div className="campo"><label>Data prevista de obtenção do visto</label><input type="date" value={f.dataPrevistaVistoTribunalContas} onChange={(e) => setF({ ...f, dataPrevistaVistoTribunalContas: e.target.value })} disabled={!f.vistoTribunalContasNecessario} /></div>
         </div>
+        <div className="campo"><label>Nº portaria de extensão de encargos</label><input value={f.numeroPortariaExtensaoEncargos} onChange={(e) => setF({ ...f, numeroPortariaExtensaoEncargos: e.target.value })} /></div>
         <button className="btn pri" onClick={() => void guardar()}>Guardar alterações</button>
       </div></div>
       <div className="cartao"><h3>Alterar estado do contrato</h3><div className="corpo">
@@ -205,12 +228,12 @@ function NovoPerfil({ contrato, onCriado, onErro }: { contrato: Contrato; onCria
   const [p, setP] = useState({ nome: '', horas: '', valorHora: '' });
   async function criar(): Promise<void> {
     onErro();
-    const horas = Number(p.horas); const valorHora = Number(p.valorHora);
-    if (p.nome.trim() === '' || !Number.isFinite(horas) || horas <= 0 || !Number.isFinite(valorHora) || valorHora <= 0) {
-      onErro('Indique nome, horas (> 0) e valor/hora (> 0) do perfil.'); return;
+    const horas = Number(p.horas); const valorHoraCent = eurosParaCent(p.valorHora);
+    if (p.nome.trim() === '' || !Number.isFinite(horas) || horas <= 0 || valorHoraCent <= 0) {
+      onErro('Indique nome, horas (> 0) e valor/hora (€ > 0) do perfil.'); return;
     }
     try {
-      await app.estrutura.criarPerfil(contrato.id, { nome: p.nome.trim(), quantidadePrevista: horasParaMin(horas), consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: false, valorHora, vigenteDe: contrato.dataInicioVigencia }, app.utilizador());
+      await app.estrutura.criarPerfil(contrato.id, { nome: p.nome.trim(), quantidadePrevista: horasParaMin(horas), consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: false, valorHora: valorHoraCent, vigenteDe: contrato.dataInicioVigencia }, app.utilizador());
       setP({ nome: '', horas: '', valorHora: '' });
       onCriado();
     } catch (e) { onErro(mensagemErro(e)); }
@@ -219,7 +242,7 @@ function NovoPerfil({ contrato, onCriado, onErro }: { contrato: Contrato; onCria
     <div className="cartao"><h3>Novo perfil</h3><div className="corpo">
       <div className="campo"><label>Nome do perfil</label><input value={p.nome} onChange={(e) => setP({ ...p, nome: e.target.value })} placeholder="ex.: Programador Sénior" /></div>
       <div className="campo"><label>Horas contratadas</label><input type="number" min={1} value={p.horas} onChange={(e) => setP({ ...p, horas: e.target.value })} /></div>
-      <div className="campo"><label>Valor/hora (cêntimos)</label><input type="number" min={1} value={p.valorHora} onChange={(e) => setP({ ...p, valorHora: e.target.value })} /></div>
+      <div className="campo"><label>Valor/hora (€)</label><input type="number" min={0} step="0.01" value={p.valorHora} onChange={(e) => setP({ ...p, valorHora: e.target.value })} /></div>
       <div className="aviso" style={{ marginBottom: 10 }}>O total dos perfis não pode exceder o valor do contrato <code>RN-105</code>.</div>
       <button className="btn pri" style={{ width: '100%', justifyContent: 'center' }} onClick={() => void criar()}>Criar perfil</button>
     </div></div>
@@ -228,6 +251,66 @@ function NovoPerfil({ contrato, onCriado, onErro }: { contrato: Contrato; onCria
 
 function Campo({ k, v }: { k: string; v: string }): ReactNode {
   return <div className="campo" style={{ margin: 0 }}><label>{k}</label><div style={{ fontWeight: 600, fontSize: 13.5 }}>{v}</div></div>;
+}
+
+/**
+ * Gestão de afetações do contrato (movida do antigo menu Afetações para o
+ * separador do detalhe). Afetar recurso a um perfil, substituir e ativar/inativar.
+ */
+function GestaoAfetacoes({ contrato, perfis, afetacoes, podeGerir, onMudou, onErro }: { contrato: Contrato; perfis: PerfilContratual[]; afetacoes: Afetacao[]; podeGerir: boolean; onMudou: () => void; onErro: (m?: string) => void }): ReactNode {
+  const [form, setForm] = useState({ perfilId: '', recursoId: '' });
+
+  async function garantirRecurso(recursoId: string): Promise<void> {
+    if ((await app.ctx.repos.recursos.obter(recursoId)) === null) {
+      await app.recursos.criar(recursoId, contrato.prestador.nipc || '000000000', app.utilizador());
+    }
+  }
+  async function criar(): Promise<void> {
+    onErro();
+    try {
+      await garantirRecurso(form.recursoId);
+      await app.afetacoes.criar({ contratoId: contrato.id, perfilId: form.perfilId, recursoId: form.recursoId }, app.utilizador());
+      setForm({ perfilId: '', recursoId: '' });
+      onMudou();
+    } catch (e) { onErro(mensagemErro(e)); }
+  }
+  async function substituir(id: string): Promise<void> {
+    const novo = prompt('Substituir por (utilizador Azure — oid), mesma entidade executante:');
+    if (novo === null || novo.trim() === '') return;
+    onErro();
+    try { await garantirRecurso(novo.trim()); await app.afetacoes.substituir(id, novo.trim(), app.utilizador()); onMudou(); }
+    catch (e) { onErro(mensagemErro(e)); }
+  }
+  async function alternar(id: string, ativa: boolean): Promise<void> {
+    onErro();
+    try { await app.afetacoes.definirAtiva(id, !ativa, app.utilizador()); onMudou(); }
+    catch (e) { onErro(mensagemErro(e)); }
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: podeGerir ? '1fr 340px' : '1fr', gap: 16 }}>
+      <div className="cartao"><h3>Afetações do contrato · {afetacoes.filter((a) => a.ativa).length} ativas</h3><table>
+        <thead><tr><th>Recurso</th><th>Perfil</th><th>Estado</th>{podeGerir && <th></th>}</tr></thead>
+        <tbody>{afetacoes.map((a) => (
+          <tr key={a.id}>
+            <td className="prim">{nomeAzure(a.recursoId)}<div className="sec">{prestadorAzure(a.recursoId) ?? ''}</div></td>
+            <td>{perfis.find((p) => p.id === a.perfilId)?.nome ?? a.perfilId}</td>
+            <td><Estado v={a.ativa ? 'Ativa' : 'Inativa'} /></td>
+            {podeGerir && <td style={{ whiteSpace: 'nowrap' }}><button className="btn sm" onClick={() => void alternar(a.id, a.ativa)}>{a.ativa ? 'Inativar' : 'Ativar'}</button> <button className="btn sm" onClick={() => void substituir(a.id)}>Substituir</button></td>}
+          </tr>
+        ))}{afetacoes.length === 0 && <tr><td colSpan={podeGerir ? 4 : 3} className="vazio">Sem afetações.</td></tr>}</tbody>
+      </table></div>
+      {podeGerir && (
+        <div className="cartao"><h3>Nova afetação</h3><div className="corpo">
+          <div className="campo"><label>Perfil (do contrato)</label><select value={form.perfilId} onChange={(e) => setForm({ ...form, perfilId: e.target.value })}><option value="">— selecionar —</option>{perfis.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></div>
+          <div className="campo"><label>Recurso (utilizador Azure)</label><select value={form.recursoId} onChange={(e) => setForm({ ...form, recursoId: e.target.value })}><option value="">— selecionar —</option>{RECURSOS_AZURE.map((r) => <option key={r.id} value={r.id}>{r.nome} · {r.prestador}</option>)}</select></div>
+          <div className="aviso" style={{ marginBottom: 12 }}>A afetação mantém-se até indicação manual de inativação ou substituição.</div>
+          <button className="btn pri" style={{ width: '100%', justifyContent: 'center' }} disabled={form.perfilId === '' || form.recursoId === '' || perfis.length === 0} onClick={() => void criar()}>Criar afetação</button>
+          {perfis.length === 0 && <div className="sec" style={{ marginTop: 8 }}>Este contrato ainda não tem perfis. Defina perfis no separador Estrutura.</div>}
+        </div></div>
+      )}
+    </div>
+  );
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { app, nomeAzure, prestadorAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Estado, mensagemErro, useAsync } from '../comum.js';
+import { Estado, useAsync } from '../comum.js';
 
 /**
  * Recursos = utilizadores Azure associados a um contrato/perfil através das
@@ -9,9 +9,7 @@ import { Estado, mensagemErro, useAsync } from '../comum.js';
  * associações (histórico); por omissão a vista só mostra os ativos.
  */
 export function Recursos(): ReactNode {
-  const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
   const [mostrarInativos, setMostrarInativos] = useState(false);
-  const [erro, setErro] = useState<string>();
 
   const base = useAsync(async () => {
     const recursos = await app.ctx.repos.recursos.todos();
@@ -36,22 +34,15 @@ export function Recursos(): ReactNode {
     return linhas;
   }, []);
 
-  async function alternar(id: string, ativo: boolean): Promise<void> {
-    setErro(undefined);
-    try { await app.recursos.definirAtivo(id, !ativo, app.utilizador()); base.recarregar(); }
-    catch (e) { setErro(mensagemErro(e)); }
-  }
-
   const linhas = (base.dados ?? []).filter((l) => mostrarInativos || l.ativo);
 
   return (
     <>
-      <Cabecalho titulo="Recursos" sub="Utilizadores do workspace Azure afetos a contratos (sem criação manual)" acoes={
+      <Cabecalho titulo="Recursos" sub="Utilizadores do workspace Azure afetos a contratos (apenas visualização)" acoes={
         <label className="papel-chip" style={{ cursor: 'pointer' }}><input type="checkbox" checked={mostrarInativos} onChange={(e) => setMostrarInativos(e.target.checked)} /> Mostrar inativos</label>
       } />
-      {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
       <div className="cartao"><table>
-        <thead><tr><th>Recurso</th><th>Prestador</th><th>Contratos</th><th>Perfis</th><th>Estado</th>{podeGerir && <th></th>}</tr></thead>
+        <thead><tr><th>Recurso</th><th>Prestador</th><th>Contratos</th><th>Perfis</th><th>Estado</th></tr></thead>
         <tbody>{linhas.map((r) => (
           <tr key={r.id}>
             <td className="prim">{nomeAzure(r.id)}</td>
@@ -59,9 +50,8 @@ export function Recursos(): ReactNode {
             <td>{r.contratos.map((c) => <span key={c} className="chip" style={{ marginRight: 4 }}>{c}</span>)}{r.contratos.length === 0 && '—'}</td>
             <td>{r.perfis.join(', ') || '—'}</td>
             <td><Estado v={r.ativo ? 'Ativa' : 'Inativa'} /></td>
-            {podeGerir && <td style={{ whiteSpace: 'nowrap' }}>{r.temRegisto && <button className="btn sm" onClick={() => void alternar(r.id, r.ativo)}>{r.ativo ? 'Inativar' : 'Ativar'}</button>}</td>}
           </tr>
-        ))}{linhas.length === 0 && <tr><td colSpan={podeGerir ? 6 : 5} className="vazio">Sem recursos {mostrarInativos ? '' : 'ativos '}a mostrar.</td></tr>}</tbody>
+        ))}{linhas.length === 0 && <tr><td colSpan={5} className="vazio">Sem recursos {mostrarInativos ? '' : 'ativos '}a mostrar.</td></tr>}</tbody>
       </table></div>
     </>
   );

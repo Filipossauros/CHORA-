@@ -8,7 +8,6 @@ import { Painel } from './telas/Painel.js';
 import { Contratos } from './telas/Contratos.js';
 import { ContratoDetalhe } from './telas/ContratoDetalhe.js';
 import { NovoContrato } from './telas/NovoContrato.js';
-import { Afetacoes } from './telas/Afetacoes.js';
 import { Recursos } from './telas/Recursos.js';
 import { Registos } from './telas/Registos.js';
 import { Aprovacoes } from './telas/Aprovacoes.js';
@@ -23,7 +22,6 @@ const rotas = [
   { path: '/contratos', element: <Contratos /> },
   { path: '/contratos/novo', element: <NovoContrato /> },
   { path: '/contratos/:id', element: <ContratoDetalhe /> },
-  { path: '/afetacoes', element: <Afetacoes /> },
   { path: '/recursos', element: <Recursos /> },
   { path: '/registos', element: <Registos /> },
   { path: '/aprovacoes', element: <Aprovacoes /> },

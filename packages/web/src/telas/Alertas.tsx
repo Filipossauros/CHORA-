@@ -4,9 +4,11 @@ import type { Alerta, Contrato, PerfilContratual, RegistoTempo } from '@chora/do
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Severidade, formatarHoras, formatarMoeda, useAsync } from '../comum.js';
-import { perfisIdenticosDisponiveis, SALVAGUARDA_JURIDICA } from '../sugestoes.js';
+import { perfisIdenticosDisponiveis, SALVAGUARDA_JURIDICA, type PerfilAlternativo } from '../sugestoes.js';
+import { calcularProjecao, gerarMapaProjecaoXlsx } from '../projecoes.js';
 
 interface Contexto { contratos: Contrato[]; perfis: PerfilContratual[]; aprovados: RegistoTempo[] }
+interface Sugestao { texto: string; alternativa?: PerfilAlternativo; nivel2?: string }
 
 export function Alertas(): ReactNode {
   const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
@@ -18,7 +20,7 @@ export function Alertas(): ReactNode {
     return { alertas, ctx: { contratos, perfis, aprovados } as Contexto };
   }, []);
   const [aberto, setAberto] = useState<string>();
-  const [sugestao, setSugestao] = useState<Record<string, string>>({});
+  const [sugestao, setSugestao] = useState<Record<string, Sugestao>>({});
 
   async function executar(): Promise<void> {
     await new JobAlertas(app.ctx).executar();
@@ -37,7 +39,7 @@ export function Alertas(): ReactNode {
       <Cabecalho titulo="Alertas" sub="Preocupações de execução do contrato (secção 11)" acoes={podeGerir ? <button className="btn" onClick={() => void executar()}>Executar job de alertas</button> : undefined} />
       <div className="cartao"><table>
         <thead><tr><th>Severidade</th><th>Código</th><th>Título</th><th>Detalhe</th><th></th></tr></thead>
-        <tbody>{(base.dados?.alertas ?? []).map((a) => (
+        <tbody>{(base.dados?.alertas ?? []).map((a) => { const s = sugestao[a.id]; return (
           <Fragment key={a.id}>
             <tr>
               <td><Severidade v={a.severidade} /></td>
@@ -50,41 +52,57 @@ export function Alertas(): ReactNode {
               <tr>
                 <td colSpan={5}>
                   <div className="aviso" style={{ margin: 0 }}>
-                    <b>Sugestão (IA · protótipo):</b> {sugestao[a.id] ?? 'A analisar…'}
-                    <div className="sec" style={{ marginTop: 4 }}>{SALVAGUARDA_JURIDICA}</div>
+                    <b>Sugestão (IA · protótipo):</b> {s?.texto ?? 'A analisar…'}
+                    {s?.nivel2 !== undefined && (
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--linha)' }}>
+                        <b>2.º nível — projeção:</b> {s.nivel2}
+                        {s.alternativa !== undefined && (
+                          <div style={{ marginTop: 8 }}>
+                            <button className="btn sm" onClick={() => gerarMapaProjecaoXlsx({ contratoNumero: s.alternativa!.contratoNumero, perfilNome: s.alternativa!.perfilNome, horasDisponiveis: s.alternativa!.horasDisponiveis, valorDisponivel: s.alternativa!.valorDisponivel })}>⬇ Gerar mapa de projeção (Excel)</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="sec" style={{ marginTop: 8 }}>{SALVAGUARDA_JURIDICA}</div>
                   </div>
                 </td>
               </tr>
             )}
           </Fragment>
-        ))}
+        ); })}
         {base.dados?.alertas.length === 0 && <tr><td colSpan={5} className="vazio">Sem alertas.</td></tr>}</tbody>
       </table></div>
     </>
   );
 }
 
+/** Descrição textual do 2.º nível (projeção) para uma alternativa. */
+function textoProjecao(alt: PerfilAlternativo): string {
+  const linhas = calcularProjecao({ contratoNumero: alt.contratoNumero, perfilNome: alt.perfilNome, horasDisponiveis: alt.horasDisponiveis, valorDisponivel: alt.valorDisponivel });
+  const meses = linhas.length;
+  return `com 1 pessoa a tempo inteiro (160 h/mês), o saldo do perfil «${alt.perfilNome}» no contrato ${alt.contratoNumero} (${formatarHoras(alt.horasDisponiveis * 60)} · ${formatarMoeda(alt.valorDisponivel)}) dá para cerca de ${meses} ${meses === 1 ? 'mês' : 'meses'} de execução. Descarregue o mapa de projeção mensal (Excel) para partilhar/decidir.`;
+}
+
 /**
  * Recurso a IA (stub determinístico, secção 14). Devolve uma sugestão de ação a
- * partir do código do alerta. Para o esgotamento de um perfil, faz a verificação
- * determinística de perfis idênticos disponíveis noutros contratos.
+ * partir do código do alerta. Para o esgotamento de um perfil, verifica perfis
+ * idênticos disponíveis noutros contratos e, quando existem, acrescenta um
+ * segundo nível com projeção e exportação para Excel.
  */
-function sugestaoIA(a: Alerta, ctx: Contexto): string {
+function sugestaoIA(a: Alerta, ctx: Contexto): Sugestao {
   if (a.codigo === 'AL-PERFIL-80' || a.codigo === 'AL-PERFIL-90') {
-    const emRisco = perfisIdenticosDisponiveis(a.contratoId, ctx.contratos, ctx.perfis, ctx.aprovados);
-    const alt = emRisco.flatMap((r) => r.alternativas)[0];
+    const alt = perfisIdenticosDisponiveis(a.contratoId, ctx.contratos, ctx.perfis, ctx.aprovados).flatMap((r) => r.alternativas)[0];
     if (alt !== undefined) {
-      return `O perfil está a esgotar-se. Existe um perfil idêntico disponível no contrato ${alt.contratoNumero} (${formatarHoras(alt.horasDisponiveis * 60)} · ${formatarMoeda(alt.valorDisponivel)} disponíveis) — pondere mobilizar aí a execução.`;
+      return { texto: `O perfil está a esgotar-se. Existe um perfil idêntico disponível no contrato ${alt.contratoNumero} (${formatarHoras(alt.horasDisponiveis * 60)} · ${formatarMoeda(alt.valorDisponivel)} disponíveis) — pondere mobilizar aí a execução.`, alternativa: alt, nivel2: textoProjecao(alt) };
     }
-    return 'O perfil aproxima-se do esgotamento e não há perfil idêntico com disponibilidade noutro contrato. Reequilibre afetações, reveja o planeamento de horas ou pondere reforço/trabalhos complementares dentro do contrato.';
+    return { texto: 'O perfil aproxima-se do esgotamento e não há perfil idêntico com disponibilidade noutro contrato. Reequilibre afetações, reveja o planeamento de horas ou pondere reforço/trabalhos complementares dentro do contrato.' };
   }
   if (a.codigo === 'AL-VALOR-DISPONIVEL') {
-    const emRisco = perfisIdenticosDisponiveis(a.contratoId, ctx.contratos, ctx.perfis, ctx.aprovados);
-    const alt = emRisco.flatMap((r) => r.alternativas)[0];
+    const alt = perfisIdenticosDisponiveis(a.contratoId, ctx.contratos, ctx.perfis, ctx.aprovados).flatMap((r) => r.alternativas)[0];
     if (alt !== undefined) {
-      return `O valor disponível está reduzido. Existe um perfil idêntico com saldo no contrato ${alt.contratoNumero} (${formatarMoeda(alt.valorDisponivel)} disponíveis); em alternativa, pondere trabalhos complementares (limite de 50%, RN-301).`;
+      return { texto: `O valor disponível está reduzido. Existe um perfil idêntico com saldo no contrato ${alt.contratoNumero} (${formatarMoeda(alt.valorDisponivel)} disponíveis); em alternativa, pondere trabalhos complementares (limite de 50%, RN-301).`, alternativa: alt, nivel2: textoProjecao(alt) };
     }
-    return 'Pondere solicitar trabalhos complementares (dentro do limite de 50% do valor inicial, RN-301), fundamentando a necessidade, antes que o saldo se esgote.';
+    return { texto: 'Pondere solicitar trabalhos complementares (dentro do limite de 50% do valor inicial, RN-301), fundamentando a necessidade, antes que o saldo se esgote.' };
   }
   const MAPA: Record<string, string> = {
     'AL-TERMINO-3M': 'Prepare a caducidade ou uma eventual prorrogação/novo procedimento em tempo útil; confirme entregáveis pendentes.',
@@ -95,5 +113,5 @@ function sugestaoIA(a: Alerta, ctx: Contexto): string {
     'AL-VISTO-PENDENTE': 'Confirme a submissão ao Tribunal de Contas; não deve haver execução relevante sem visto (salvo visto tácito).',
     'AL-FATURA-PRAZO': 'Priorize a conferência e o pagamento da fatura para cumprir o prazo.',
   };
-  return MAPA[a.codigo] ?? 'Reveja a situação do contrato e atue conforme o enquadramento aplicável do CCP.';
+  return { texto: MAPA[a.codigo] ?? 'Reveja a situação do contrato e atue conforme o enquadramento aplicável do CCP.' };
 }
