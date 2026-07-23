@@ -56,6 +56,7 @@ export const TIPOS_ALTERACAO = [
   'CESSAO_POSICAO_CONTRATUAL',
   'SUBSTITUICAO_GESTOR',
   'REFORCO_BOLSA_VALOR',
+  'TRANSICAO_ANO_ECONOMICO',
   'OUTRA',
 ] as const;
 export type TipoAlteracao = (typeof TIPOS_ALTERACAO)[number];

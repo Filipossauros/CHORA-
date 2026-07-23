@@ -98,6 +98,14 @@ export class JobAlertas {
         gerados.push(this.novoAlerta(contrato.id, 'AL-VALOR-DISPONIVEL', pctDisp <= 0.2 ? 'CRITICO' : 'AVISO', 'Valor disponível reduzido', `O contrato tem apenas ${(pctDisp * 100).toFixed(0)}% do valor disponível.`, destinatario));
       }
 
+      // AL-TRANSICAO-ANO — término próximo/atingido, com saldo por executar, sem
+      // portaria de extensão e sem transição registada: sugerir transição de
+      // encargos para o ano económico seguinte.
+      const temPortaria = contrato.portariaExtensaoEncargos !== undefined || contrato.numeroPortariaExtensaoEncargos !== undefined;
+      if (valorDisponivel > 0 && !temPortaria && contrato.transicaoAnoEconomico === undefined && meses <= 2) {
+        gerados.push(this.novoAlerta(contrato.id, 'AL-TRANSICAO-ANO', 'AVISO', 'Saldo por executar no fim da vigência', `O contrato aproxima-se do término com saldo por executar e sem portaria de extensão de encargos; pondere transitar o saldo para o ano económico seguinte.`, destinatario));
+      }
+
       // AL-VISTO-PENDENTE
       if (contrato.vistoTribunalContasNecessario && contrato.dataVistoTribunalContas === undefined && (contrato.vistoTacito ?? false) === false) {
         gerados.push(this.novoAlerta(contrato.id, 'AL-VISTO-PENDENTE', 'CRITICO', 'Visto do TdC pendente', 'Contrato em execução sem visto do Tribunal de Contas.', destinatario));

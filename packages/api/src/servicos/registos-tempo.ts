@@ -77,10 +77,15 @@ export class ServicoRegistosTempo {
       recursoId, contratoId: contrato.id, perfilId: perfil.id,
       projetoId: projetoUsado, data: novo.data,
     });
+    // Se houve transição de encargos para o ano seguinte, a janela de execução do
+    // saldo transitado estende-se até à data indicada (execucaoTransitadaAte).
+    const fimExecucao = contrato.transicaoAnoEconomico !== undefined && contrato.transicaoAnoEconomico.execucaoTransitadaAte > contrato.dataTerminoContratual
+      ? contrato.transicaoAnoEconomico.execucaoTransitadaAte
+      : contrato.dataTerminoContratual;
     exigir(RN_408, {
       data: novo.data,
       vigenciaContratoDe: contrato.dataInicioVigencia,
-      vigenciaContratoAte: contrato.dataTerminoContratual,
+      vigenciaContratoAte: fimExecucao,
       afetacaoDe: afetacao.vigenteDe,
       afetacaoAte: afetacao.vigenteAte,
     });

@@ -1,6 +1,6 @@
 import {
-  RN_105, RN_110, RN_206, RN_303, RN_304, exigir, adicionarDias,
-  totalPrevistoPerfis, valorPrevistoPerfil,
+  RN_105, RN_110, RN_206, RN_301, RN_303, RN_304, exigir, adicionarDias,
+  totalPrevistoPerfis, valorPrevistoPerfil, complementaresAcumulados,
   type PerfilContratual, type Alteracao, type DocumentoHabilitacao,
   type TipoDotacao, type TipoAlteracao, type Cent, type DataISO, type Minutos,
 } from '@chora/domain';
@@ -76,6 +76,13 @@ export class ServicoEstrutura {
     exigir(RN_110, { fundamentacao: dados.fundamentacao, dataEfeito: dados.dataEfeito });
     // RN-206: complementares não prorrogam automaticamente a data de término.
     exigir(RN_206, { tipoAlteracao: dados.tipo, alteraDataTermino: dados.tipo === 'SERVICOS_COMPLEMENTARES' && dados.novaDataTermino !== undefined });
+
+    // RN-301: os serviços complementares acumulados não podem exceder 50% do preço inicial.
+    if (dados.tipo === 'SERVICOS_COMPLEMENTARES' && dados.valorAcrescido !== undefined) {
+      const contrato = await this.contrato(contratoId);
+      const jaAcumulado = complementaresAcumulados(await this.ctx.repos.alteracoes.todos((a) => a.contratoId === contratoId));
+      exigir(RN_301, { precoContratualInicial: contrato.precoContratualInicial, complementaresAcumulados: jaAcumulado + dados.valorAcrescido });
+    }
 
     const agora = this.ctx.relogio.agora();
     const alt: Alteracao = {

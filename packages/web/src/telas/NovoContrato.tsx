@@ -28,7 +28,7 @@ export function NovoContrato(): ReactNode {
     numero: '', numeroProcedimento: '', tipoProcedimento: 'CONCURSO_PUBLICO' as TipoProcedimento, numeroLote: '',
     objeto: '', precoTotal: '100000', nome: '', nipc: '',
     dataAssinatura: hoje(), dataInicio: hoje(), dataTermino: '',
-    visto: false, dataVisto: '', dataPrevistaVisto: '', numeroPortaria: '',
+    visto: false, dataVisto: '', numeroPortaria: '',
     gestor: 'oid-gestor-contrato', tipologia: 'BOLSA_HORAS' as TipologiaContrato,
   });
   const [perfis, setPerfis] = useState<PerfilForm[]>([{ nome: '', horas: '', valorHora: '' }]);
@@ -40,10 +40,10 @@ export function NovoContrato(): ReactNode {
   const avaliacaoVisto = agenteCCP.avaliarVistoPrevio(precoCent);
   const alertaVisto = avaliacaoVisto.obrigatorio && !f.visto;
 
-  // Estado inicial: se exige visto e este não está assegurado, o contrato não pode
-  // entrar EM_VIGOR — fica AGUARDA_VISTO.
-  const vistoAssegurado = !f.visto || f.dataVisto !== '' || (f.dataPrevistaVisto !== '' && f.dataPrevistaVisto <= hoje());
-  const estadoInicial: EstadoContrato = vistoAssegurado ? 'EM_VIGOR' : 'AGUARDA_VISTO';
+  // Estado inicial: se exige visto e este não está assegurado (sem data de
+  // obtenção), o contrato não pode entrar EM_VIGOR — fica AGUARDA_VISTO.
+  const vistoOk = !f.visto || f.dataVisto !== '';
+  const estadoInicial: EstadoContrato = vistoOk ? 'EM_VIGOR' : 'AGUARDA_VISTO';
 
   async function gravar(): Promise<void> {
     setErro(undefined);
@@ -61,7 +61,6 @@ export function NovoContrato(): ReactNode {
       dataAssinaturaCA: f.dataAssinatura, dataInicioVigencia: f.dataInicio, dataTerminoContratual: f.dataTermino,
       vistoTribunalContasNecessario: f.visto,
       ...(f.dataVisto !== '' ? { dataVistoTribunalContas: f.dataVisto } : {}),
-      ...(f.dataPrevistaVisto !== '' ? { dataPrevistaVistoTribunalContas: f.dataPrevistaVisto } : {}),
       ...(f.numeroPortaria !== '' ? { numeroPortariaExtensaoEncargos: f.numeroPortaria } : {}),
       gestores: [{ utilizadorId: f.gestor, principal: true }],
       excecoes: [], criadoEm: agora, criadoPor: u.utilizadorId, atualizadoEm: agora, atualizadoPor: u.utilizadorId,
@@ -111,14 +110,13 @@ export function NovoContrato(): ReactNode {
         <div className="g3">
           <div className="campo"><label>11 · Visto prévio do Tribunal de Contas</label><label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginTop: 4 }}><input type="checkbox" checked={f.visto} onChange={(e) => upd('visto', e.target.checked)} /> Necessário</label></div>
           <div className="campo"><label>12 · Data de obtenção do visto do TdC (opcional)</label><input type="date" value={f.dataVisto} onChange={(e) => upd('dataVisto', e.target.value)} disabled={!f.visto} /></div>
-          <div className="campo"><label>12b · Data prevista de obtenção do visto (opcional)</label><input type="date" value={f.dataPrevistaVisto} onChange={(e) => upd('dataPrevistaVisto', e.target.value)} disabled={!f.visto} /></div>
-        </div>
-        <div className="g3">
           <div className="campo"><label>13 · Nº portaria de extensão de encargos (opcional)</label><input value={f.numeroPortaria} onChange={(e) => upd('numeroPortaria', e.target.value)} /></div>
+        </div>
+        <div className="g2">
           <div className="campo"><label>14 · Gestor do contrato (utilizador Azure)</label><select value={f.gestor} onChange={(e) => upd('gestor', e.target.value)}>{AZURE_USERS.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
           <div className="campo"><label>15 · Tipologia do contrato</label><select value={f.tipologia} onChange={(e) => upd('tipologia', e.target.value)}><option value="BOLSA_HORAS">Bolsa de horas</option><option value="CHAVE_NA_MAO">Chave-na-mão</option></select></div>
         </div>
-        {f.visto && !vistoAssegurado && <div className="aviso" style={{ marginTop: 2 }}>Visto necessário e ainda não assegurado: o contrato será criado no estado <b>Aguarda visto TdC</b> (não pode entrar em vigor sem visto obtido, tácito ou data prevista já atingida).</div>}
+        {f.visto && !vistoOk && <div className="aviso" style={{ marginTop: 2 }}>Visto necessário e ainda sem data de obtenção: o contrato será criado no estado <b>Aguarda visto TdC</b> (não pode entrar em vigor sem visto obtido ou tácito).</div>}
 
         {f.tipologia === 'BOLSA_HORAS' && (
           <div style={{ border: '1px solid var(--linha)', borderRadius: 8, padding: 12, marginTop: 10 }}>

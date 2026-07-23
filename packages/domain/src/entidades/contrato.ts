@@ -74,7 +74,6 @@ export const zContrato = zAuditavel.extend({
   // Fiscalização prévia (Tribunal de Contas)
   vistoTribunalContasNecessario: z.boolean(),
   dataRemessaTribunalContas: zDataISO.optional(),
-  dataPrevistaVistoTribunalContas: zDataISO.optional(), // data prevista de obtenção do visto
   dataVistoTribunalContas: zDataISO.optional(),
   vistoTacito: z.boolean().optional(),
 
@@ -89,6 +88,14 @@ export const zContrato = zAuditavel.extend({
   motivoInativacao: z.string().optional(),
   // Nota da última alteração de estado (correção/rollback), para histórico visível
   notaAlteracaoEstado: z.string().optional(),
+  // Transição de encargos para o ano económico seguinte (sem portaria de extensão):
+  // permite executar o saldo transitado até à data indicada.
+  transicaoAnoEconomico: z.object({
+    montante: zCent,
+    execucaoTransitadaAte: zDataISO,
+    fundamentacao: z.string().min(1),
+    autorizadoEm: zDataISO,
+  }).optional(),
 
   // Exceções fundamentadas a limites legais (ADR-10)
   excecoes: z.array(zExcecaoContrato),

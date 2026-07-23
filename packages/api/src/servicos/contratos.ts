@@ -1,8 +1,8 @@
 import {
   RN_101, RN_201, RN_202, exigir,
   maquinaContrato, complementaresAcumulados, percentagemComplementares,
-  calcularConsumoPerfil, valorPrevistoPerfil, vistoAssegurado, diaDeInstante,
-  type Contrato, type EstadoContrato,
+  calcularConsumoPerfil, valorPrevistoPerfil, vistoAssegurado, AgenteCCPStub,
+  type Contrato, type EstadoContrato, type Alteracao, type Cent, type DataISO,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import { ErroConflitoEstado, ErroNaoEncontrado, ErroValidacao } from '../erros/problema.js';
@@ -35,8 +35,8 @@ export class ServicoContratos {
 
   /** Um contrato que exija visto prévio do TdC só pode estar EM_VIGOR com o visto assegurado. */
   private exigirVistoParaVigor(contrato: Contrato): void {
-    if (contrato.estado === 'EM_VIGOR' && !vistoAssegurado(contrato, diaDeInstante(this.ctx.relogio.agora()))) {
-      throw new ErroValidacao('O contrato exige visto prévio do Tribunal de Contas e este não está assegurado (sem data de obtenção, visto tácito, nem data prevista já atingida): não pode estar em vigor.');
+    if (contrato.estado === 'EM_VIGOR' && !vistoAssegurado(contrato)) {
+      throw new ErroValidacao('O contrato exige visto prévio do Tribunal de Contas e este não está assegurado (sem data de obtenção do visto nem visto tácito): não pode estar em vigor.');
     }
   }
 
@@ -85,6 +85,46 @@ export class ServicoContratos {
     this.exigirVistoParaVigor(atualizado);
     await this.ctx.repos.contratos.guardar(atualizado);
     await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: id, operacao: `ALTERAR_ESTADO:${atual.estado}->${novo}`, resultado: 'PERMITIDO', antes: atual, depois: atualizado });
+    return atualizado;
+  }
+
+  /**
+   * Transita encargos por executar para o ano económico seguinte (contratos sem
+   * portaria de extensão). A admissibilidade e o limite são validados pelo agente
+   * CCP (legislação em vigor). O saldo transitado pode ser executado até à data
+   * indicada. Regista uma alteração formal e auditoria.
+   */
+  async transitarAnoEconomico(id: string, montante: Cent, execucaoTransitadaAte: DataISO, fundamentacao: string, u: ContextoUtilizador): Promise<Contrato> {
+    const contrato = await this.ctx.repos.contratos.obter(id);
+    if (contrato === null) throw new ErroNaoEncontrado(`Contrato ${id} inexistente.`);
+    if (fundamentacao.trim().length === 0) throw new ErroValidacao('A transição de ano económico exige fundamentação.');
+    const aprovados = await this.ctx.repos.registosTempo.todos((r) => r.contratoId === id && r.estado === 'APROVADO');
+    const executado = aprovados.reduce((s, r) => s + r.valorImputado, 0);
+    const saldoPorExecutar = Math.max(0, contrato.precoContratualAtual - executado);
+    const temPortariaExtensaoEncargos = contrato.portariaExtensaoEncargos !== undefined || contrato.numeroPortariaExtensaoEncargos !== undefined;
+
+    const av = await new AgenteCCPStub().avaliarTransicaoAnoEconomico({
+      precoContratualInicial: contrato.precoContratualInicial,
+      precoContratualAtual: contrato.precoContratualAtual,
+      saldoPorExecutar, temPortariaExtensaoEncargos, montantePretendido: montante,
+    });
+    if (!av.permitido) throw new ErroValidacao(av.motivo ?? 'Transição não permitida pela legislação em vigor.');
+
+    const agora = this.ctx.relogio.agora();
+    const atualizado: Contrato = {
+      ...contrato,
+      transicaoAnoEconomico: { montante, execucaoTransitadaAte, fundamentacao, autorizadoEm: agora.slice(0, 10) },
+      atualizadoEm: agora, atualizadoPor: u.utilizadorId,
+    };
+    await this.ctx.repos.contratos.guardar(atualizado);
+    const alt: Alteracao = {
+      id: this.ctx.ids.novo('alt'), contratoId: id, tipo: 'TRANSICAO_ANO_ECONOMICO', dataEfeito: agora.slice(0, 10),
+      descricao: `Transição de encargos para o ano seguinte; execução do saldo até ${execucaoTransitadaAte}.`,
+      fundamentacao, valorAcrescido: montante,
+      registadoEm: agora, registadoPor: u.utilizadorId, atualizadoEm: agora, atualizadoPor: u.utilizadorId,
+    };
+    await this.ctx.repos.alteracoes.guardar(alt);
+    await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: id, operacao: 'TRANSICAO_ANO_ECONOMICO', resultado: 'PERMITIDO', antes: contrato, depois: atualizado });
     return atualizado;
   }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { ESTADOS_CONTRATO, type Afetacao, type Contrato, type EstadoContrato, type PerfilContratual, type RegistoTempo } from '@chora/domain';
+import { ESTADOS_CONTRATO, type Afetacao, type Contrato, type EstadoContrato, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
 import { app, AZURE_USERS, nomeAzure, prestadorAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
@@ -122,6 +122,7 @@ export function ContratoDetalhe(): ReactNode {
 
       {tab === 'Histórico de alterações' && (
         <>
+          {ehGestorContrato && <GestaoAlteracoes contrato={c} resumo={dados.resumo} onMudou={() => base.recarregar()} onErro={setErro} />}
           <div className="cartao" style={{ marginBottom: 16 }}><h3>Registo de alterações (auditoria do contrato)</h3><table>
             <thead><tr><th>Quando</th><th>Operação</th><th>Detalhe</th><th>Autor</th></tr></thead>
             <tbody>{dados.eventos.map((e) => <tr key={e.id}><td className="tabnum">{e.ocorridoEm.replace('T', ' ').slice(0, 16)}</td><td>{rotularOperacao(e.operacao)}</td><td className="sec">{resumirEvento(e)}</td><td>{nomeAzure(e.utilizadorId)}</td></tr>)}
@@ -153,42 +154,48 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
     dataTerminoContratual: contrato.dataTerminoContratual,
     vistoTribunalContasNecessario: contrato.vistoTribunalContasNecessario,
     dataVistoTribunalContas: contrato.dataVistoTribunalContas ?? '',
-    dataPrevistaVistoTribunalContas: contrato.dataPrevistaVistoTribunalContas ?? '',
+    vistoTacito: contrato.vistoTacito ?? false,
     numeroPortariaExtensaoEncargos: contrato.numeroPortariaExtensaoEncargos ?? '',
   });
   const [novoEstado, setNovoEstado] = useState<EstadoContrato>(contrato.estado);
   const [nota, setNota] = useState('');
 
+  /** Persiste os dados do formulário. Devolve true se gravou. */
+  async function persistir(): Promise<boolean> {
+    if (f.precoContratualAtual.trim() === '') { onErro('O valor atual do contrato não pode ficar vazio.'); return false; }
+    const valor = eurosParaCent(f.precoContratualAtual);
+    if (valor < 0) { onErro('O valor atual do contrato tem de ser um número não negativo.'); return false; }
+    await app.contratos.atualizar(contrato.id, {
+      objeto: f.objeto,
+      precoContratualAtual: valor,
+      dataTerminoContratual: f.dataTerminoContratual,
+      vistoTribunalContasNecessario: f.vistoTribunalContasNecessario,
+      vistoTacito: f.vistoTacito,
+      ...(f.dataVistoTribunalContas !== '' ? { dataVistoTribunalContas: f.dataVistoTribunalContas } : {}),
+      ...(f.numeroPortariaExtensaoEncargos !== '' ? { numeroPortariaExtensaoEncargos: f.numeroPortariaExtensaoEncargos } : {}),
+    }, app.utilizador());
+    return true;
+  }
+
   async function guardar(): Promise<void> {
     onErro();
-    if (f.precoContratualAtual.trim() === '') { onErro('O valor atual do contrato não pode ficar vazio.'); return; }
-    const valor = eurosParaCent(f.precoContratualAtual);
-    if (valor < 0) { onErro('O valor atual do contrato tem de ser um número não negativo.'); return; }
-    try {
-      await app.contratos.atualizar(contrato.id, {
-        objeto: f.objeto,
-        precoContratualAtual: valor,
-        dataTerminoContratual: f.dataTerminoContratual,
-        vistoTribunalContasNecessario: f.vistoTribunalContasNecessario,
-        ...(f.dataVistoTribunalContas !== '' ? { dataVistoTribunalContas: f.dataVistoTribunalContas } : {}),
-        ...(f.dataPrevistaVistoTribunalContas !== '' ? { dataPrevistaVistoTribunalContas: f.dataPrevistaVistoTribunalContas } : {}),
-        ...(f.numeroPortariaExtensaoEncargos !== '' ? { numeroPortariaExtensaoEncargos: f.numeroPortariaExtensaoEncargos } : {}),
-      }, app.utilizador());
-      onGravado();
-    } catch (e) { onErro(mensagemErro(e)); }
+    try { if (await persistir()) onGravado(); } catch (e) { onErro(mensagemErro(e)); }
   }
 
   async function alterarEstado(): Promise<void> {
     onErro();
-    // Confirmação ao entrar num estado terminal ou ao reverter a partir dele.
     const envolveTerminal = ESTADOS_TERMINAIS.includes(novoEstado) || ESTADOS_TERMINAIS.includes(contrato.estado);
     if (envolveTerminal && !window.confirm(`Vai alterar o estado de "${ROT_ESTADO[contrato.estado]}" para "${ROT_ESTADO[novoEstado]}". Esta é uma operação sensível (estado terminal). Confirmar?`)) return;
-    // O bloqueio de EM_VIGOR sem visto assegurado é aplicado no serviço (erro visível).
     try {
+      // Persiste primeiro os dados do formulário (ex.: data do visto), para que a
+      // passagem a EM_VIGOR considere o visto acabado de registar.
+      if (!(await persistir())) return;
       await app.contratos.alterarEstado(contrato.id, novoEstado, nota, app.utilizador());
       onGravado();
     } catch (e) { onErro(mensagemErro(e)); }
   }
+
+  const estadosSelecionaveis = ESTADOS_CONTRATO.filter((s) => s !== 'EM_PREPARACAO');
 
   return (
     <div className="duas">
@@ -199,19 +206,24 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
           <div className="campo"><label>Data de término do contrato</label><input type="date" value={f.dataTerminoContratual} onChange={(e) => setF({ ...f, dataTerminoContratual: e.target.value })} /></div>
         </div>
         <div className="campo"><label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={f.vistoTribunalContasNecessario} onChange={(e) => setF({ ...f, vistoTribunalContasNecessario: e.target.checked })} /> Visto prévio do Tribunal de Contas necessário</label></div>
-        <div className="g2">
-          <div className="campo"><label>Data de obtenção do visto do TdC</label><input type="date" value={f.dataVistoTribunalContas} onChange={(e) => setF({ ...f, dataVistoTribunalContas: e.target.value })} disabled={!f.vistoTribunalContasNecessario} /></div>
-          <div className="campo"><label>Data prevista de obtenção do visto</label><input type="date" value={f.dataPrevistaVistoTribunalContas} onChange={(e) => setF({ ...f, dataPrevistaVistoTribunalContas: e.target.value })} disabled={!f.vistoTribunalContasNecessario} /></div>
-        </div>
+        {f.vistoTribunalContasNecessario && (
+          <div style={{ border: '1px solid var(--linha)', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+            <div className="sec" style={{ marginBottom: 6 }}>Visto do Tribunal de Contas — o contrato só entra em vigor com o visto assegurado (data de obtenção ou visto tácito).</div>
+            <div className="g2">
+              <div className="campo" style={{ margin: 0 }}><label>Data de obtenção do visto</label><input type="date" value={f.dataVistoTribunalContas} onChange={(e) => setF({ ...f, dataVistoTribunalContas: e.target.value })} /></div>
+              <div className="campo" style={{ margin: 0 }}><label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginTop: 22 }}><input type="checkbox" checked={f.vistoTacito} onChange={(e) => setF({ ...f, vistoTacito: e.target.checked })} /> Visto tácito</label></div>
+            </div>
+          </div>
+        )}
         <div className="campo"><label>Nº portaria de extensão de encargos</label><input value={f.numeroPortariaExtensaoEncargos} onChange={(e) => setF({ ...f, numeroPortariaExtensaoEncargos: e.target.value })} /></div>
         <button className="btn pri" onClick={() => void guardar()}>Guardar alterações</button>
       </div></div>
       <div className="cartao"><h3>Alterar estado do contrato</h3><div className="corpo">
         {podeAlterarEstado ? (
           <>
-            <div className="aviso" style={{ marginBottom: 12 }}>Permite corrigir/reverter o estado (incluindo reativar de suspenso ou terminado). A alteração fica registada na auditoria e a nota visível na ficha.</div>
+            <div className="aviso" style={{ marginBottom: 12 }}>Ao aplicar, as alterações de dados acima são gravadas primeiro (ex.: data do visto). Permite corrigir/reverter o estado; fica registado na auditoria e a nota visível na ficha.</div>
             <div className="campo"><label>Estado atual</label><div style={{ marginTop: 2 }}><Estado v={contrato.estado} /></div></div>
-            <div className="campo"><label>Novo estado</label><select value={novoEstado} onChange={(e) => setNovoEstado(e.target.value as EstadoContrato)}>{ESTADOS_CONTRATO.map((s) => <option key={s} value={s}>{ROT_ESTADO[s]}</option>)}</select></div>
+            <div className="campo"><label>Novo estado</label><select value={novoEstado} onChange={(e) => setNovoEstado(e.target.value as EstadoContrato)}>{estadosSelecionaveis.map((s) => <option key={s} value={s}>{ROT_ESTADO[s]}</option>)}</select></div>
             <div className="campo"><label>Nota / motivo (obrigatório)</label><textarea rows={3} value={nota} onChange={(e) => setNota(e.target.value)} /></div>
             <button className="btn" disabled={nota.trim() === '' || novoEstado === contrato.estado} onClick={() => void alterarEstado()}>Aplicar novo estado</button>
           </>
@@ -251,6 +263,79 @@ function NovoPerfil({ contrato, onCriado, onErro }: { contrato: Contrato; onCria
 
 function Campo({ k, v }: { k: string; v: string }): ReactNode {
   return <div className="campo" style={{ margin: 0 }}><label>{k}</label><div style={{ fontWeight: 600, fontSize: 13.5 }}>{v}</div></div>;
+}
+
+const TIPOS_ALT: Array<{ v: TipoAlteracao; r: string; valor: boolean }> = [
+  { v: 'SERVICOS_COMPLEMENTARES', r: 'Serviços complementares (modificação objetiva)', valor: true },
+  { v: 'REVISAO_PRECOS', r: 'Revisão de preços', valor: false },
+  { v: 'PRORROGACAO', r: 'Prorrogação', valor: false },
+  { v: 'OUTRA', r: 'Outra', valor: false },
+];
+
+/** Registo de alterações contratuais formais e transição de ano económico. */
+function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Contrato; resumo: ResumoExec; onMudou: () => void; onErro: (m?: string) => void }): ReactNode {
+  const [a, setA] = useState({ tipo: 'SERVICOS_COMPLEMENTARES' as TipoAlteracao, dataEfeito: hoje(), fundamentacao: '', valor: '' });
+  const [t, setT] = useState({ montante: '', ate: '', fundamentacao: '' });
+  const tipoSel = TIPOS_ALT.find((x) => x.v === a.tipo);
+  const temPortaria = contrato.numeroPortariaExtensaoEncargos !== undefined || contrato.portariaExtensaoEncargos !== undefined;
+  const limiteTransicao = Math.floor(contrato.precoContratualInicial * 0.5);
+
+  async function registar(): Promise<void> {
+    onErro();
+    if (a.fundamentacao.trim() === '') { onErro('Indique a fundamentação da alteração.'); return; }
+    if (tipoSel?.valor && eurosParaCent(a.valor) <= 0) { onErro('Indique o valor acrescido (€ > 0).'); return; }
+    try {
+      await app.estrutura.registarAlteracao(contrato.id, {
+        tipo: a.tipo, dataEfeito: a.dataEfeito, descricao: tipoSel?.r ?? a.tipo, fundamentacao: a.fundamentacao,
+        ...(tipoSel?.valor ? { valorAcrescido: eurosParaCent(a.valor) } : {}),
+        publicitacaoObrigatoria: true,
+      }, app.utilizador());
+      setA({ tipo: 'SERVICOS_COMPLEMENTARES', dataEfeito: hoje(), fundamentacao: '', valor: '' });
+      onMudou();
+    } catch (e) { onErro(mensagemErro(e)); }
+  }
+
+  async function transitar(): Promise<void> {
+    onErro();
+    if (t.ate === '' || t.fundamentacao.trim() === '' || eurosParaCent(t.montante) <= 0) { onErro('Indique montante (€ > 0), data limite de execução e fundamentação.'); return; }
+    try {
+      await app.contratos.transitarAnoEconomico(contrato.id, eurosParaCent(t.montante), t.ate, t.fundamentacao, app.utilizador());
+      setT({ montante: '', ate: '', fundamentacao: '' });
+      onMudou();
+    } catch (e) { onErro(mensagemErro(e)); }
+  }
+
+  return (
+    <div className="duas" style={{ marginBottom: 16 }}>
+      <div className="cartao"><h3>Nova alteração contratual</h3><div className="corpo">
+        <div className="g2">
+          <div className="campo"><label>Tipo</label><select value={a.tipo} onChange={(e) => setA({ ...a, tipo: e.target.value as TipoAlteracao })}>{TIPOS_ALT.map((x) => <option key={x.v} value={x.v}>{x.r}</option>)}</select></div>
+          <div className="campo"><label>Data de efeito</label><input type="date" value={a.dataEfeito} onChange={(e) => setA({ ...a, dataEfeito: e.target.value })} /></div>
+        </div>
+        {tipoSel?.valor && <div className="campo"><label>Valor acrescido (€)</label><input type="number" min={0} step="0.01" value={a.valor} onChange={(e) => setA({ ...a, valor: e.target.value })} /></div>}
+        <div className="campo"><label>Fundamentação</label><textarea rows={2} value={a.fundamentacao} onChange={(e) => setA({ ...a, fundamentacao: e.target.value })} /></div>
+        <div className="aviso" style={{ marginBottom: 10 }}>Os serviços complementares (modificação objetiva) atualizam o valor do contrato, até 50% do preço inicial <code>RN-301</code>.</div>
+        <button className="btn pri" onClick={() => void registar()}>Registar alteração</button>
+      </div></div>
+
+      <div className="cartao"><h3>Transição para o ano económico seguinte</h3><div className="corpo">
+        {temPortaria ? (
+          <div className="sec">O contrato tem portaria de extensão de encargos: a execução plurianual segue essa autorização (não há transição).</div>
+        ) : (
+          <>
+            <div className="aviso" style={{ marginBottom: 10 }}>Saldo por executar: <b>{formatarMoeda(resumo.valorDisponivel)}</b>. Limite transitável (agente CCP, até 50% do valor contratualizado): <b>{formatarMoeda(limiteTransicao)}</b>. O saldo transitado pode ser executado até à data indicada.</div>
+            <div className="g2">
+              <div className="campo"><label>Montante a transitar (€)</label><input type="number" min={0} step="0.01" value={t.montante} onChange={(e) => setT({ ...t, montante: e.target.value })} /></div>
+              <div className="campo"><label>Executável até</label><input type="date" value={t.ate} onChange={(e) => setT({ ...t, ate: e.target.value })} /></div>
+            </div>
+            <div className="campo"><label>Fundamentação</label><textarea rows={2} value={t.fundamentacao} onChange={(e) => setT({ ...t, fundamentacao: e.target.value })} /></div>
+            {contrato.transicaoAnoEconomico !== undefined && <div className="sec" style={{ marginBottom: 8 }}>Já registada: {formatarMoeda(contrato.transicaoAnoEconomico.montante)} até {contrato.transicaoAnoEconomico.execucaoTransitadaAte}.</div>}
+            <button className="btn" onClick={() => void transitar()}>Registar transição</button>
+          </>
+        )}
+      </div></div>
+    </div>
+  );
 }
 
 /**

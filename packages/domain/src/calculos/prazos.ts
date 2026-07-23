@@ -51,14 +51,12 @@ export function excedeLimiteVigencia(contrato: Contrato): boolean {
 /**
  * Visto prévio do Tribunal de Contas assegurado para efeitos de EXECUÇÃO.
  * Um contrato que exija visto prévio só pode iniciar execução (estar EM_VIGOR)
- * quando o visto está assegurado: obtido (data de obtenção preenchida), tácito,
- * ou já ultrapassada/coincidente a data prevista de obtenção do visto.
+ * quando o visto está assegurado: obtido (data de obtenção preenchida) ou tácito.
  */
-export function vistoAssegurado(contrato: Contrato, hoje: DataISO): boolean {
+export function vistoAssegurado(contrato: Contrato): boolean {
   if (!contrato.vistoTribunalContasNecessario) return true;
   if (contrato.dataVistoTribunalContas !== undefined) return true;
   if (contrato.vistoTacito === true) return true;
-  if (contrato.dataPrevistaVistoTribunalContas !== undefined && hoje >= contrato.dataPrevistaVistoTribunalContas) return true;
   return false;
 }
 
