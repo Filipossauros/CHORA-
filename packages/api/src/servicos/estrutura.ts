@@ -75,6 +75,8 @@ export class ServicoEstrutura {
       tipo: TipoAlteracao; dataEfeito: DataISO; descricao: string; fundamentacao: string;
       valorAcrescido?: Cent; novaDataTermino?: DataISO; reprogramacaoFinanceira?: boolean;
       suspensao?: Alteracao['suspensao'];
+      novoPrestador?: { nome: string; nipc: string }; // CESSAO_POSICAO_CONTRATUAL
+      novoGestorId?: string; // SUBSTITUICAO_GESTOR
       /** Fundamentação da exceção ao limite de 36 meses (RN-202/RN-204), quando aplicável. */
       excecaoVigencia?: string;
     },
@@ -108,6 +110,20 @@ export class ServicoEstrutura {
       exigir(RN_205, { suspensoes: [...existentes, { dataInicio: dados.suspensao.dataInicio, dataFim: dados.suspensao.dataFim, suspendePrazoExecucao: dados.suspensao.suspendePrazoExecucao }] });
     }
 
+    // CESSÃO DA POSIÇÃO CONTRATUAL (modificação subjetiva, CCP art. 316.º e ss.).
+    if (dados.tipo === 'CESSAO_POSICAO_CONTRATUAL') {
+      if (dados.novoPrestador === undefined || dados.novoPrestador.nome.trim() === '' || dados.novoPrestador.nipc.trim() === '') {
+        throw new ErroValidacao('A cessão da posição contratual exige o novo prestador (nome e NIPC).');
+      }
+    }
+
+    // SUBSTITUIÇÃO DO GESTOR DO CONTRATO (CCP art. 290.º-A).
+    if (dados.tipo === 'SUBSTITUICAO_GESTOR') {
+      if (dados.novoGestorId === undefined || dados.novoGestorId.trim() === '') {
+        throw new ErroValidacao('A substituição de gestor exige o novo gestor.');
+      }
+    }
+
     const agora = this.ctx.relogio.agora();
     const alt: Alteracao = {
       id: this.ctx.ids.novo('alt'), contratoId, tipo: dados.tipo, dataEfeito: dados.dataEfeito,
@@ -116,6 +132,8 @@ export class ServicoEstrutura {
       ...(dados.novaDataTermino !== undefined ? { novaDataTermino: dados.novaDataTermino } : {}),
       ...(dados.reprogramacaoFinanceira !== undefined ? { reprogramacaoFinanceira: dados.reprogramacaoFinanceira } : {}),
       ...(dados.suspensao !== undefined ? { suspensao: dados.suspensao } : {}),
+      ...(dados.novoPrestador !== undefined ? { novoPrestador: dados.novoPrestador } : {}),
+      ...(dados.novoGestorId !== undefined ? { novoGestorId: dados.novoGestorId } : {}),
       registadoEm: agora, registadoPor: u.utilizadorId, atualizadoEm: agora, atualizadoPor: u.utilizadorId,
     };
     await this.ctx.repos.alteracoes.guardar(alt);
@@ -152,6 +170,21 @@ export class ServicoEstrutura {
       if (excecoes !== contrato.excecoes) {
         await this.ctx.repos.contratos.guardar({ ...contrato, excecoes, atualizadoEm: agora, atualizadoPor: u.utilizadorId });
       }
+    }
+
+    // Cessão da posição contratual: passa a vigorar o novo prestador.
+    if (dados.tipo === 'CESSAO_POSICAO_CONTRATUAL' && dados.novoPrestador !== undefined) {
+      const contrato = await this.contrato(contratoId);
+      await this.ctx.repos.contratos.guardar({ ...contrato, prestador: { nome: dados.novoPrestador.nome, nipc: dados.novoPrestador.nipc }, atualizadoEm: agora, atualizadoPor: u.utilizadorId });
+    }
+
+    // Substituição do gestor: cessa o gestor principal atual e designa o novo.
+    if (dados.tipo === 'SUBSTITUICAO_GESTOR' && dados.novoGestorId !== undefined) {
+      const contrato = await this.contrato(contratoId);
+      const dataDesignacao = dados.dataEfeito;
+      const gestores = contrato.gestores.map((g) => (g.principal && g.cessouEm === undefined ? { ...g, principal: false, cessouEm: dataDesignacao } : g));
+      gestores.push({ utilizadorId: dados.novoGestorId, principal: true, designadoEm: dataDesignacao });
+      await this.ctx.repos.contratos.guardar({ ...contrato, gestores, atualizadoEm: agora, atualizadoPor: u.utilizadorId });
     }
 
     await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Alteracao', entidadeId: alt.id, operacao: `ALTERAR:${dados.tipo}`, resultado: 'PERMITIDO', depois: alt });

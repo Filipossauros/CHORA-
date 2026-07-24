@@ -61,6 +61,8 @@ export const zAlteracao = z.object({
   novaDataTermino: zDataISO.optional(), // PRORROGACAO
   reprogramacaoFinanceira: z.boolean().optional(), // PRORROGACAO — houve reprogramação de encargos plurianuais
   suspensao: zSuspensao.optional(),
+  novoPrestador: z.object({ nome: z.string().min(1), nipc: z.string().min(1) }).optional(), // CESSAO_POSICAO_CONTRATUAL
+  novoGestorId: z.string().optional(), // SUBSTITUICAO_GESTOR — oid do novo gestor principal
   registadoEm: zInstanteISO,
   registadoPor: z.string().min(1),
   atualizadoEm: zInstanteISO,

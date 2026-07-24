@@ -64,6 +64,37 @@ describe('alterações — prorrogação e suspensão', () => {
     expect(c.excecoes.some((e) => e.regra === 'RN-202')).toBe(true);
   });
 
+  it('cessão da posição contratual substitui o prestador', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const id = await contrato(ctx, 'C-2026-002');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/alteracoes`, headers: comoGestor(), payload: { tipo: 'CESSAO_POSICAO_CONTRATUAL', dataEfeito: '2026-06-01', descricao: 'Cessão', fundamentacao: 'Autorizada.', novoPrestador: { nome: 'Nova Prestadora, Lda.', nipc: '500000002' } } });
+    expect(r.statusCode).toBe(201);
+    const c = (await ctx.repos.contratos.obter(id))!;
+    expect(c.prestador.nome).toBe('Nova Prestadora, Lda.');
+    expect(c.prestador.nipc).toBe('500000002');
+  });
+
+  it('substituição de gestor cessa o anterior e designa o novo', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const id = await contrato(ctx, 'C-2026-002');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/alteracoes`, headers: comoGestor(), payload: { tipo: 'SUBSTITUICAO_GESTOR', dataEfeito: '2026-06-01', descricao: 'Substituição', fundamentacao: 'Mobilidade interna.', novoGestorId: 'oid-gestor-tecnico' } });
+    expect(r.statusCode).toBe(201);
+    const c = (await ctx.repos.contratos.obter(id))!;
+    const principal = c.gestores.find((g) => g.principal && g.cessouEm === undefined);
+    expect(principal?.utilizadorId).toBe('oid-gestor-tecnico');
+    expect(c.gestores.some((g) => g.cessouEm === '2026-06-01')).toBe(true);
+  });
+
+  it('cessão sem novo prestador falha (validação)', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const id = await contrato(ctx, 'C-2026-002');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/alteracoes`, headers: comoGestor(), payload: { tipo: 'CESSAO_POSICAO_CONTRATUAL', dataEfeito: '2026-06-01', descricao: 'Cessão', fundamentacao: 'x' } });
+    expect(r.statusCode).toBe(400); // ErroValidacao (falta o novo prestador)
+  });
+
   it('suspensões sobrepostas falham (RN-205)', async () => {
     const { app, ctx } = await montarApp();
     fechar = () => app.close();
