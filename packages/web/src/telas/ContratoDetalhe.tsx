@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { ESTADOS_CONTRATO, type Afetacao, type Contrato, type EstadoContrato, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
+import { AgenteCCPStub, mesesEntre, ESTADOS_CONTRATO, LIMITE_VIGENCIA_MESES, type Afetacao, type Contrato, type EstadoContrato, type Minuta, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
 import { app, AZURE_USERS, nomeAzure, prestadorAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
@@ -265,33 +265,71 @@ function Campo({ k, v }: { k: string; v: string }): ReactNode {
   return <div className="campo" style={{ margin: 0 }}><label>{k}</label><div style={{ fontWeight: 600, fontSize: 13.5 }}>{v}</div></div>;
 }
 
-const TIPOS_ALT: Array<{ v: TipoAlteracao; r: string; valor: boolean }> = [
+const TIPOS_ALT: Array<{ v: TipoAlteracao; r: string; valor: boolean; data?: boolean; susp?: boolean }> = [
   { v: 'SERVICOS_COMPLEMENTARES', r: 'Serviços complementares (modificação objetiva)', valor: true },
   { v: 'REVISAO_PRECOS', r: 'Revisão de preços', valor: false },
-  { v: 'PRORROGACAO', r: 'Prorrogação', valor: false },
+  { v: 'PRORROGACAO', r: 'Prorrogação (nova data de vigência)', valor: false, data: true },
+  { v: 'SUSPENSAO', r: 'Suspensão', valor: false, susp: true },
   { v: 'OUTRA', r: 'Outra', valor: false },
 ];
 
+const ALT_INICIAL = {
+  tipo: 'SERVICOS_COMPLEMENTARES' as TipoAlteracao, dataEfeito: hoje(), fundamentacao: '', valor: '',
+  novaData: '', reprog: false, suspInicio: hoje(), suspFim: '', suspExecucao: true, excecao: '',
+};
+
 /** Registo de alterações contratuais formais e transição de ano económico. */
 function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Contrato; resumo: ResumoExec; onMudou: () => void; onErro: (m?: string) => void }): ReactNode {
-  const [a, setA] = useState({ tipo: 'SERVICOS_COMPLEMENTARES' as TipoAlteracao, dataEfeito: hoje(), fundamentacao: '', valor: '' });
+  const [a, setA] = useState({ ...ALT_INICIAL, dataEfeito: hoje() });
   const [t, setT] = useState({ montante: '', ate: '', fundamentacao: '' });
+  const [minuta, setMinuta] = useState<Minuta>();
+  const [minutaGuardada, setMinutaGuardada] = useState(false);
   const tipoSel = TIPOS_ALT.find((x) => x.v === a.tipo);
   const temPortaria = contrato.numeroPortariaExtensaoEncargos !== undefined || contrato.portariaExtensaoEncargos !== undefined;
   const limiteTransicao = Math.floor(contrato.precoContratualInicial * 0.5);
+  const mesesProrrog = a.novaData !== '' ? mesesEntre(contrato.dataInicioVigencia, a.novaData) : 0;
+  const prorrogExcede = tipoSel?.data === true && mesesProrrog > LIMITE_VIGENCIA_MESES;
+
+  function mudar(patch: Partial<typeof a>): void { setA((prev) => ({ ...prev, ...patch })); setMinuta(undefined); }
 
   async function registar(): Promise<void> {
     onErro();
     if (a.fundamentacao.trim() === '') { onErro('Indique a fundamentação da alteração.'); return; }
     if (tipoSel?.valor && eurosParaCent(a.valor) <= 0) { onErro('Indique o valor acrescido (€ > 0).'); return; }
+    if (tipoSel?.data && a.novaData === '') { onErro('Indique a nova data de vigência da prorrogação.'); return; }
+    if (prorrogExcede && a.excecao.trim() === '') { onErro('A nova vigência excede 36 meses: indique a fundamentação da exceção (RN-202).'); return; }
+    if (tipoSel?.susp && a.suspInicio === '') { onErro('Indique a data de início da suspensão.'); return; }
     try {
       await app.estrutura.registarAlteracao(contrato.id, {
         tipo: a.tipo, dataEfeito: a.dataEfeito, descricao: tipoSel?.r ?? a.tipo, fundamentacao: a.fundamentacao,
         ...(tipoSel?.valor ? { valorAcrescido: eurosParaCent(a.valor) } : {}),
+        ...(tipoSel?.data ? { novaDataTermino: a.novaData, reprogramacaoFinanceira: a.reprog } : {}),
+        ...(tipoSel?.susp ? { suspensao: { dataInicio: a.suspInicio, ...(a.suspFim !== '' ? { dataFim: a.suspFim } : {}), suspendePrazoExecucao: a.suspExecucao } } : {}),
+        ...(a.excecao.trim() !== '' ? { excecaoVigencia: a.excecao } : {}),
       }, app.utilizador());
-      setA({ tipo: 'SERVICOS_COMPLEMENTARES', dataEfeito: hoje(), fundamentacao: '', valor: '' });
+      setA({ ...ALT_INICIAL, dataEfeito: hoje() });
+      setMinuta(undefined);
       onMudou();
     } catch (e) { onErro(mensagemErro(e)); }
+  }
+
+  async function gerarMinuta(): Promise<void> {
+    onErro();
+    const agente = new AgenteCCPStub();
+    const m = await agente.gerarMinuta(a.tipo === 'SUSPENSAO'
+      ? { tipo: 'SUSPENSAO_EXCECAO', numeroContrato: contrato.numero, objeto: contrato.objeto, fundamentacao: a.fundamentacao }
+      : { tipo: 'PRORROGACAO', numeroContrato: contrato.numero, objeto: contrato.objeto, dataTerminoAtual: contrato.dataTerminoContratual, ...(a.novaData !== '' ? { novaDataTermino: a.novaData, vigenciaProjetadaMeses: mesesProrrog } : {}), reprogramacaoFinanceira: a.reprog, fundamentacao: a.fundamentacao });
+    setMinuta(m); setMinutaGuardada(false);
+  }
+
+  async function guardarMinuta(): Promise<void> {
+    if (minuta === undefined) return;
+    await app.recomendacoes.criar({
+      contratoId: contrato.id, origem: 'AGENTE_CCP', titulo: minuta.titulo, texto: minuta.corpo,
+      ...(a.fundamentacao.trim() !== '' ? { fundamentacao: a.fundamentacao } : {}),
+      referenciaLegal: minuta.referencia, confianca: 0.7,
+    }, app.utilizador());
+    setMinutaGuardada(true);
   }
 
   async function transitar(): Promise<void> {
@@ -308,13 +346,49 @@ function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Con
     <div className="duas" style={{ marginBottom: 16 }}>
       <div className="cartao"><h3>Nova alteração contratual</h3><div className="corpo">
         <div className="g2">
-          <div className="campo"><label>Tipo</label><select value={a.tipo} onChange={(e) => setA({ ...a, tipo: e.target.value as TipoAlteracao })}>{TIPOS_ALT.map((x) => <option key={x.v} value={x.v}>{x.r}</option>)}</select></div>
-          <div className="campo"><label>Data de efeito</label><input type="date" value={a.dataEfeito} onChange={(e) => setA({ ...a, dataEfeito: e.target.value })} /></div>
+          <div className="campo"><label>Tipo</label><select value={a.tipo} onChange={(e) => mudar({ tipo: e.target.value as TipoAlteracao })}>{TIPOS_ALT.map((x) => <option key={x.v} value={x.v}>{x.r}</option>)}</select></div>
+          <div className="campo"><label>Data de efeito</label><input type="date" value={a.dataEfeito} onChange={(e) => mudar({ dataEfeito: e.target.value })} /></div>
         </div>
-        {tipoSel?.valor && <div className="campo"><label>Valor acrescido (€)</label><input type="number" min={0} step="0.01" value={a.valor} onChange={(e) => setA({ ...a, valor: e.target.value })} /></div>}
-        <div className="campo"><label>Fundamentação</label><textarea rows={2} value={a.fundamentacao} onChange={(e) => setA({ ...a, fundamentacao: e.target.value })} /></div>
-        <div className="aviso" style={{ marginBottom: 10 }}>Os serviços complementares (modificação objetiva) atualizam o valor do contrato, até 50% do preço inicial <code>RN-301</code>.</div>
-        <button className="btn pri" onClick={() => void registar()}>Registar alteração</button>
+        {tipoSel?.valor && <div className="campo"><label>Valor acrescido (€)</label><input type="number" min={0} step="0.01" value={a.valor} onChange={(e) => mudar({ valor: e.target.value })} /></div>}
+        {tipoSel?.data && (
+          <>
+            <div className="g2">
+              <div className="campo"><label>Nova data de vigência</label><input type="date" value={a.novaData} onChange={(e) => mudar({ novaData: e.target.value })} /></div>
+              <div className="campo"><label>Vigência resultante</label><div style={{ marginTop: 2, fontWeight: 600 }}>{a.novaData !== '' ? `${mesesProrrog.toFixed(1)} meses` : '—'}</div></div>
+            </div>
+            <label className="check" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '2px 0 8px' }}><input type="checkbox" checked={a.reprog} onChange={(e) => mudar({ reprog: e.target.checked })} /> Houve reprogramação financeira dos encargos plurianuais</label>
+          </>
+        )}
+        {tipoSel?.susp && (
+          <>
+            <div className="g2">
+              <div className="campo"><label>Início da suspensão</label><input type="date" value={a.suspInicio} onChange={(e) => mudar({ suspInicio: e.target.value })} /></div>
+              <div className="campo"><label>Fim (opcional)</label><input type="date" value={a.suspFim} onChange={(e) => mudar({ suspFim: e.target.value })} /></div>
+            </div>
+            <label className="check" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '2px 0 8px' }}><input type="checkbox" checked={a.suspExecucao} onChange={(e) => mudar({ suspExecucao: e.target.checked })} /> A suspensão desloca o prazo de execução</label>
+          </>
+        )}
+        <div className="campo"><label>Fundamentação</label><textarea rows={2} value={a.fundamentacao} onChange={(e) => mudar({ fundamentacao: e.target.value })} /></div>
+        {prorrogExcede && (
+          <div className="campo"><label>Fundamentação da exceção aos 36 meses (RN-202)</label><textarea rows={2} value={a.excecao} onChange={(e) => mudar({ excecao: e.target.value })} /></div>
+        )}
+        {tipoSel?.data && <div className="aviso" style={{ marginBottom: 10 }}>A prorrogação é modificação <b>autónoma e fundamentada</b> — não decorre dos serviços complementares <code>RN-206</code>. Acima de 36 meses exige exceção fundamentada <code>RN-202</code>.</div>}
+        {tipoSel?.susp && <div className="aviso" style={{ marginBottom: 10 }}>A suspensão que desloca a execução pode empurrar a vigência além dos 36 meses; nesse caso, aviso e exceção fundamentada <code>RN-204</code>. Períodos não se podem sobrepor <code>RN-205</code>.</div>}
+        {!tipoSel?.data && !tipoSel?.susp && <div className="aviso" style={{ marginBottom: 10 }}>Os serviços complementares (modificação objetiva) atualizam o valor do contrato, até 50% do preço inicial <code>RN-301</code>.</div>}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn pri" onClick={() => void registar()}>Registar alteração</button>
+          {(tipoSel?.data || tipoSel?.susp) && <button className="btn sm" onClick={() => void gerarMinuta()}>✨ Gerar minuta (agente CCP)</button>}
+        </div>
+        {minuta !== undefined && (
+          <div className="aviso" style={{ marginTop: 10 }}>
+            <b>{minuta.titulo}</b>
+            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: '6px 0' }}>{minuta.corpo}</pre>
+            <div className="sec">{minuta.referencia}</div>
+            <div style={{ marginTop: 8 }}>
+              {minutaGuardada ? <span className="pill p-verde">Guardada em Recomendações</span> : <button className="btn sm" onClick={() => void guardarMinuta()}>Guardar como recomendação</button>}
+            </div>
+          </div>
+        )}
       </div></div>
 
       <div className="cartao"><h3>Transição para o ano económico seguinte</h3><div className="corpo">

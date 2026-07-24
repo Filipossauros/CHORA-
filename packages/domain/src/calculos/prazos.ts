@@ -101,6 +101,29 @@ export function mesesAteTermino(contrato: Contrato, referencia: DataISO): number
 }
 
 /**
+ * Último ano económico coberto pela portaria de extensão de encargos (repartição
+ * plurianual). `undefined` quando não há portaria com repartição anual detalhada.
+ */
+export function anoFinalPortaria(contrato: Contrato): number | undefined {
+  const rep = contrato.portariaExtensaoEncargos?.reparticaoAnual;
+  if (rep === undefined || rep.length === 0) return undefined;
+  return rep.reduce((max, r) => (r.ano > max ? r.ano : max), rep[0]!.ano);
+}
+
+/**
+ * Verdadeiro quando o contrato tem portaria de extensão de encargos mas a sua
+ * vigência (ano do término contratual) ultrapassa o último ano coberto pela
+ * repartição plurianual — é necessário pedir a reprogramação da portaria
+ * (AL-PORTARIA-REPROGRAMAR).
+ */
+export function portariaExigeReprogramacao(contrato: Contrato): boolean {
+  const anoFinal = anoFinalPortaria(contrato);
+  if (anoFinal === undefined) return false;
+  const anoTermino = Number(contrato.dataTerminoContratual.slice(0, 4));
+  return anoTermino > anoFinal;
+}
+
+/**
  * Fim efetivo de vigência (RN-203): o primeiro de dataTerminoContratual ou a
  * data de esgotamento das horas/valor disponíveis, quando esta for conhecida.
  */

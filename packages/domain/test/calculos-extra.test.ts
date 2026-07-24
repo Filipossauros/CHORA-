@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Dotacao, PerfilContratual, Alteracao } from '../src/entidades/estrutura.js';
 import type { Contrato } from '../src/entidades/contrato.js';
 import { totalDotacoes, totalPrevistoPerfis, montanteLiquidoFatura } from '../src/calculos/financeira.js';
+import { anoFinalPortaria, portariaExigeReprogramacao } from '../src/calculos/prazos.js';
 import {
   periodosSuspensao,
   suspensoesSobrepoem,
@@ -76,5 +77,24 @@ describe('prazos — utilitários', () => {
       { dataInicio: '2026-01-01', dataFim: '2026-01-31', suspendePrazoExecucao: false },
       { dataInicio: '2026-06-01', dataFim: '2026-06-30', suspendePrazoExecucao: false },
     )).toBe(false);
+  });
+
+  it('anoFinalPortaria e portariaExigeReprogramacao', () => {
+    const semPortaria = { dataTerminoContratual: '2027-06-30' } as Contrato;
+    expect(anoFinalPortaria(semPortaria)).toBeUndefined();
+    expect(portariaExigeReprogramacao(semPortaria)).toBe(false);
+
+    const comPortaria = {
+      dataTerminoContratual: '2027-06-30',
+      portariaExtensaoEncargos: { numero: 'P-1', data: '2025-01-01', reparticaoAnual: [{ ano: 2025, montante: 100 }, { ano: 2026, montante: 100 }] },
+    } as Contrato;
+    expect(anoFinalPortaria(comPortaria)).toBe(2026);
+    expect(portariaExigeReprogramacao(comPortaria)).toBe(true); // término em 2027 > 2026
+
+    const coberto = {
+      dataTerminoContratual: '2026-12-31',
+      portariaExtensaoEncargos: { numero: 'P-2', data: '2025-01-01', reparticaoAnual: [{ ano: 2025, montante: 100 }, { ano: 2026, montante: 100 }] },
+    } as Contrato;
+    expect(portariaExigeReprogramacao(coberto)).toBe(false); // término em 2026 = ano final
   });
 });

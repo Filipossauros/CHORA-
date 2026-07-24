@@ -455,6 +455,9 @@ components:
         - CONSULTA_PREVIA
         - CONCURSO_PUBLICO
         - CONCURSO_LIMITADO
+        - PROCEDIMENTO_NEGOCIACAO
+        - DIALOGO_CONCORRENCIAL
+        - PARCERIA_INOVACAO
         - ACORDO_QUADRO
         - SISTEMA_AQUISICAO_DINAMICA
     TipoAlteracao:
@@ -467,6 +470,7 @@ components:
         - CESSAO_POSICAO_CONTRATUAL
         - SUBSTITUICAO_GESTOR
         - REFORCO_BOLSA_VALOR
+        - TRANSICAO_ANO_ECONOMICO
         - OUTRA
     UnidadeMedida:
       type: string

@@ -16,8 +16,9 @@ const zPerfil = z.object({ nome: z.string().min(1), quantidadePrevista: zMinutos
 const zPreco = z.object({ valorHora: zCentNaoNegativo, vigenteDe: zDataISO });
 const zAlteracao = z.object({
   tipo: zTipoAlteracao, dataEfeito: zDataISO, descricao: z.string().min(1), fundamentacao: z.string().min(1),
-  valorAcrescido: zCent.optional(), novaDataTermino: zDataISO.optional(),
+  valorAcrescido: zCent.optional(), novaDataTermino: zDataISO.optional(), reprogramacaoFinanceira: z.boolean().optional(),
   suspensao: z.object({ dataInicio: zDataISO, dataFim: zDataISO.optional(), suspendePrazoExecucao: z.boolean() }).optional(),
+  excecaoVigencia: z.string().optional(),
 });
 const zHabilitacao = z.object({ tipo: zTipoDocumentoHabilitacao, emitidoEm: zDataISO, validoAte: zDataISO, referencia: z.string().optional() });
 

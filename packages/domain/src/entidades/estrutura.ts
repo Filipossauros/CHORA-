@@ -59,6 +59,7 @@ export const zAlteracao = z.object({
   // Campos por tipo
   valorAcrescido: zCent.optional(), // SERVICOS_COMPLEMENTARES, REFORCO_BOLSA_VALOR, REVISAO_PRECOS
   novaDataTermino: zDataISO.optional(), // PRORROGACAO
+  reprogramacaoFinanceira: z.boolean().optional(), // PRORROGACAO — houve reprogramação de encargos plurianuais
   suspensao: zSuspensao.optional(),
   registadoEm: zInstanteISO,
   registadoPor: z.string().min(1),

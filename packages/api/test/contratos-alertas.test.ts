@@ -59,6 +59,17 @@ describe('alertas e auditoria', () => {
     expect(codigos.has('AL-PUBLICITACAO')).toBe(false);
   });
 
+  it('gera AL-PORTARIA-REPROGRAMAR quando a vigência ultrapassa o ano coberto pela portaria', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const c = (await ctx.repos.contratos.todos((x) => x.estado === 'EM_VIGOR'))[0]!;
+    // Término em 2027; portaria cobre só até 2026 → reprogramação necessária.
+    await ctx.repos.contratos.guardar({ ...c, portariaExtensaoEncargos: { numero: 'P-99', data: '2025-12-01', reparticaoAnual: [{ ano: 2026, montante: 100_000_00 }] } });
+    const r = await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    const alertas = (r.json() as { alertas: Array<{ codigo: string; contratoId: string }> }).alertas;
+    expect(alertas.some((a) => a.codigo === 'AL-PORTARIA-REPROGRAMAR' && a.contratoId === c.id)).toBe(true);
+  });
+
   it('só o gestor de contrato consulta auditoria (403 para técnico)', async () => {
     const { app } = await montarApp();
     fechar = () => app.close();

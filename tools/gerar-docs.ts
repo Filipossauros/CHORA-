@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { CATALOGO_REGRAS, FAMILIAS_REGRAS } from '../packages/domain/src/index.js';
+import { CATALOGO_REGRAS, FAMILIAS_REGRAS, CATALOGO_ALERTAS } from '../packages/domain/src/index.js';
 import { gerarOpenApi } from '../packages/api/src/openapi/documento.js';
 
 /**
@@ -34,6 +34,29 @@ function gerarCatalogo(): string {
     }
     linhas.push('');
   }
+  return linhas.join('\n');
+}
+
+// --- catalogo-alertas.md (regras de alertas, separadas) -----------------------
+function gerarCatalogoAlertas(): string {
+  const linhas: string[] = [
+    '# Catálogo de regras de alertas',
+    '',
+    '> Documento **gerado** a partir de `packages/domain/src/alertas/` por `pnpm docs`. Não editar à mão.',
+    '',
+    'As regras de alertas (AL-xxx) estão **separadas** das regras de negócio (RN-xxx)',
+    'para facilidade de gestão. Os alertas são sempre **consultivos**: sinalizam',
+    'preocupações de execução, não bloqueiam decisões.',
+    '',
+    `Total de alertas: **${CATALOGO_ALERTAS.length}**.`,
+    '',
+    '| Código | Alerta | Condição | Severidade base | Regra ligada | Base legal / nota |',
+    '|---|---|---|---|---|---|',
+  ];
+  for (const a of [...CATALOGO_ALERTAS].sort((x, y) => (x.codigo < y.codigo ? -1 : 1))) {
+    linhas.push(`| ${a.codigo} | ${a.titulo} | ${a.descricao} | ${a.severidadeBase} | ${a.regraRelacionada ?? '—'} | ${a.base ?? '—'} |`);
+  }
+  linhas.push('');
   return linhas.join('\n');
 }
 
@@ -113,6 +136,7 @@ function paraYaml(valor: unknown, indent = 0): string {
 
 const openapi = gerarOpenApi();
 writeFileSync(join(docs, 'catalogo-regras.md'), gerarCatalogo(), 'utf8');
+writeFileSync(join(docs, 'catalogo-alertas.md'), gerarCatalogoAlertas(), 'utf8');
 writeFileSync(join(docs, 'modelo-dados.md'), gerarModeloDados(), 'utf8');
 writeFileSync(join(docs, 'openapi.yaml'), `# Gerado por pnpm docs — não editar à mão.\n${paraYaml(openapi)}\n`, 'utf8');
 

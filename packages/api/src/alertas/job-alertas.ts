@@ -1,7 +1,8 @@
 import {
   RN_302, RN_505,
   calcularConsumoPerfil, valorPrevistoPerfil, mesesAteTermino, excedeLimiteVigencia,
-  diaDeInstante,
+  portariaExigeReprogramacao, anoFinalPortaria, terminoExecucaoAjustado, mesesEntre,
+  LIMITE_VIGENCIA_MESES, diaDeInstante,
   type Alerta, type SeveridadeAlerta,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
@@ -65,6 +66,20 @@ export class JobAlertas {
       // AL-VIGENCIA-36M
       if (excedeLimiteVigencia(contrato)) {
         gerados.push(this.novoAlerta(contrato.id, 'AL-VIGENCIA-36M', 'CRITICO', 'Vigência aproxima-se ou excede 36 meses', 'Rever prazo e exceção fundamentada (RN-202).', destinatario));
+      }
+
+      // AL-SUSPENSAO-VIGENCIA (RN-204 consultiva) — a deslocação por suspensões que
+      // suspendem a execução projeta a vigência para além dos 36 meses, sem exceção.
+      const projetadaMeses = mesesEntre(contrato.dataInicioVigencia, terminoExecucaoAjustado(contrato, alteracoes));
+      const temExcecaoVigencia = contrato.excecoes.some((e) => e.regra === 'RN-204' || e.regra === 'RN-202');
+      if (projetadaMeses > LIMITE_VIGENCIA_MESES && !excedeLimiteVigencia(contrato) && !temExcecaoVigencia) {
+        gerados.push(this.novoAlerta(contrato.id, 'AL-SUSPENSAO-VIGENCIA', 'AVISO', 'Suspensão empurra a vigência além dos 36 meses', `A deslocação por suspensões projeta a vigência para ${projetadaMeses.toFixed(0)} meses; pondere exceção fundamentada (RN-204).`, destinatario));
+      }
+
+      // AL-PORTARIA-REPROGRAMAR — a vigência ultrapassa o último ano coberto pela
+      // portaria de extensão de encargos: é preciso pedir a reprogramação.
+      if (portariaExigeReprogramacao(contrato)) {
+        gerados.push(this.novoAlerta(contrato.id, 'AL-PORTARIA-REPROGRAMAR', 'AVISO', 'Portaria de extensão de encargos a reprogramar', `A vigência ultrapassa o último ano coberto pela portaria de extensão de encargos (${anoFinalPortaria(contrato) ?? '—'}); peça a reprogramação da portaria para manter a execução plurianual.`, destinatario));
       }
 
       // AL-COMPLEMENTARES-40/-45 (RN-302 consultiva)

@@ -2,7 +2,7 @@
 
 > Documento **gerado** a partir de `packages/domain/src/rules/` por `pnpm docs`. Não editar à mão.
 
-Total de regras: **56**.
+Total de regras: **53**.
 
 ## Contratos e procedimentos
 

@@ -1,6 +1,6 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { JobAlertas } from '@chora/api/nucleo';
-import type { Alerta, Contrato, PerfilContratual, RegistoTempo } from '@chora/domain';
+import { AgenteCCPStub, anoFinalPortaria, type Alerta, type Contrato, type Minuta, type PerfilContratual, type RegistoTempo } from '@chora/domain';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Severidade, formatarHoras, formatarMoeda, useAsync } from '../comum.js';
@@ -22,6 +22,8 @@ export function Alertas(): ReactNode {
   const [aberto, setAberto] = useState<string>();
   const [sugestao, setSugestao] = useState<Record<string, Sugestao>>({});
   const [guardadas, setGuardadas] = useState<Record<string, boolean>>({});
+  const [minutas, setMinutas] = useState<Record<string, Minuta>>({});
+  const [minutasGuardadas, setMinutasGuardadas] = useState<Record<string, boolean>>({});
 
   async function executar(): Promise<void> {
     await new JobAlertas(app.ctx).executar();
@@ -42,6 +44,32 @@ export function Alertas(): ReactNode {
     if (sugestao[a.id] === undefined && base.dados !== undefined) {
       setSugestao((s) => ({ ...s, [a.id]: sugestaoIA(a, base.dados!.ctx) }));
     }
+  }
+
+  /** Alertas para os quais o agente CCP consegue redigir uma minuta. */
+  function temMinuta(codigo: string): boolean {
+    return codigo === 'AL-PORTARIA-REPROGRAMAR' || codigo === 'AL-SUSPENSAO-VIGENCIA';
+  }
+
+  async function gerarMinuta(a: Alerta): Promise<void> {
+    const contrato = base.dados?.ctx.contratos.find((c) => c.id === a.contratoId);
+    if (contrato === undefined) return;
+    const agente = new AgenteCCPStub();
+    const m = a.codigo === 'AL-PORTARIA-REPROGRAMAR'
+      ? await agente.gerarMinuta({ tipo: 'PORTARIA_REPROGRAMACAO', numeroContrato: contrato.numero, objeto: contrato.objeto, ...(contrato.portariaExtensaoEncargos?.numero !== undefined ? { numeroPortaria: contrato.portariaExtensaoEncargos.numero } : {}), ...(anoFinalPortaria(contrato) !== undefined ? { anoFinalPortaria: anoFinalPortaria(contrato) } : {}), anoTermino: Number(contrato.dataTerminoContratual.slice(0, 4)) })
+      : await agente.gerarMinuta({ tipo: 'SUSPENSAO_EXCECAO', numeroContrato: contrato.numero, objeto: contrato.objeto });
+    setMinutas((mm) => ({ ...mm, [a.id]: m }));
+    setMinutasGuardadas((g) => ({ ...g, [a.id]: false }));
+  }
+
+  async function guardarMinuta(a: Alerta): Promise<void> {
+    const m = minutas[a.id];
+    if (m === undefined) return;
+    await app.recomendacoes.criar({
+      contratoId: a.contratoId, origem: 'AGENTE_CCP', codigo: a.codigo,
+      titulo: m.titulo, texto: m.corpo, fundamentacao: a.detalhe, referenciaLegal: m.referencia, confianca: 0.7,
+    }, app.utilizador());
+    setMinutasGuardadas((g) => ({ ...g, [a.id]: true }));
   }
 
   return (
@@ -75,8 +103,21 @@ export function Alertas(): ReactNode {
                     )}
                     <div className="sec" style={{ marginTop: 8 }}>{SALVAGUARDA_JURIDICA}</div>
                     {podeGerir && s !== undefined && (
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         {guardadas[a.id] ? <span className="pill p-verde">Guardada em Recomendações</span> : <button className="btn sm" onClick={() => void guardarRecomendacao(a, s)}>Guardar como recomendação</button>}
+                        {temMinuta(a.codigo) && <button className="btn sm" onClick={() => void gerarMinuta(a)}>✨ Gerar minuta (agente CCP)</button>}
+                      </div>
+                    )}
+                    {minutas[a.id] !== undefined && (
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--linha)' }}>
+                        <b>{minutas[a.id]!.titulo}</b>
+                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: '6px 0' }}>{minutas[a.id]!.corpo}</pre>
+                        <div className="sec">{minutas[a.id]!.referencia}</div>
+                        {podeGerir && (
+                          <div style={{ marginTop: 8 }}>
+                            {minutasGuardadas[a.id] ? <span className="pill p-verde">Minuta guardada em Recomendações</span> : <button className="btn sm" onClick={() => void guardarMinuta(a)}>Guardar minuta como recomendação</button>}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -123,6 +164,9 @@ function sugestaoIA(a: Alerta, ctx: Contexto): Sugestao {
     'AL-TERMINO-3M': 'Prepare a caducidade ou uma eventual prorrogação/novo procedimento em tempo útil; confirme entregáveis pendentes.',
     'AL-TERMINO-6M': 'Planeie a transição: confirme o saldo de horas e o calendário de execução até ao término.',
     'AL-VIGENCIA-36M': 'Reveja o prazo de vigência e fundamente a exceção ao limite (RN-202) se aplicável.',
+    'AL-SUSPENSAO-VIGENCIA': 'As suspensões deslocam a execução e projetam a vigência para além dos 36 meses; registe a exceção fundamentada (RN-204). O agente CCP pode redigir a minuta.',
+    'AL-PORTARIA-REPROGRAMAR': 'A vigência ultrapassa o último ano coberto pela portaria de extensão de encargos; promova a reprogramação da portaria para manter a execução plurianual. O agente CCP pode redigir a minuta do pedido.',
+    'AL-TRANSICAO-ANO': 'Pondere transitar o saldo por executar para o ano económico seguinte (sem portaria, até 50% do valor contratualizado), fundamentando.',
     'AL-COMPLEMENTARES-40': 'Acompanhe o acumulado de trabalhos complementares face ao limite legal de 50% (RN-301).',
     'AL-COMPLEMENTARES-45': 'Está próximo do limite de 50% de trabalhos complementares; evite novos acréscimos sem análise.',
     'AL-VISTO-PENDENTE': 'Confirme a submissão ao Tribunal de Contas; não deve haver execução relevante sem visto (salvo visto tácito).',

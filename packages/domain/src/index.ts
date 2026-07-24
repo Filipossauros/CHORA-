@@ -13,6 +13,7 @@ export * from './erros/violacao-regra.js';
 export * from './entidades/index.js';
 export * from './calculos/index.js';
 export * from './rules/index.js';
+export * from './alertas/catalogo.js';
 export * from './maquinas-estado/index.js';
 export * from './ccp/agente.js';
 export * from './legal/base-legal.js';
