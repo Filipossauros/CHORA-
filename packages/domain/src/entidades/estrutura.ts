@@ -44,12 +44,6 @@ const zSuspensao = z.object({
   suspendePrazoExecucao: z.boolean(),
 });
 
-const zPublicitacaoPortalBase = z.object({
-  obrigatoria: z.boolean(),
-  efetuadaEm: zDataISO.optional(),
-  referencia: z.string().optional(),
-});
-
 /**
  * Alteração contratual. Os campos `registadoEm`/`registadoPor` são os campos de
  * criação (não se duplicam com criadoEm/criadoPor — secção 5.3.2); adiciona-se o
@@ -66,7 +60,6 @@ export const zAlteracao = z.object({
   valorAcrescido: zCent.optional(), // SERVICOS_COMPLEMENTARES, REFORCO_BOLSA_VALOR, REVISAO_PRECOS
   novaDataTermino: zDataISO.optional(), // PRORROGACAO
   suspensao: zSuspensao.optional(),
-  publicitacaoPortalBase: zPublicitacaoPortalBase.optional(),
   registadoEm: zInstanteISO,
   registadoPor: z.string().min(1),
   atualizadoEm: zInstanteISO,

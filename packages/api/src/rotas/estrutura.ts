@@ -18,7 +18,6 @@ const zAlteracao = z.object({
   tipo: zTipoAlteracao, dataEfeito: zDataISO, descricao: z.string().min(1), fundamentacao: z.string().min(1),
   valorAcrescido: zCent.optional(), novaDataTermino: zDataISO.optional(),
   suspensao: z.object({ dataInicio: zDataISO, dataFim: zDataISO.optional(), suspendePrazoExecucao: z.boolean() }).optional(),
-  publicitacaoObrigatoria: z.boolean().optional(),
 });
 const zHabilitacao = z.object({ tipo: zTipoDocumentoHabilitacao, emitidoEm: zDataISO, validoAte: zDataISO, referencia: z.string().optional() });
 
@@ -49,13 +48,6 @@ export function rotasEstrutura(app: FastifyInstance, ctx: Contexto): void {
     const { id } = req.params as { id: string };
     await reply.status(201).send(await servico.registarAlteracao(id, parse(zAlteracao, req.body), u));
   });
-  app.post('/api/v1/contratos/:id/alteracoes/:altId/publicitacao', async (req) => {
-    const u = exigirUtilizador(req); if (!podeExecutar(u.papeis, 'gerir.contratos')) throw new ErroProibido('Sem competência.');
-    const { altId } = req.params as { altId: string };
-    const { referencia } = parse(z.object({ referencia: z.string().min(1) }), req.body);
-    return servico.registarPublicitacao(altId, referencia, u);
-  });
-
   app.get('/api/v1/contratos/:id/projetos', async (req) => {
     exigirUtilizador(req); const { id } = req.params as { id: string };
     const assoc = await ctx.repos.contratoProjetos.todos((c) => c.contratoId === id);

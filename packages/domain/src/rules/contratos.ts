@@ -123,10 +123,6 @@ export const RN_106: Regra<{ dotacoes: ReadonlyArray<Pick<Dotacao, 'tipo'>> }> =
   },
 };
 
-function gestoresAtivos(gestores: ReadonlyArray<GestorContrato>): GestorContrato[] {
-  return gestores.filter((g) => g.cessouEm === undefined);
-}
-
 /** RN-107 — pelo menos um gestor, designado antes do início de vigência. */
 export const RN_107: Regra<{
   gestores: ReadonlyArray<GestorContrato>;
@@ -148,53 +144,6 @@ export const RN_107: Regra<{
         'Nenhum gestor foi designado antes do início de vigência do contrato.',
         { dataInicioVigencia },
       );
-    }
-    return conforme;
-  },
-};
-
-/** RN-108 — havendo mais do que um gestor em simultâneo, a delimitação de funções é obrigatória. */
-export const RN_108: Regra<{ gestores: ReadonlyArray<GestorContrato> }> = {
-  codigo: 'RN-108',
-  descricao:
-    'Havendo mais do que um gestor em simultâneo, a delimitação de funções é obrigatória.',
-  requisito: 'novo',
-  base: 'CCP, art. 290.º-A n.º 2.',
-  excecaoFundamentavel: false,
-  avaliar({ gestores }) {
-    const ativos = gestoresAtivos(gestores);
-    if (ativos.length > 1) {
-      const semFuncoes = ativos.filter(
-        (g) => g.funcoes === undefined || g.funcoes.trim().length === 0,
-      );
-      if (semFuncoes.length > 0) {
-        return violada(
-          'Com mais do que um gestor ativo, cada um tem de ter a delimitação de funções definida.',
-          { gestoresSemFuncoes: semFuncoes.map((g) => g.utilizadorId) },
-        );
-      }
-    }
-    return conforme;
-  },
-};
-
-/** RN-109 — declaração de inexistência de conflito de interesses (aviso, não bloqueio). */
-export const RN_109: Regra<{ gestores: ReadonlyArray<GestorContrato> }> = {
-  codigo: 'RN-109',
-  descricao:
-    'Cada gestor tem de ter declaração de inexistência de conflito de interesses registada. Ausência gera aviso, não bloqueio.',
-  requisito: 'novo',
-  base: 'CCP, art. 290.º-A n.º 7 e Anexo XIII.',
-  excecaoFundamentavel: false,
-  bloqueia: false,
-  avaliar({ gestores }) {
-    const semDeclaracao = gestoresAtivos(gestores).filter(
-      (g) => g.declaracaoConflitoInteressesEm === undefined,
-    );
-    if (semDeclaracao.length > 0) {
-      return violada('Há gestores sem declaração de inexistência de conflito de interesses.', {
-        gestores: semDeclaracao.map((g) => g.utilizadorId),
-      });
     }
     return conforme;
   },
@@ -231,7 +180,5 @@ export const REGRAS_CONTRATOS = [
   RN_105,
   RN_106,
   RN_107,
-  RN_108,
-  RN_109,
   RN_110,
 ] as const;

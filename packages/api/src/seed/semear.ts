@@ -13,7 +13,7 @@ export async function semear(ctx: Contexto): Promise<void> {
   const agora = relogio.agora();
   const audit = { criadoEm: agora, criadoPor: 'oid-gestor-contrato', atualizadoEm: agora, atualizadoPor: 'oid-gestor-contrato' };
   const gestores = [
-    { utilizadorId: 'oid-gestor-contrato', principal: true, designadoEm: '2025-12-01', declaracaoConflitoInteressesEm: '2025-12-01', funcoes: 'execução física e financeira' },
+    { utilizadorId: 'oid-gestor-contrato', principal: true, designadoEm: '2025-12-01' },
   ];
 
   // Procedimento de concurso público com 3 lotes.
@@ -60,7 +60,7 @@ export async function semear(ctx: Contexto): Promise<void> {
   const altComplementar: Alteracao = {
     id: ids.novo('alt'), contratoId: contratoC.id, tipo: 'SERVICOS_COMPLEMENTARES', dataEfeito: '2026-06-01',
     descricao: 'Serviços complementares', fundamentacao: 'Necessidade superveniente fundamentada.',
-    valorAcrescido: 42_000_00, publicitacaoPortalBase: { obrigatoria: true },
+    valorAcrescido: 42_000_00,
     registadoEm: agora, registadoPor: 'oid-gestor-contrato', atualizadoEm: agora, atualizadoPor: 'oid-gestor-contrato',
   };
   await repos.alteracoes.guardar(altComplementar);

@@ -10,8 +10,8 @@ regra que têm consequências operacionais diferentes:
 - **Bloqueio** — a violação impede a operação e é mapeada para `422` na API
   (ex.: RN-301, limite de serviços complementares).
 - **Aviso** — a condição indesejada é sinalizada mas *não* impede a operação;
-  gera um alerta (secção 11). Exemplos: RN-109 (declaração de conflito de
-  interesses), RN-204, RN-302, RN-306, RN-404, RN-505, RN-605, RN-703.
+  gera um alerta (secção 11). Exemplos: RN-204, RN-302, RN-404, RN-505,
+  RN-605, RN-703.
 
 O tipo `ResultadoRegra` é binário (`ok` / violação) e não distingue estes casos.
 

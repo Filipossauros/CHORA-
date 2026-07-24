@@ -28,10 +28,8 @@ const zPortariaExtensaoEncargos = z.object({
 const zGestorContrato = z.object({
   utilizadorId: z.string().min(1), // oid do utilizador Azure selecionado
   principal: z.boolean(),
-  funcoes: z.string().optional(),
   designadoEm: zDataISO.optional(),
   cessouEm: zDataISO.optional(),
-  declaracaoConflitoInteressesEm: zDataISO.optional(),
 });
 export type GestorContrato = z.infer<typeof zGestorContrato>;
 

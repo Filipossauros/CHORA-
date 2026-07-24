@@ -15,8 +15,6 @@ Total de regras: **56**.
 | RN-105 | bloqueio | RF17 | não | A soma do valor de todas as dotações e do valor previsto de todos os perfis não pode exceder precoContratualAtual. | — |
 | RN-106 | bloqueio | RF6 | não | Tem de existir pelo menos uma dotação HORAS_BASE; BOLSA_VALOR e TRABALHOS_COMPLEMENTARES são opcionais. | — |
 | RN-107 | bloqueio | novo | não | Todo o contrato tem de ter pelo menos um gestor designado, com data de designação anterior ao início de vigência. | CCP, art. 290.º-A n.º 1 e art. 96.º n.º 1 al. j). |
-| RN-108 | bloqueio | novo | não | Havendo mais do que um gestor em simultâneo, a delimitação de funções é obrigatória. | CCP, art. 290.º-A n.º 2. |
-| RN-109 | aviso | novo | não | Cada gestor tem de ter declaração de inexistência de conflito de interesses registada. Ausência gera aviso, não bloqueio. | CCP, art. 290.º-A n.º 7 e Anexo XIII. |
 | RN-110 | bloqueio | RF36 | não | Todas as alterações contratuais são registadas em histórico imutável, incluindo o histórico de alterações da data de término. | — |
 
 ## Prazos e vigência
@@ -41,7 +39,6 @@ Total de regras: **56**.
 | RN-303 | bloqueio | RF8 | não | Registar tempo contra BOLSA_VALOR exige perfil com consomeBolsaValor = true. | — |
 | RN-304 | bloqueio | RF9 | não | Registar tempo contra TRABALHOS_COMPLEMENTARES exige perfil com consomeTrabalhosComplementares = true. | — |
 | RN-305 | bloqueio | RF12 | não | Uma alteração de SERVICOS_COMPLEMENTARES cria obrigatoriamente uma Dotacao correspondente e atualiza precoContratualAtual. | — |
-| RN-306 | aviso | novo | não | Alterações objetivas ao contrato ficam marcadas como "por publicitar" até registo de publicitação no Portal BASE. | CCP, art. 315.º e 465.º: a publicitação é condição de eficácia. Sinalizar, não bloquear. |
 
 ## Registo de tempo
 

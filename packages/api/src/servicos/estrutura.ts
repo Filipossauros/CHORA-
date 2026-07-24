@@ -70,7 +70,7 @@ export class ServicoEstrutura {
 
   async registarAlteracao(
     contratoId: string,
-    dados: { tipo: TipoAlteracao; dataEfeito: DataISO; descricao: string; fundamentacao: string; valorAcrescido?: Cent; novaDataTermino?: DataISO; suspensao?: Alteracao['suspensao']; publicitacaoObrigatoria?: boolean },
+    dados: { tipo: TipoAlteracao; dataEfeito: DataISO; descricao: string; fundamentacao: string; valorAcrescido?: Cent; novaDataTermino?: DataISO; suspensao?: Alteracao['suspensao'] },
     u: ContextoUtilizador,
   ): Promise<Alteracao> {
     exigir(RN_110, { fundamentacao: dados.fundamentacao, dataEfeito: dados.dataEfeito });
@@ -91,7 +91,6 @@ export class ServicoEstrutura {
       ...(dados.valorAcrescido !== undefined ? { valorAcrescido: dados.valorAcrescido } : {}),
       ...(dados.novaDataTermino !== undefined ? { novaDataTermino: dados.novaDataTermino } : {}),
       ...(dados.suspensao !== undefined ? { suspensao: dados.suspensao } : {}),
-      ...(dados.publicitacaoObrigatoria ? { publicitacaoPortalBase: { obrigatoria: true } } : {}),
       registadoEm: agora, registadoPor: u.utilizadorId, atualizadoEm: agora, atualizadoPor: u.utilizadorId,
     };
     await this.ctx.repos.alteracoes.guardar(alt);
@@ -103,15 +102,6 @@ export class ServicoEstrutura {
     }
     await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Alteracao', entidadeId: alt.id, operacao: `ALTERAR:${dados.tipo}`, resultado: 'PERMITIDO', depois: alt });
     return alt;
-  }
-
-  async registarPublicitacao(alteracaoId: string, referencia: string, u: ContextoUtilizador): Promise<Alteracao> {
-    const alt = await this.ctx.repos.alteracoes.obter(alteracaoId);
-    if (alt === null) throw new ErroNaoEncontrado(`Alteração ${alteracaoId} inexistente.`);
-    const pub = alt.publicitacaoPortalBase ?? { obrigatoria: true };
-    const atualizado: Alteracao = { ...alt, publicitacaoPortalBase: { ...pub, efetuadaEm: this.ctx.relogio.agora().slice(0, 10), referencia }, atualizadoEm: this.ctx.relogio.agora(), atualizadoPor: u.utilizadorId };
-    await this.ctx.repos.alteracoes.guardar(atualizado);
-    return atualizado;
   }
 
   async adicionarHabilitacao(contratoId: string, tipo: DocumentoHabilitacao['tipo'], emitidoEm: DataISO, validoAte: DataISO, referencia: string | undefined, u: ContextoUtilizador): Promise<DocumentoHabilitacao> {

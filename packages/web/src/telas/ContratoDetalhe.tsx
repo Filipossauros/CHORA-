@@ -129,9 +129,9 @@ export function ContratoDetalhe(): ReactNode {
             {dados.eventos.length === 0 && <tr><td colSpan={4} className="vazio">Sem alterações registadas.</td></tr>}</tbody>
           </table></div>
           <div className="cartao"><h3>Alterações contratuais formais (complementares, suspensões)</h3><table>
-            <thead><tr><th>Data efeito</th><th>Tipo</th><th>Fundamentação</th><th className="num">Valor</th><th>Publicitação</th></tr></thead>
-            <tbody>{dados.alteracoes.map((a) => <tr key={a.id}><td className="tabnum">{a.dataEfeito}</td><td>{a.tipo.replace(/_/g, ' ').toLowerCase()}</td><td>{a.fundamentacao}</td><td className="num">{a.valorAcrescido !== undefined ? formatarMoeda(a.valorAcrescido) : '—'}</td><td>{a.publicitacaoPortalBase?.efetuadaEm !== undefined ? <Estado v="VALIDADA" /> : a.publicitacaoPortalBase?.obrigatoria ? <Estado v="INVALIDADA" /> : '—'}</td></tr>)}
-            {dados.alteracoes.length === 0 && <tr><td colSpan={5} className="vazio">Sem alterações contratuais formais.</td></tr>}</tbody>
+            <thead><tr><th>Data efeito</th><th>Tipo</th><th>Fundamentação</th><th className="num">Valor</th></tr></thead>
+            <tbody>{dados.alteracoes.map((a) => <tr key={a.id}><td className="tabnum">{a.dataEfeito}</td><td>{a.tipo.replace(/_/g, ' ').toLowerCase()}</td><td>{a.fundamentacao}</td><td className="num">{a.valorAcrescido !== undefined ? formatarMoeda(a.valorAcrescido) : '—'}</td></tr>)}
+            {dados.alteracoes.length === 0 && <tr><td colSpan={4} className="vazio">Sem alterações contratuais formais.</td></tr>}</tbody>
           </table></div>
         </>
       )}
@@ -288,7 +288,6 @@ function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Con
       await app.estrutura.registarAlteracao(contrato.id, {
         tipo: a.tipo, dataEfeito: a.dataEfeito, descricao: tipoSel?.r ?? a.tipo, fundamentacao: a.fundamentacao,
         ...(tipoSel?.valor ? { valorAcrescido: eurosParaCent(a.valor) } : {}),
-        publicitacaoObrigatoria: true,
       }, app.utilizador());
       setA({ tipo: 'SERVICOS_COMPLEMENTARES', dataEfeito: hoje(), fundamentacao: '', valor: '' });
       onMudou();

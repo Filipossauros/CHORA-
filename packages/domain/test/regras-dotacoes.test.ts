@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RN_301, RN_302, RN_303, RN_304, RN_305, RN_306 } from '../src/rules/dotacoes.js';
+import { RN_301, RN_302, RN_303, RN_304, RN_305 } from '../src/rules/dotacoes.js';
 
 describe('RN-301 complementares ≤ 50% do preço inicial', () => {
   it('positivo — a 42%', () => expect(RN_301.avaliar({ precoContratualInicial: 100, complementaresAcumulados: 42 }).ok).toBe(true));
@@ -28,11 +28,4 @@ describe('RN-305 complementares criam dotação e atualizam preço', () => {
   it('positivo', () => expect(RN_305.avaliar({ criaDotacao: true, atualizaPrecoAtual: true }).ok).toBe(true));
   it('negativo — sem dotação', () => expect(RN_305.avaliar({ criaDotacao: false, atualizaPrecoAtual: true }).ok).toBe(false));
   it('negativo — sem atualizar preço', () => expect(RN_305.avaliar({ criaDotacao: true, atualizaPrecoAtual: false }).ok).toBe(false));
-});
-
-describe('RN-306 publicitação Portal BASE (aviso)', () => {
-  it('consultiva', () => expect(RN_306.bloqueia).toBe(false));
-  it('positivo — publicitada', () => expect(RN_306.avaliar({ obrigatoria: true, efetuadaEm: '2026-01-01' }).ok).toBe(true));
-  it('positivo — não obrigatória', () => expect(RN_306.avaliar({ obrigatoria: false, efetuadaEm: undefined }).ok).toBe(true));
-  it('negativo — por publicitar', () => expect(RN_306.avaliar({ obrigatoria: true, efetuadaEm: undefined }).ok).toBe(false));
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  RN_101, RN_102, RN_103, RN_104, RN_105, RN_106, RN_107, RN_108, RN_109, RN_110,
+  RN_101, RN_102, RN_103, RN_104, RN_105, RN_106, RN_107, RN_110,
 } from '../src/rules/contratos.js';
 import type { GestorContrato } from '../src/entidades/contrato.js';
 
@@ -51,23 +51,6 @@ describe('RN-107 gestor designado antes da vigência', () => {
     expect(RN_107.avaliar({ gestores: [], dataInicioVigencia: '2026-01-01' }).ok).toBe(false));
   it('negativo — todos designados tarde', () =>
     expect(RN_107.avaliar({ gestores: [gestor({ designadoEm: '2026-02-01' })], dataInicioVigencia: '2026-01-01' }).ok).toBe(false));
-});
-
-describe('RN-108 delimitação de funções com múltiplos gestores', () => {
-  it('positivo — um só gestor', () =>
-    expect(RN_108.avaliar({ gestores: [gestor({})] }).ok).toBe(true));
-  it('positivo — dois com funções', () =>
-    expect(RN_108.avaliar({ gestores: [gestor({ utilizadorId: 'a', funcoes: 'físico' }), gestor({ utilizadorId: 'b', funcoes: 'financeiro' })] }).ok).toBe(true));
-  it('negativo — dois sem funções', () =>
-    expect(RN_108.avaliar({ gestores: [gestor({ utilizadorId: 'a' }), gestor({ utilizadorId: 'b' })] }).ok).toBe(false));
-});
-
-describe('RN-109 declaração de conflito (aviso)', () => {
-  it('é regra consultiva', () => expect(RN_109.bloqueia).toBe(false));
-  it('positivo', () =>
-    expect(RN_109.avaliar({ gestores: [gestor({ declaracaoConflitoInteressesEm: '2025-12-01' })] }).ok).toBe(true));
-  it('negativo (gera aviso)', () =>
-    expect(RN_109.avaliar({ gestores: [gestor({})] }).ok).toBe(false));
 });
 
 describe('RN-110 alteração com fundamentação e data', () => {

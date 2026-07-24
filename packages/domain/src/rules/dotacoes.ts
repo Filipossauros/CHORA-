@@ -100,21 +100,4 @@ export const RN_305: Regra<{ criaDotacao: boolean; atualizaPrecoAtual: boolean }
   },
 };
 
-/** RN-306 — alterações objetivas ficam "por publicitar" até registo no Portal BASE (aviso). */
-export const RN_306: Regra<{ obrigatoria: boolean; efetuadaEm: string | undefined }> = {
-  codigo: 'RN-306',
-  descricao:
-    'Alterações objetivas ao contrato ficam marcadas como "por publicitar" até registo de publicitação no Portal BASE.',
-  requisito: 'novo',
-  base: 'CCP, art. 315.º e 465.º: a publicitação é condição de eficácia. Sinalizar, não bloquear.',
-  excecaoFundamentavel: false,
-  bloqueia: false,
-  avaliar({ obrigatoria, efetuadaEm }) {
-    if (obrigatoria && efetuadaEm === undefined) {
-      return violada('Alteração por publicitar no Portal BASE.');
-    }
-    return conforme;
-  },
-};
-
-export const REGRAS_DOTACOES = [RN_301, RN_302, RN_303, RN_304, RN_305, RN_306] as const;
+export const REGRAS_DOTACOES = [RN_301, RN_302, RN_303, RN_304, RN_305] as const;
