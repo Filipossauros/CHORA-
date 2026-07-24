@@ -118,3 +118,11 @@ export const zTipoDocumentoHabilitacao = z.enum(TIPOS_DOCUMENTO_HABILITACAO);
 export const SEVERIDADES_ALERTA = ['INFO', 'AVISO', 'CRITICO'] as const;
 export type SeveridadeAlerta = (typeof SEVERIDADES_ALERTA)[number];
 export const zSeveridadeAlerta = z.enum(SEVERIDADES_ALERTA);
+
+export const ESTADOS_RECOMENDACAO = ['PROPOSTA', 'ACEITE', 'REJEITADA'] as const;
+export type EstadoRecomendacao = (typeof ESTADOS_RECOMENDACAO)[number];
+export const zEstadoRecomendacao = z.enum(ESTADOS_RECOMENDACAO);
+
+export const ORIGENS_RECOMENDACAO = ['ALERTA', 'PREVISAO', 'AGENTE_CCP'] as const;
+export type OrigemRecomendacao = (typeof ORIGENS_RECOMENDACAO)[number];
+export const zOrigemRecomendacao = z.enum(ORIGENS_RECOMENDACAO);

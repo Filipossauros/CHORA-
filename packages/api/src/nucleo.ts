@@ -19,6 +19,7 @@ export { ServicoEstrutura } from './servicos/estrutura.js';
 export { ServicoAfetacoes, type NovaAfetacao } from './servicos/afetacoes.js';
 export { ServicoFaturas, gerarFraseEvidencia } from './servicos/faturas.js';
 export { ServicoRecursos, ServicoAcessos } from './servicos/recursos-acessos.js';
+export { ServicoRecomendacoes } from './servicos/recomendacoes.js';
 export type { Acesso, RelatorioEvidencia } from './repositorios/memoria/index.js';
 export { JobAlertas, NotifierConsola } from './alertas/job-alertas.js';
 export { paraProblema, ErroProibido, ErroNaoEncontrado, type Problema } from './erros/problema.js';

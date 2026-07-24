@@ -1,7 +1,7 @@
 import {
   criarContexto, semear, resumoSeed, JobAlertas, FakeTokenValidator, UTILIZADORES_DEV,
   ServicoContratos, ServicoRegistosTempo, ServicoProcedimentos, ServicoEstrutura,
-  ServicoAfetacoes, ServicoFaturas, ServicoRecursos, ServicoAcessos,
+  ServicoAfetacoes, ServicoFaturas, ServicoRecursos, ServicoAcessos, ServicoRecomendacoes,
   type Contexto, type Repositorios, type ContextoUtilizador,
 } from '@chora/api/nucleo';
 import { relogioSistema, type PapelAplicacional } from '@chora/domain';
@@ -40,6 +40,7 @@ function criarReposLocais(): Repositorios {
     compromissos: r('compromissos'), faturas: r('faturas'), documentosHabilitacao: r('documentosHabilitacao'),
     alertas: r('alertas'), eventosAuditoria: r('eventosAuditoria'), contratoProjetos: r('contratoProjetos'),
     acessos: r('acessos'), relatoriosEvidencia: r('relatoriosEvidencia'),
+    recomendacoes: r('recomendacoes'),
   };
 }
 
@@ -54,6 +55,7 @@ export class AplicacaoLocal {
   readonly faturas: ServicoFaturas;
   readonly recursos: ServicoRecursos;
   readonly acessos: ServicoAcessos;
+  readonly recomendacoes: ServicoRecomendacoes;
   private utilizadorId = 'oid-gestor-contrato';
 
   constructor() {
@@ -67,6 +69,7 @@ export class AplicacaoLocal {
     this.faturas = new ServicoFaturas(this.ctx);
     this.recursos = new ServicoRecursos(this.ctx);
     this.acessos = new ServicoAcessos(this.ctx);
+    this.recomendacoes = new ServicoRecomendacoes(this.ctx);
   }
 
   /** Semeia se estiver vazio (primeiro arranque) e gera os alertas. */

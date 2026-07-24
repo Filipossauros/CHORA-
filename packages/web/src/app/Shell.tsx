@@ -11,7 +11,9 @@ const NAV = [
   { grupo: 'Financeiro', itens: [{ to: '/faturacao', rot: 'Faturação' }] },
   { grupo: 'Análise', itens: [
     { to: '/recursos', rot: 'Recursos' },
-    { to: '/relatorios', rot: 'Relatórios' }, { to: '/alertas', rot: 'Alertas' },
+    { to: '/relatorios', rot: 'Relatórios' }, { to: '/previsoes', rot: 'Previsões' },
+    { to: '/alertas', rot: 'Alertas' }, { to: '/recomendacoes', rot: 'Recomendações' },
+    { to: '/regras', rot: 'Regras' },
     { to: '/auditoria', rot: 'Auditoria' }, { to: '/acessos', rot: 'Acessos' },
   ] },
 ];

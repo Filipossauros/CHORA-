@@ -21,10 +21,20 @@ export function Alertas(): ReactNode {
   }, []);
   const [aberto, setAberto] = useState<string>();
   const [sugestao, setSugestao] = useState<Record<string, Sugestao>>({});
+  const [guardadas, setGuardadas] = useState<Record<string, boolean>>({});
 
   async function executar(): Promise<void> {
     await new JobAlertas(app.ctx).executar();
     base.recarregar();
+  }
+
+  async function guardarRecomendacao(al: Alerta, s: Sugestao): Promise<void> {
+    await app.recomendacoes.criar({
+      contratoId: al.contratoId, origem: 'ALERTA', codigo: al.codigo,
+      titulo: al.titulo, texto: s.texto + (s.nivel2 !== undefined ? ` — ${s.nivel2}` : ''),
+      fundamentacao: al.detalhe, referenciaLegal: undefined, confianca: al.severidade === 'CRITICO' ? 0.9 : 0.75,
+    }, app.utilizador());
+    setGuardadas((g) => ({ ...g, [al.id]: true }));
   }
 
   function sugerir(a: Alerta): void {
@@ -64,6 +74,11 @@ export function Alertas(): ReactNode {
                       </div>
                     )}
                     <div className="sec" style={{ marginTop: 8 }}>{SALVAGUARDA_JURIDICA}</div>
+                    {podeGerir && s !== undefined && (
+                      <div style={{ marginTop: 8 }}>
+                        {guardadas[a.id] ? <span className="pill p-verde">Guardada em Recomendações</span> : <button className="btn sm" onClick={() => void guardarRecomendacao(a, s)}>Guardar como recomendação</button>}
+                      </div>
+                    )}
                   </div>
                 </td>
               </tr>

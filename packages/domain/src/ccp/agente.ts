@@ -1,4 +1,5 @@
 import type { Cent } from '../tipos/primitivos.js';
+import { parametroLegal, valorLegal } from '../legal/base-legal.js';
 
 /**
  * Ponto de extensão para um AGENTE DE IA com acesso permanente à versão mais
@@ -41,31 +42,26 @@ export interface AgenteCCP {
 /** Percentagem (ilustrativa) do valor contratualizado transitável para o ano seguinte. */
 export const PERCENTAGEM_TRANSICAO_ANO: number = 0.5;
 
-/**
- * Limiar (ILUSTRATIVO) a partir do qual o visto prévio do Tribunal de Contas se
- * torna, em regra, obrigatório. O valor efetivo é fixado anualmente (Lei do
- * Orçamento do Estado / LOPTC) — o agente de IA deve obtê-lo da fonte legal em
- * vigor. Aqui usa-se um valor de referência para o protótipo.
- */
-export const LIMIAR_VISTO_PREVIO_CENT: Cent = 750_000_00;
+/** Limiar (ILUSTRATIVO) do visto prévio — obtido da base legal versionada. */
+export const LIMIAR_VISTO_PREVIO_CENT: Cent = valorLegal('VISTO_PREVIO_LIMIAR_CENT', 750_000_00);
 
 export class AgenteCCPStub implements AgenteCCP {
-  constructor(private readonly limiar: Cent = LIMIAR_VISTO_PREVIO_CENT) {}
+  constructor(private readonly limiar: Cent = valorLegal('VISTO_PREVIO_LIMIAR_CENT', 750_000_00)) {}
   avaliarVistoPrevio(valorContratoCent: Cent): AvaliacaoVisto {
     return {
       obrigatorio: valorContratoCent >= this.limiar,
       limiar: this.limiar,
-      referencia: 'LOPTC (Lei n.º 98/97) e Lei do Orçamento do Estado em vigor — limiar de fiscalização prévia (valor ilustrativo no protótipo; a confirmar pelo agente CCP).',
+      referencia: parametroLegal('VISTO_PREVIO_LIMIAR_CENT')?.referencia ?? 'LOPTC (Lei n.º 98/97) — limiar de fiscalização prévia.',
     };
   }
 
   avaliarTransicaoAnoEconomico(e: EntradaTransicao): AvaliacaoTransicao {
-    // Base aplicada segundo a legislação em vigor (stub): até 50% do valor
-    // contratualizado (preço contratual inicial). O agente real deve confirmar a
-    // base e a percentagem na legislação aplicável (LCPA / DL 127/2012).
-    const limiteMontante = Math.floor(e.precoContratualInicial * PERCENTAGEM_TRANSICAO_ANO);
-    const base = `Até ${Math.round(PERCENTAGEM_TRANSICAO_ANO * 100)}% do preço contratual inicial`;
-    const referencia = 'LCPA (Lei n.º 8/2012) e DL n.º 127/2012 — transição de encargos sem portaria de extensão (valores a confirmar pelo agente CCP com a legislação em vigor).';
+    // Base e percentagem obtidas da base legal versionada (o agente real
+    // confirma-as na legislação em vigor: LCPA / DL 127/2012).
+    const pct = valorLegal('TRANSICAO_ANO_PCT', PERCENTAGEM_TRANSICAO_ANO);
+    const limiteMontante = Math.floor(e.precoContratualInicial * pct);
+    const base = `Até ${Math.round(pct * 100)}% do preço contratual inicial`;
+    const referencia = parametroLegal('TRANSICAO_ANO_PCT')?.referencia ?? 'LCPA (Lei n.º 8/2012) e DL n.º 127/2012.';
     if (e.temPortariaExtensaoEncargos) {
       return { permitido: false, limiteMontante, base, motivo: 'O contrato tem portaria de extensão de encargos: a execução plurianual segue essa autorização, não a transição.', referencia };
     }
@@ -76,7 +72,7 @@ export class AgenteCCPStub implements AgenteCCP {
       return { permitido: false, limiteMontante, base, motivo: 'Indique um montante a transitar (> 0).', referencia };
     }
     if (e.montantePretendido > Math.min(limiteMontante, e.saldoPorExecutar)) {
-      return { permitido: false, limiteMontante, base, motivo: `O montante a transitar não pode exceder ${Math.round(PERCENTAGEM_TRANSICAO_ANO * 100)}% do valor contratualizado nem o saldo por executar.`, referencia };
+      return { permitido: false, limiteMontante, base, motivo: `O montante a transitar não pode exceder ${Math.round(pct * 100)}% do valor contratualizado nem o saldo por executar.`, referencia };
     }
     return { permitido: true, limiteMontante, base, referencia };
   }

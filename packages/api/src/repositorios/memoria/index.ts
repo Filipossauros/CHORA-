@@ -11,6 +11,7 @@ import type {
   Lote,
   PerfilContratual,
   Procedimento,
+  Recomendacao,
   Recurso,
   RegistoTempo,
 } from '@chora/domain';
@@ -45,6 +46,8 @@ export interface Repositorios {
   acessos: Repository<Acesso>;
   /** Relatórios de evidência de decisão de fatura (RN-604), imutáveis. */
   relatoriosEvidencia: Repository<RelatorioEvidencia>;
+  /** Recomendações (camada inteligente) persistidas com estado e feedback. */
+  recomendacoes: Repository<Recomendacao>;
 }
 
 /** Relatório de evidência gerado na decisão de uma fatura (RN-604, imutável). */
@@ -89,6 +92,7 @@ export function criarRepositoriosMemoria(): Repositorios {
     contratoProjetos: new RepositorioMemoria('contratoProjetos'),
     acessos: new RepositorioMemoria('acessos'),
     relatoriosEvidencia: new RepositorioMemoria('relatoriosEvidencia'),
+    recomendacoes: new RepositorioMemoria('recomendacoes'),
   };
 }
 
