@@ -133,7 +133,6 @@ export function ContratoDetalhe(): ReactNode {
             <tbody>{dados.alteracoes.map((a) => <tr key={a.id}><td className="tabnum">{a.dataEfeito}</td><td className="sec">{familiaModificacao(a.tipo)}</td><td>{rotularTipoAlt(a.tipo)}</td><td className="sec">{detalheModificacao(a)}</td><td>{a.fundamentacao}</td><td className="num">{a.valorAcrescido !== undefined ? formatarMoeda(a.valorAcrescido) : '—'}</td></tr>)}
             {dados.alteracoes.length === 0 && <tr><td colSpan={6} className="vazio">Sem modificações contratuais formais.</td></tr>}</tbody>
           </table></div>
-          {ehGestorContrato && <EliminarContrato contrato={c} onErro={setErro} />}
         </>
       )}
     </>
@@ -199,6 +198,7 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
   const estadosSelecionaveis = ESTADOS_CONTRATO.filter((s) => s !== 'EM_PREPARACAO');
 
   return (
+    <>
     <div className="duas">
       <div className="cartao"><h3>Alterar dados do contrato</h3><div className="corpo">
         <div className="campo"><label>Objeto</label><input value={f.objeto} onChange={(e) => setF({ ...f, objeto: e.target.value })} /></div>
@@ -233,6 +233,8 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
         )}
       </div></div>
     </div>
+    {podeAlterarEstado && <EliminarContrato contrato={contrato} onErro={onErro} />}
+    </>
   );
 }
 
