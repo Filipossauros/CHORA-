@@ -232,6 +232,225 @@ export async function semear(ctx: Contexto): Promise<void> {
   // Fatura 3 — divergência de quantidade (aciona RN-603).
   await repos.faturas.guardar(fatura({ id: ids.novo('fat'), numero: 'FT-003', documentos: [docFatura, docRelatorio],
     linhas: [{ perfilId: perfilSenior.id, recursoId: 'oid-recurso-01', quantidade: 600, valorHora: 5000, montante: 50000, origem: 'MANUAL' }] }));
+
+  await semearCenariosDeAlerta(ctx, { agora, audit, gestores, isoMeses, procNumero: proc.numero });
+}
+
+interface ContextoCenarios {
+  agora: string;
+  audit: { criadoEm: string; criadoPor: string; atualizadoEm: string; atualizadoPor: string };
+  gestores: Contrato['gestores'];
+  isoMeses: (meses: number) => string;
+  procNumero: string;
+}
+
+/**
+ * Cenários dedicados a exercitar TODAS as regras de alerta do catálogo.
+ *
+ * Cada contrato aqui existe para demonstrar uma família de decisões na fila
+ * «Hoje» — cobertura orçamental plurianual, fim de ciclo, higiene de execução.
+ * Os números são escolhidos para o alerta disparar de forma óbvia, e o objeto de
+ * cada contrato descreve o cenário que representa.
+ */
+async function semearCenariosDeAlerta(ctx: Contexto, c: ContextoCenarios): Promise<void> {
+  const { repos, ids } = ctx;
+  const { agora, audit, gestores, isoMeses, procNumero } = c;
+  const anoAtual = Number(agora.slice(0, 4));
+  const carimbo = { registadoEm: agora, registadoPor: 'oid-gestor-contrato', atualizadoEm: agora, atualizadoPor: 'oid-gestor-contrato' };
+
+  function base(over: Partial<Contrato> & Pick<Contrato, 'id' | 'numero' | 'objeto'>): Contrato {
+    return {
+      estado: 'EM_VIGOR', tipologia: 'BOLSA_HORAS',
+      numeroProcedimento: procNumero, tipoProcedimento: 'CONCURSO_PUBLICO',
+      precoContratualInicial: 100_000_00, precoContratualAtual: 100_000_00,
+      prestador: { nome: 'Prestador Alfa, Lda.', nipc: '500000001' },
+      dataAssinaturaCA: '2025-12-15', dataInicioVigencia: isoMeses(-6),
+      dataTerminoContratual: isoMeses(18), dataTerminoOriginal: isoMeses(18),
+      vistoTribunalContasNecessario: false, gestores, excecoes: [], ...audit, ...over,
+    };
+  }
+
+  /** Cria perfil + afetação + registo aprovado, para gerar execução real. */
+  async function comExecucao(contrato: Contrato, nome: string, horas: number, valorHora: number, horasConsumidas: number, dataRegisto: string): Promise<void> {
+    const perfil: PerfilContratual = {
+      id: ids.novo('perf'), contratoId: contrato.id, nome, quantidadePrevista: horas * 60,
+      consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: false,
+      precos: [{ valorHora, vigenteDe: contrato.dataInicioVigencia }], ...audit,
+    };
+    await repos.perfis.guardar(perfil);
+    const af: Afetacao = { id: ids.novo('afe'), contratoId: contrato.id, perfilId: perfil.id, recursoId: 'oid-recurso-02', projetoIds: [], vigenteDe: contrato.dataInicioVigencia, ativa: true, ...audit };
+    await repos.afetacoes.guardar(af);
+    if (horasConsumidas > 0) {
+      await repos.registosTempo.guardar({
+        id: ids.novo('rt'), afetacaoId: af.id, contratoId: contrato.id, perfilId: perfil.id, recursoId: 'oid-recurso-02',
+        projetoId: 'azure-devops', workItemId: 3000 + Math.round(horasConsumidas), data: dataRegisto,
+        duracao: horasConsumidas * 60, descricaoAtividade: 'Execução contratada',
+        tipoDotacaoConsumida: 'HORAS_BASE', valorHoraAplicado: valorHora, valorImputado: horasConsumidas * valorHora,
+        estado: 'APROVADO', aprovadoPor: 'oid-gestor-contrato', aprovadoEm: agora,
+        criadoEm: agora, criadoPor: 'oid-recurso-02', atualizadoEm: agora, atualizadoPor: 'oid-recurso-02',
+      });
+    }
+  }
+
+  // ── G · Portaria trava a vigência abaixo do máximo legal ──────────────────
+  // A portaria só reparte encargos para o ano corrente e o contrato termina a
+  // 31/12; reprogramá-la libertaria ~34 meses até ao limite de 36.
+  const gPortariaCurta = base({
+    id: ids.novo('ctr'), numero: 'C-2026-PT1',
+    objeto: 'Bolsa de horas travada pela portaria de extensão de encargos',
+    dataInicioVigencia: isoMeses(-1), dataTerminoContratual: `${anoAtual}-12-31`, dataTerminoOriginal: `${anoAtual}-12-31`,
+    portariaExtensaoEncargos: { numero: `P-${anoAtual}/101`, data: `${anoAtual - 1}-12-20`, reparticaoAnual: [{ ano: anoAtual, montante: 100_000_00 }] },
+  });
+  await repos.contratos.guardar(gPortariaCurta);
+  await comExecucao(gPortariaCurta, 'Analista de Sistemas', 1000, 4500, 60, isoMeses(-1));
+
+  // ── H · Portaria por reprogramar (vigência já ultrapassa o ano coberto) ───
+  const hPortariaVencida = base({
+    id: ids.novo('ctr'), numero: 'C-2026-PT2',
+    objeto: 'Contrato plurianual sem cobertura orçamental para o período remanescente',
+    dataInicioVigencia: isoMeses(-8), dataTerminoContratual: `${anoAtual + 1}-10-31`, dataTerminoOriginal: `${anoAtual + 1}-10-31`,
+    portariaExtensaoEncargos: { numero: `P-${anoAtual}/102`, data: `${anoAtual - 1}-12-20`, reparticaoAnual: [{ ano: anoAtual, montante: 80_000_00 }] },
+  });
+  await repos.contratos.guardar(hPortariaVencida);
+  await comExecucao(hPortariaVencida, 'Programador Sénior', 1200, 5000, 100, isoMeses(-2));
+
+  // ── I · Execução projetada excede a dotação do ano ────────────────────────
+  // Ritmo recente alto contra uma dotação anual pequena.
+  const iExcedeAno = base({
+    id: ids.novo('ctr'), numero: 'C-2026-PT3',
+    objeto: 'Execução acima da dotação repartida para o ano corrente',
+    precoContratualInicial: 300_000_00, precoContratualAtual: 300_000_00,
+    dataInicioVigencia: isoMeses(-4), dataTerminoContratual: isoMeses(20), dataTerminoOriginal: isoMeses(20),
+    portariaExtensaoEncargos: { numero: `P-${anoAtual}/103`, data: `${anoAtual - 1}-12-20`, reparticaoAnual: [{ ano: anoAtual, montante: 30_000_00 }, { ano: anoAtual + 1, montante: 120_000_00 }] },
+  });
+  await repos.contratos.guardar(iExcedeAno);
+  await comExecucao(iExcedeAno, 'Programador Full-stack', 4000, 5000, 500, isoMeses(-1)); // 25 000 € já executados, ritmo elevado
+
+  // ── I2 · Dotação do ano quase esgotada (sem a exceder) ────────────────────
+  // 46 000 € executados de 50 000 € repartidos para o ano (92%). O registo é
+  // antigo, pelo que o ritmo recente é nulo e a projeção não ultrapassa a
+  // dotação — é o aviso, não a rutura.
+  const i2DotacaoNoLimite = base({
+    id: ids.novo('ctr'), numero: 'C-2026-PT4',
+    objeto: 'Dotação anual quase esgotada antes do fim do ano económico',
+    precoContratualInicial: 150_000_00, precoContratualAtual: 150_000_00,
+    dataInicioVigencia: isoMeses(-9), dataTerminoContratual: isoMeses(15), dataTerminoOriginal: isoMeses(15),
+    portariaExtensaoEncargos: { numero: `P-${anoAtual}/104`, data: `${anoAtual - 1}-12-20`, reparticaoAnual: [{ ano: anoAtual, montante: 50_000_00 }, { ano: anoAtual + 1, montante: 100_000_00 }] },
+  });
+  await repos.contratos.guardar(i2DotacaoNoLimite);
+  await comExecucao(i2DotacaoNoLimite, 'Consultor de Dados', 1000, 5000, 920, isoMeses(-3));
+
+  // ── J · Valor disponível reduzido + perfil a 80% + complementares a 46% ───
+  const jQuaseEsgotado = base({
+    id: ids.novo('ctr'), numero: 'C-2026-EX1',
+    objeto: 'Contrato com saldo reduzido e complementares perto do teto',
+    precoContratualInicial: 100_000_00, precoContratualAtual: 146_000_00,
+    dataInicioVigencia: isoMeses(-10), dataTerminoContratual: isoMeses(14), dataTerminoOriginal: isoMeses(14),
+  });
+  await repos.contratos.guardar(jQuaseEsgotado);
+  await repos.alteracoes.guardar({
+    id: ids.novo('alt'), contratoId: jQuaseEsgotado.id, tipo: 'SERVICOS_COMPLEMENTARES', dataEfeito: isoMeses(-3),
+    descricao: 'Trabalhos complementares', fundamentacao: 'Necessidade superveniente fundamentada.',
+    valorAcrescido: 46_000_00, novaDataTermino: isoMeses(14), ...carimbo,
+  });
+  // Dois perfis muito consumidos: 83% e 87% (AL-PERFIL-80) e, no conjunto,
+  // 118 000 € executados de 146 000 € — sobram 19% (AL-VALOR-DISPONIVEL).
+  await comExecucao(jQuaseEsgotado, 'Consultor Funcional Sénior', 2000, 5000, 1660, isoMeses(-1));
+  await comExecucao(jQuaseEsgotado, 'Programador Sénior', 800, 5000, 700, isoMeses(-1));
+
+  // ── K · Fim de ciclo: término a menos de 3 meses ──────────────────────────
+  const kTermino3 = base({
+    id: ids.novo('ctr'), numero: 'C-2026-FC1',
+    objeto: 'Contrato a terminar — preparar continuidade do serviço',
+    dataInicioVigencia: isoMeses(-20), dataTerminoContratual: isoMeses(2), dataTerminoOriginal: isoMeses(2),
+    vistoTribunalContasNecessario: true, dataVistoTribunalContas: isoMeses(-19),
+  });
+  await repos.contratos.guardar(kTermino3);
+  await comExecucao(kTermino3, 'Gestor de Projeto', 800, 6000, 700, isoMeses(-1));
+
+  // ── L · Fim de ciclo: término a menos de 6 meses ──────────────────────────
+  const lTermino6 = base({
+    id: ids.novo('ctr'), numero: 'C-2026-FC2',
+    objeto: 'Contrato a caminho do termo — planear a transição',
+    dataInicioVigencia: isoMeses(-18), dataTerminoContratual: isoMeses(5), dataTerminoOriginal: isoMeses(5),
+  });
+  await repos.contratos.guardar(lTermino6);
+  await comExecucao(lTermino6, 'Técnico de Testes', 900, 3800, 400, isoMeses(-1));
+
+  // ── M · Vigência acima dos 36 meses ───────────────────────────────────────
+  const mVigencia = base({
+    id: ids.novo('ctr'), numero: 'C-2026-VG1',
+    objeto: 'Contrato com vigência acima do limite legal de 36 meses',
+    dataInicioVigencia: isoMeses(-30), dataTerminoContratual: isoMeses(12), dataTerminoOriginal: isoMeses(12),
+  });
+  await repos.contratos.guardar(mVigencia);
+  await comExecucao(mVigencia, 'Arquiteto de Software', 1500, 8200, 300, isoMeses(-1));
+
+  // ── N · Suspensão em aberto que empurra a vigência além dos 36 meses ──────
+  const nSuspensao = base({
+    id: ids.novo('ctr'), numero: 'C-2026-SU1',
+    objeto: 'Contrato com suspensão em aberto há vários meses',
+    dataInicioVigencia: isoMeses(-24), dataTerminoContratual: isoMeses(11), dataTerminoOriginal: isoMeses(11),
+  });
+  await repos.contratos.guardar(nSuspensao);
+  await repos.alteracoes.guardar({
+    id: ids.novo('alt'), contratoId: nSuspensao.id, tipo: 'SUSPENSAO', dataEfeito: isoMeses(-8),
+    descricao: 'Suspensão da execução', fundamentacao: 'Aguarda decisão de arquitetura do cliente.',
+    suspensao: { dataInicio: isoMeses(-8), suspendePrazoExecucao: true }, // sem data de fim
+    ...carimbo,
+  });
+  await comExecucao(nSuspensao, 'Analista Funcional', 700, 4200, 150, isoMeses(-10));
+
+  // ── O · Execução registada fora da vigência (achado de auditoria) ─────────
+  const oForaVigencia = base({
+    id: ids.novo('ctr'), numero: 'C-2026-AU1',
+    objeto: 'Contrato com registos de tempo fora do período de vigência',
+    dataInicioVigencia: isoMeses(-5), dataTerminoContratual: isoMeses(15), dataTerminoOriginal: isoMeses(15),
+  });
+  await repos.contratos.guardar(oForaVigencia);
+  await comExecucao(oForaVigencia, 'Programador Júnior', 1000, 3000, 200, isoMeses(-2));
+  const perfilFora = (await repos.perfis.todos((p) => p.contratoId === oForaVigencia.id))[0];
+  const afFora = (await repos.afetacoes.todos((a) => a.contratoId === oForaVigencia.id))[0];
+  if (perfilFora !== undefined && afFora !== undefined) {
+    await repos.registosTempo.guardar({
+      id: ids.novo('rt'), afetacaoId: afFora.id, contratoId: oForaVigencia.id, perfilId: perfilFora.id, recursoId: 'oid-recurso-02',
+      projetoId: 'azure-devops', workItemId: 4100, data: isoMeses(-9), // ANTES do início de vigência
+      duracao: 480, descricaoAtividade: 'Trabalho anterior ao início de vigência',
+      tipoDotacaoConsumida: 'HORAS_BASE', valorHoraAplicado: 3000, valorImputado: 24000,
+      estado: 'APROVADO', aprovadoPor: 'oid-gestor-contrato', aprovadoEm: agora,
+      criadoEm: agora, criadoPor: 'oid-recurso-02', atualizadoEm: agora, atualizadoPor: 'oid-recurso-02',
+    });
+  }
+
+  // ── P · Em vigor sem visto do TdC assegurado (risco grave) ────────────────
+  const pSemVisto = base({
+    id: ids.novo('ctr'), numero: 'C-2026-TC1',
+    objeto: 'Contrato em execução com visto do Tribunal de Contas por obter',
+    precoContratualInicial: 900_000_00, precoContratualAtual: 900_000_00,
+    dataInicioVigencia: isoMeses(-3), dataTerminoContratual: isoMeses(21), dataTerminoOriginal: isoMeses(21),
+    vistoTribunalContasNecessario: true, dataRemessaTribunalContas: isoMeses(-4),
+  });
+  await repos.contratos.guardar(pSemVisto);
+  await comExecucao(pSemVisto, 'Consultor Funcional', 3000, 4000, 200, isoMeses(-1));
+
+  // ── Q · Fatura com prazo de pagamento ultrapassado ────────────────────────
+  const qFatura = base({
+    id: ids.novo('ctr'), numero: 'C-2026-FT1',
+    objeto: 'Contrato com fatura por pagar fora de prazo',
+    dataInicioVigencia: isoMeses(-7), dataTerminoContratual: isoMeses(17), dataTerminoOriginal: isoMeses(17),
+  });
+  await repos.contratos.guardar(qFatura);
+  await comExecucao(qFatura, 'Programador Full-stack', 1100, 3500, 250, isoMeses(-1));
+  const cmpQ: Compromisso = { id: ids.novo('cmp'), contratoId: qFatura.id, numero: 'CMP-2026-9', montante: 60_000_00, ano: anoAtual, emitidoEm: isoMeses(-7), ...audit };
+  await repos.compromissos.guardar(cmpQ);
+  await repos.faturas.guardar({
+    id: ids.novo('fat'), contratoId: qFatura.id, compromissoId: cmpQ.id, numero: 'FT-2026/0910',
+    documentos: [], linhas: [], dataEmissao: isoMeses(-3), dataRececao: isoMeses(-3),
+    periodoDe: isoMeses(-4), periodoAte: isoMeses(-3),
+    montanteSemIva: 12_000_00, montanteIva: 2_760_00,
+    dataLimitePagamento: isoMeses(-1), // prazo já ultrapassado
+    estado: 'VALIDADA', ...audit,
+  });
 }
 
 /** Resumo textual do seed, para o comando `pnpm seed`. */

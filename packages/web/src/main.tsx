@@ -5,7 +5,6 @@ import './estilo.css';
 import { app } from './porta/aplicacao-local.js';
 import { Shell } from './app/Shell.js';
 import { Hoje } from './telas/Hoje.js';
-import { Painel } from './telas/Painel.js';
 import { Contratos } from './telas/Contratos.js';
 import { ContratoDetalhe } from './telas/ContratoDetalhe.js';
 import { NovoContrato } from './telas/NovoContrato.js';
@@ -22,7 +21,6 @@ import { Acessos } from './telas/Acessos.js';
 const rotas = [
   // "Hoje" é a entrada: a fila única de decisões.
   { path: '/', element: <Hoje /> },
-  { path: '/painel', element: <Painel /> },
   { path: '/contratos', element: <Contratos /> },
   { path: '/contratos/novo', element: <NovoContrato /> },
   { path: '/contratos/:id', element: <ContratoDetalhe /> },

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { CATALOGO_ALERTAS } from '@chora/domain';
 import { montarApp, comoGestor, comoRecurso } from './helpers.js';
 
 let fechar: (() => Promise<void>) | undefined;
@@ -46,17 +47,31 @@ describe('contratos', () => {
 
 describe('alertas e auditoria', () => {
   it('o job de alertas gera os códigos esperados sobre o seed', async () => {
-    const { app } = await montarApp();
+    const { app, ctx } = await montarApp();
     fechar = () => app.close();
     const r = await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
     expect(r.statusCode).toBe(200);
-    const codigos = new Set(((r.json() as { alertas: Array<{ codigo: string }> }).alertas).map((a) => a.codigo));
-    expect(codigos.has('AL-VISTO-PENDENTE')).toBe(false); // contrato B está AGUARDA_VISTO, não EM_VIGOR
+    const alertas = (r.json() as { alertas: Array<{ codigo: string; contratoId: string }> }).alertas;
+    const codigos = new Set(alertas.map((a) => a.codigo));
+    // O contrato B está AGUARDA_VISTO (não EM_VIGOR), pelo que não é ele a
+    // acionar o visto pendente — é o C-2026-TC1, que está em execução sem visto.
+    const contratoB = (await ctx.repos.contratos.todos((c) => c.numero === 'C-2026-002'))[0]!;
+    expect(alertas.some((a) => a.codigo === 'AL-VISTO-PENDENTE' && a.contratoId === contratoB.id)).toBe(false);
     expect(codigos.has('AL-COMPLEMENTARES-40')).toBe(true);
     expect(codigos.has('AL-PERFIL-90')).toBe(true); // C-2026-BH3 tem um perfil quase esgotado
     // Alertas pré-contratuais removidos (só execução):
     expect(codigos.has('AL-HABILITACAO')).toBe(false);
     expect(codigos.has('AL-PUBLICITACAO')).toBe(false);
+  });
+
+  it('o seed exercita TODAS as regras de alerta do catálogo', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const r = await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    const gerados = new Set(((r.json() as { alertas: Array<{ codigo: string }> }).alertas).map((a) => a.codigo));
+    const porAcionar = CATALOGO_ALERTAS.map((a) => a.codigo).filter((c) => !gerados.has(c));
+    // Se falhar, o seed deixou de cobrir algum alerta — ajustar os cenários.
+    expect(porAcionar, `alertas sem cenário no seed: ${porAcionar.join(', ')}`).toEqual([]);
   });
 
   it('reexecutar o job não duplica decisões (identidade estável)', async () => {
