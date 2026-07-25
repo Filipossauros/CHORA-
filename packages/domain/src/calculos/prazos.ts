@@ -101,6 +101,25 @@ export function mesesAteTermino(contrato: Contrato, referencia: DataISO): number
 }
 
 /**
+ * Vigência LÍQUIDA em meses: a vigência de calendário descontada dos períodos de
+ * suspensão que suspendem o prazo de execução (o relógio pára durante a
+ * suspensão). É esta a grandeza confrontada com o limite de 36 meses (RN-202)
+ * quando se fixa uma nova data de vigência.
+ */
+export function vigenciaLiquidaMeses(
+  dataInicioVigencia: DataISO,
+  dataTermino: DataISO,
+  alteracoes: ReadonlyArray<Alteracao>,
+): number {
+  const diasSuspensos = diasSuspensaoExecucao(alteracoes, dataTermino);
+  const bruta = mesesEntre(dataInicioVigencia, dataTermino);
+  return Math.max(0, bruta - diasSuspensos / DIAS_POR_MES);
+}
+
+/** Aproximação de dias por mês usada para converter suspensões em meses. */
+const DIAS_POR_MES = 30.436875;
+
+/**
  * Último ano económico coberto pela portaria de extensão de encargos (repartição
  * plurianual). `undefined` quando não há portaria com repartição anual detalhada.
  */

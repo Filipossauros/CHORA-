@@ -112,6 +112,41 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problema"
+    delete:
+      summary: Elimina contrato e dependentes (auditoria conserva o rasto)
+      tags:
+        - Contratos
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Contrato eliminado
+        400:
+          description: Motivo em falta
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+        403:
+          description: Papel insuficiente
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+        404:
+          description: Não encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
   /api/v1/contratos/{id}/resumo-execucao:
     get:
       summary: Resumo de execução física e financeira

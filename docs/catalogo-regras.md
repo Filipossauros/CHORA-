@@ -2,7 +2,7 @@
 
 > Documento **gerado** a partir de `packages/domain/src/rules/` por `pnpm docs`. Não editar à mão.
 
-Total de regras: **53**.
+Total de regras: **52**.
 
 ## Contratos e procedimentos
 
@@ -26,7 +26,6 @@ Total de regras: **53**.
 | RN-203 | bloqueio | RF11 | não | A vigência conta desde dataInicioVigencia até ao primeiro de: dataTerminoContratual; ou o esgotamento das horas/valor disponíveis. | — |
 | RN-204 | aviso | RF11.3 (corrigido) | sim | Suspensões que deslocam a execução podem empurrar a vigência além dos 36 meses; nesse caso, aviso e exceção fundamentada. | Separar prazo de vigência de prazo de execução. |
 | RN-205 | bloqueio | novo | não | Períodos de suspensão não se podem sobrepor entre si. | — |
-| RN-206 | bloqueio | RF13 (corrigido) | não | O registo de serviços complementares não prorroga automaticamente a data de término. A prorrogação é alteração autónoma e fundamentada. | A prorrogação é modificação autónoma, com fundamento próprio. |
 | RN-207 | bloqueio | requisito sem número | não | A existência de disponibilidade financeira não altera o limite temporal. | — |
 | RN-208 | bloqueio | novo | não | Contratos em estado RESOLVIDO, CADUCADO, REVOGADO ou TERMINADO bloqueiam qualquer novo registo ou aprovação. | O documento original só previa termo natural. |
 

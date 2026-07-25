@@ -1,13 +1,20 @@
 import {
-  RN_105, RN_110, RN_201, RN_202, RN_205, RN_206, RN_301, RN_303, RN_304, exigir, adicionarDias,
+  RN_105, RN_110, RN_201, RN_202, RN_205, RN_301, RN_303, RN_304, exigir, adicionarDias,
   totalPrevistoPerfis, valorPrevistoPerfil, complementaresAcumulados,
-  periodosSuspensao, terminoExecucaoAjustado, mesesEntre, LIMITE_VIGENCIA_MESES,
+  periodosSuspensao, terminoExecucaoAjustado, mesesEntre, vigenciaLiquidaMeses, LIMITE_VIGENCIA_MESES,
+  ViolacaoRegra,
   type PerfilContratual, type Alteracao, type DocumentoHabilitacao, type ExcecaoContrato,
   type TipoDotacao, type TipoAlteracao, type Cent, type DataISO, type Minutos,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import { ErroNaoEncontrado, ErroValidacao } from '../erros/problema.js';
 import type { ContextoUtilizador } from '../auth/token-validator.js';
+
+/**
+ * Tipos de modificação que fixam uma nova data de vigência do contrato. Para
+ * estes, a nova data é obrigatória e passa pelas validações de prazo.
+ */
+export const ALTERA_VIGENCIA: ReadonlyArray<TipoAlteracao> = ['PRORROGACAO', 'SERVICOS_COMPLEMENTARES'];
 
 /**
  * Casos de uso da estrutura contratual: perfis (com série de preços, ADR-09),
@@ -83,8 +90,6 @@ export class ServicoEstrutura {
     u: ContextoUtilizador,
   ): Promise<Alteracao> {
     exigir(RN_110, { fundamentacao: dados.fundamentacao, dataEfeito: dados.dataEfeito });
-    // RN-206: complementares não prorrogam automaticamente a data de término.
-    exigir(RN_206, { tipoAlteracao: dados.tipo, alteraDataTermino: dados.tipo === 'SERVICOS_COMPLEMENTARES' && dados.novaDataTermino !== undefined });
 
     // RN-301: os serviços complementares acumulados não podem exceder 50% do preço inicial.
     if (dados.tipo === 'SERVICOS_COMPLEMENTARES' && dados.valorAcrescido !== undefined) {
@@ -93,14 +98,20 @@ export class ServicoEstrutura {
       exigir(RN_301, { precoContratualInicial: contrato.precoContratualInicial, complementaresAcumulados: jaAcumulado + dados.valorAcrescido });
     }
 
-    // PRORROGAÇÃO — alteração autónoma e fundamentada da data de término (RN-206).
-    // Valida a nova data (RN-201) e o limite de 36 meses (RN-202, exceção fundamentável).
-    if (dados.tipo === 'PRORROGACAO') {
-      if (dados.novaDataTermino === undefined) throw new ErroValidacao('A prorrogação exige a nova data de vigência.');
+    // Modificações que alteram a data de vigência (prorrogação e trabalhos
+    // complementares): a nova data é OBRIGATÓRIA e é validada quanto à ordem
+    // (RN-201) e ao limite de 36 meses (RN-202). O limite é confrontado com a
+    // vigência LÍQUIDA — descontados os períodos de suspensão da execução.
+    if (ALTERA_VIGENCIA.includes(dados.tipo)) {
+      if (dados.novaDataTermino === undefined) throw new ErroValidacao('Esta modificação exige a indicação da nova data de vigência do contrato.');
       const contrato = await this.contrato(contratoId);
       exigir(RN_201, { dataInicioVigencia: contrato.dataInicioVigencia, dataTerminoContratual: dados.novaDataTermino });
+      const alteracoes = await this.ctx.repos.alteracoes.todos((a) => a.contratoId === contratoId);
+      const liquida = vigenciaLiquidaMeses(contrato.dataInicioVigencia, dados.novaDataTermino, alteracoes);
       const temExcecao = contrato.excecoes.some((e) => e.regra === 'RN-202') || (dados.excecaoVigencia?.trim() ?? '') !== '';
-      exigir(RN_202, { dataInicioVigencia: contrato.dataInicioVigencia, dataTerminoContratual: dados.novaDataTermino, temExcecao });
+      if (liquida > LIMITE_VIGENCIA_MESES && !temExcecao) {
+        throw new ViolacaoRegra(RN_202, `A vigência líquida de ${liquida.toFixed(1)} meses (descontadas as suspensões) excede o limite de ${LIMITE_VIGENCIA_MESES} meses. Requer exceção fundamentada.`, { meses: liquida, limite: LIMITE_VIGENCIA_MESES });
+      }
     }
 
     // SUSPENSÃO — os períodos não se podem sobrepor (RN-205).
@@ -144,11 +155,13 @@ export class ServicoEstrutura {
       await this.ctx.repos.contratos.guardar({ ...contrato, precoContratualAtual: contrato.precoContratualAtual + dados.valorAcrescido, atualizadoEm: agora, atualizadoPor: u.utilizadorId });
     }
 
-    // Prorrogação: desloca o término contratual, preservando o término original e
-    // registando a exceção fundamentada aos 36 meses, se necessária.
-    if (dados.tipo === 'PRORROGACAO' && dados.novaDataTermino !== undefined) {
+    // Modificações que fixam nova vigência: deslocam o término contratual,
+    // preservando o término original e registando a exceção fundamentada aos 36
+    // meses, se necessária.
+    if (ALTERA_VIGENCIA.includes(dados.tipo) && dados.novaDataTermino !== undefined) {
       const contrato = await this.contrato(contratoId);
-      const excede = mesesEntre(contrato.dataInicioVigencia, dados.novaDataTermino) > LIMITE_VIGENCIA_MESES;
+      const alteracoes = await this.ctx.repos.alteracoes.todos((a) => a.contratoId === contratoId);
+      const excede = vigenciaLiquidaMeses(contrato.dataInicioVigencia, dados.novaDataTermino, alteracoes) > LIMITE_VIGENCIA_MESES;
       const excecoes = this.comExcecaoVigencia(contrato.excecoes, 'RN-202', excede, dados.excecaoVigencia, u, agora);
       await this.ctx.repos.contratos.guardar({
         ...contrato,

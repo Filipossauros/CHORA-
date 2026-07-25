@@ -68,6 +68,17 @@ export function rotasContratos(app: FastifyInstance, ctx: Contexto): void {
     return servico.inativar(id, parsed.data.estado, parsed.data.motivo, u);
   });
 
+  /** Elimina o contrato e os registos dependentes. A auditoria conserva o rasto. */
+  app.delete('/api/v1/contratos/:id', async (req) => {
+    const u = exigirUtilizador(req);
+    if (!podeExecutar(u.papeis, 'gerir.contratos')) throw new ErroProibido('Sem competência.');
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ motivo: z.string().min(1) }).safeParse(req.body);
+    if (!parsed.success) throw new ErroValidacao('A eliminação exige a indicação do motivo.', parsed.error.issues);
+    await servico.eliminar(id, parsed.data.motivo, u);
+    return { eliminado: id };
+  });
+
   app.get('/api/v1/contratos/:id', async (req) => {
     exigirUtilizador(req);
     const { id } = req.params as { id: string };

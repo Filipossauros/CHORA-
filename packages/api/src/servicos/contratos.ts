@@ -128,6 +128,40 @@ export class ServicoContratos {
     return atualizado;
   }
 
+  /**
+   * Elimina definitivamente um contrato e os registos que dele dependem
+   * (perfis, alterações, afetações, registos de tempo, documentos, compromissos,
+   * faturas, alertas e associações a projetos).
+   *
+   * A auditoria é append-only (ADR-07): os eventos de criação e de eliminação
+   * permanecem no registo de auditoria mesmo depois de o contrato desaparecer,
+   * garantindo o rasto exigido. Exige motivo.
+   */
+  async eliminar(id: string, motivo: string, u: ContextoUtilizador): Promise<void> {
+    if (motivo.trim().length === 0) throw new ErroValidacao('A eliminação de um contrato exige a indicação do motivo.');
+    const contrato = await this.ctx.repos.contratos.obter(id);
+    if (contrato === null) throw new ErroNaoEncontrado(`Contrato ${id} inexistente.`);
+
+    const repos = this.ctx.repos;
+    const doContrato = (e: { contratoId: string }): boolean => e.contratoId === id;
+    for (const p of await repos.perfis.todos(doContrato)) await repos.perfis.remover(p.id);
+    for (const a of await repos.alteracoes.todos(doContrato)) await repos.alteracoes.remover(a.id);
+    for (const a of await repos.afetacoes.todos(doContrato)) await repos.afetacoes.remover(a.id);
+    for (const r of await repos.registosTempo.todos(doContrato)) await repos.registosTempo.remover(r.id);
+    for (const d of await repos.documentosHabilitacao.todos(doContrato)) await repos.documentosHabilitacao.remover(d.id);
+    for (const c of await repos.compromissos.todos(doContrato)) await repos.compromissos.remover(c.id);
+    for (const f of await repos.faturas.todos(doContrato)) await repos.faturas.remover(f.id);
+    for (const a of await repos.alertas.todos(doContrato)) await repos.alertas.remover(a.id);
+    for (const cp of await repos.contratoProjetos.todos(doContrato)) await repos.contratoProjetos.remover(cp.id);
+    for (const d of await repos.dotacoes.todos(doContrato)) await repos.dotacoes.remover(d.id);
+    await repos.contratos.remover(id);
+
+    await this.ctx.auditoria.registar({
+      utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: id,
+      operacao: 'ELIMINAR', resultado: 'PERMITIDO', antes: { ...contrato, motivoEliminacao: motivo },
+    });
+  }
+
   async transitarEstado(id: string, novo: EstadoContrato, utilizador: ContextoUtilizador): Promise<Contrato> {
     const contrato = await this.ctx.repos.contratos.obter(id);
     if (contrato === null) throw new ErroNaoEncontrado(`Contrato ${id} inexistente.`);

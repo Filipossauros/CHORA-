@@ -78,6 +78,7 @@ export function gerarOpenApi(): Record<string, unknown> {
     },
     '/api/v1/contratos/{id}': {
       get: { summary: 'Obtém contrato', tags: ['Contratos'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Contrato' }, ...respostaProblema('404', 'Não encontrado') } },
+      delete: { summary: 'Elimina contrato e dependentes (auditoria conserva o rasto)', tags: ['Contratos'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Contrato eliminado' }, ...respostaProblema('400', 'Motivo em falta'), ...respostaProblema('403', 'Papel insuficiente'), ...respostaProblema('404', 'Não encontrado') } },
     },
     '/api/v1/contratos/{id}/resumo-execucao': {
       get: { summary: 'Resumo de execução física e financeira', tags: ['Contratos'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Resumo agregado' } } },

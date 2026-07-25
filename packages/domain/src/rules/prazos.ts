@@ -121,24 +121,6 @@ export const RN_205: Regra<{ suspensoes: ReadonlyArray<PeriodoSuspensao> }> = {
   },
 };
 
-/** RN-206 — serviços complementares não prorrogam automaticamente a data de término. */
-export const RN_206: Regra<{ tipoAlteracao: string; alteraDataTermino: boolean }> = {
-  codigo: 'RN-206',
-  descricao:
-    'O registo de serviços complementares não prorroga automaticamente a data de término. A prorrogação é alteração autónoma e fundamentada.',
-  requisito: 'RF13 (corrigido)',
-  base: 'A prorrogação é modificação autónoma, com fundamento próprio.',
-  excecaoFundamentavel: false,
-  avaliar({ tipoAlteracao, alteraDataTermino }) {
-    if (tipoAlteracao === 'SERVICOS_COMPLEMENTARES' && alteraDataTermino) {
-      return violada(
-        'Uma alteração de serviços complementares não pode, por si só, alterar a data de término.',
-      );
-    }
-    return conforme;
-  },
-};
-
 /** RN-207 — disponibilidade financeira não altera o limite temporal (invariante informativa). */
 export const RN_207: Regra<{ tentaEstenderVigenciaPorSaldo: boolean }> = {
   codigo: 'RN-207',
@@ -180,7 +162,6 @@ export const REGRAS_PRAZOS = [
   RN_203,
   RN_204,
   RN_205,
-  RN_206,
   RN_207,
   RN_208,
 ] as const;

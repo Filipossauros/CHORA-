@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  RN_201, RN_202, RN_203, RN_204, RN_205, RN_206, RN_207, RN_208,
+  RN_201, RN_202, RN_203, RN_204, RN_205, RN_207, RN_208,
 } from '../src/rules/prazos.js';
 
 describe('RN-201 início antes do término', () => {
@@ -41,12 +41,6 @@ describe('RN-205 suspensões não sobrepostas', () => {
       { dataInicio: '2026-01-01', dataFim: '2026-02-15', suspendePrazoExecucao: true },
       { dataInicio: '2026-02-01', dataFim: '2026-02-28', suspendePrazoExecucao: true },
     ] }).ok).toBe(false));
-});
-
-describe('RN-206 complementares não prorrogam automaticamente', () => {
-  it('positivo', () => expect(RN_206.avaliar({ tipoAlteracao: 'SERVICOS_COMPLEMENTARES', alteraDataTermino: false }).ok).toBe(true));
-  it('negativo', () => expect(RN_206.avaliar({ tipoAlteracao: 'SERVICOS_COMPLEMENTARES', alteraDataTermino: true }).ok).toBe(false));
-  it('positivo — prorrogação sim altera', () => expect(RN_206.avaliar({ tipoAlteracao: 'PRORROGACAO', alteraDataTermino: true }).ok).toBe(true));
 });
 
 describe('RN-207 saldo não estende vigência', () => {

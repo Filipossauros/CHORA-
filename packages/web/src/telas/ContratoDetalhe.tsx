@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { AgenteCCPStub, mesesEntre, ESTADOS_CONTRATO, LIMITE_VIGENCIA_MESES, type Afetacao, type Alteracao, type Contrato, type EstadoContrato, type Minuta, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { vigenciaLiquidaMeses, ESTADOS_CONTRATO, LIMITE_VIGENCIA_MESES, type Afetacao, type Alteracao, type Contrato, type EstadoContrato, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
 import { app, AZURE_USERS, nomeAzure, prestadorAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
@@ -122,7 +122,7 @@ export function ContratoDetalhe(): ReactNode {
 
       {tab === 'Modificações' && (
         <>
-          {ehGestorContrato && <GestaoAlteracoes contrato={c} resumo={dados.resumo} onMudou={() => base.recarregar()} onErro={setErro} />}
+          {ehGestorContrato && <GestaoAlteracoes contrato={c} resumo={dados.resumo} alteracoes={dados.alteracoes} onMudou={() => base.recarregar()} onErro={setErro} />}
           <div className="cartao" style={{ marginBottom: 16 }}><h3>Registo de modificações (auditoria do contrato)</h3><table>
             <thead><tr><th>Quando</th><th>Operação</th><th>Detalhe</th><th>Autor</th></tr></thead>
             <tbody>{dados.eventos.map((e) => <tr key={e.id}><td className="tabnum">{e.ocorridoEm.replace('T', ' ').slice(0, 16)}</td><td>{rotularOperacao(e.operacao)}</td><td className="sec">{resumirEvento(e)}</td><td>{nomeAzure(e.utilizadorId)}</td></tr>)}
@@ -133,6 +133,7 @@ export function ContratoDetalhe(): ReactNode {
             <tbody>{dados.alteracoes.map((a) => <tr key={a.id}><td className="tabnum">{a.dataEfeito}</td><td className="sec">{familiaModificacao(a.tipo)}</td><td>{rotularTipoAlt(a.tipo)}</td><td className="sec">{detalheModificacao(a)}</td><td>{a.fundamentacao}</td><td className="num">{a.valorAcrescido !== undefined ? formatarMoeda(a.valorAcrescido) : '—'}</td></tr>)}
             {dados.alteracoes.length === 0 && <tr><td colSpan={6} className="vazio">Sem modificações contratuais formais.</td></tr>}</tbody>
           </table></div>
+          {ehGestorContrato && <EliminarContrato contrato={c} onErro={setErro} />}
         </>
       )}
     </>
@@ -265,30 +266,33 @@ function Campo({ k, v }: { k: string; v: string }): ReactNode {
   return <div className="campo" style={{ margin: 0 }}><label>{k}</label><div style={{ fontWeight: 600, fontSize: 13.5 }}>{v}</div></div>;
 }
 
-type FamiliaMod = 'Modificações objetivas' | 'Modificações subjetivas' | 'Vicissitudes da execução' | 'Gestão orçamental plurianual' | 'Outras';
+type FamiliaMod = 'Modificações objetivas' | 'Modificações subjetivas' | 'Vicissitudes da execução' | 'Gestão orçamental plurianual';
 interface DescritorMod {
   v: TipoAlteracao; r: string; familia: FamiliaMod; base: string;
-  valor?: boolean; prorrog?: boolean; susp?: boolean; cessao?: boolean; gestor?: boolean; transicao?: boolean;
+  valor?: boolean; vigencia?: boolean; susp?: boolean; cessao?: boolean; gestor?: boolean; transicao?: boolean;
   dataEfeitos?: boolean; // pede "Data de produção de efeitos" ao utilizador (senão é derivada)
 }
 
-/** Tipos de modificação contratual, agrupados pelas famílias previstas no CCP. */
+/**
+ * Tipos de modificação contratual, agrupados pelas famílias previstas no CCP.
+ * `vigencia` marca os tipos que fixam uma NOVA data de vigência do contrato
+ * (obrigatória); nesses, não se pede data de produção de efeitos.
+ */
 const TIPOS_ALT: DescritorMod[] = [
-  { v: 'SERVICOS_COMPLEMENTARES', r: 'Trabalhos/serviços complementares', familia: 'Modificações objetivas', base: 'CCP, art. 370.º/454.º', valor: true, dataEfeitos: true },
+  { v: 'SERVICOS_COMPLEMENTARES', r: 'Trabalhos/serviços complementares', familia: 'Modificações objetivas', base: 'CCP, art. 370.º/454.º', valor: true, vigencia: true },
   { v: 'REVISAO_PRECOS', r: 'Revisão de preços', familia: 'Modificações objetivas', base: 'CCP, art. 300.º', dataEfeitos: true },
-  { v: 'PRORROGACAO', r: 'Prorrogação do prazo de vigência', familia: 'Modificações objetivas', base: 'CCP, art. 311.º e 440.º/48.º', prorrog: true },
+  { v: 'PRORROGACAO', r: 'Prorrogação do prazo de vigência', familia: 'Modificações objetivas', base: 'CCP, art. 311.º e 440.º/48.º', vigencia: true },
   { v: 'REFORCO_BOLSA_VALOR', r: 'Reforço de bolsa de valor', familia: 'Modificações objetivas', base: 'CCP, art. 370.º', valor: true, dataEfeitos: true },
   { v: 'CESSAO_POSICAO_CONTRATUAL', r: 'Cessão da posição contratual', familia: 'Modificações subjetivas', base: 'CCP, art. 316.º e ss.', cessao: true, dataEfeitos: true },
   { v: 'SUBSTITUICAO_GESTOR', r: 'Substituição do gestor do contrato', familia: 'Modificações subjetivas', base: 'CCP, art. 290.º-A', gestor: true, dataEfeitos: true },
   { v: 'SUSPENSAO', r: 'Suspensão da execução', familia: 'Vicissitudes da execução', base: 'CCP, art. 297.º-298.º', susp: true },
   { v: 'TRANSICAO_ANO_ECONOMICO', r: 'Transição para o ano económico seguinte', familia: 'Gestão orçamental plurianual', base: 'LCPA / DL 127/2012', transicao: true },
-  { v: 'OUTRA', r: 'Outra', familia: 'Outras', base: '—', dataEfeitos: true },
 ];
-const FAMILIAS_MOD: FamiliaMod[] = ['Modificações objetivas', 'Modificações subjetivas', 'Vicissitudes da execução', 'Gestão orçamental plurianual', 'Outras'];
+const FAMILIAS_MOD: FamiliaMod[] = ['Modificações objetivas', 'Modificações subjetivas', 'Vicissitudes da execução', 'Gestão orçamental plurianual'];
 function rotularTipoAlt(t: TipoAlteracao): string { return TIPOS_ALT.find((x) => x.v === t)?.r ?? t.replace(/_/g, ' ').toLowerCase(); }
-function familiaModificacao(t: TipoAlteracao): string { return TIPOS_ALT.find((x) => x.v === t)?.familia ?? 'Outras'; }
+function familiaModificacao(t: TipoAlteracao): string { return TIPOS_ALT.find((x) => x.v === t)?.familia ?? '—'; }
 function detalheModificacao(a: Alteracao): string {
-  if (a.tipo === 'PRORROGACAO' && a.novaDataTermino !== undefined) return `novo termo ${a.novaDataTermino}${a.reprogramacaoFinanceira === true ? ' · com reprogramação financeira' : ''}`;
+  if (a.novaDataTermino !== undefined) return `nova vigência até ${a.novaDataTermino}${a.reprogramacaoFinanceira === true ? ' · com reprogramação financeira' : ''}`;
   if (a.tipo === 'SUSPENSAO' && a.suspensao !== undefined) return `${a.suspensao.dataInicio}${a.suspensao.dataFim !== undefined ? ` a ${a.suspensao.dataFim}` : ' (em aberto)'}${a.suspensao.suspendePrazoExecucao ? ' · desloca execução' : ''}`;
   if (a.tipo === 'CESSAO_POSICAO_CONTRATUAL' && a.novoPrestador !== undefined) return `novo prestador: ${a.novoPrestador.nome} (${a.novoPrestador.nipc})`;
   if (a.tipo === 'SUBSTITUICAO_GESTOR' && a.novoGestorId !== undefined) return `novo gestor: ${nomeAzure(a.novoGestorId)}`;
@@ -303,22 +307,21 @@ const ALT_INICIAL = {
 };
 
 /** Registo de modificações contratuais formais, alinhado com os tipos do CCP. */
-function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Contrato; resumo: ResumoExec; onMudou: () => void; onErro: (m?: string) => void }): ReactNode {
+function GestaoAlteracoes({ contrato, resumo, alteracoes, onMudou, onErro }: { contrato: Contrato; resumo: ResumoExec; alteracoes: Alteracao[]; onMudou: () => void; onErro: (m?: string) => void }): ReactNode {
   const [a, setA] = useState({ ...ALT_INICIAL, dataEfeitos: hoje() });
-  const [minuta, setMinuta] = useState<Minuta>();
-  const [minutaGuardada, setMinutaGuardada] = useState(false);
   const tipoSel = TIPOS_ALT.find((x) => x.v === a.tipo)!;
   const temPortaria = contrato.numeroPortariaExtensaoEncargos !== undefined || contrato.portariaExtensaoEncargos !== undefined;
   const limiteTransicao = Math.floor(contrato.precoContratualInicial * 0.5);
-  const mesesProrrog = a.novaData !== '' ? mesesEntre(contrato.dataInicioVigencia, a.novaData) : 0;
-  const prorrogExcede = tipoSel.prorrog === true && mesesProrrog > LIMITE_VIGENCIA_MESES;
+  // Vigência resultante da nova data, DESCONTADOS os períodos de suspensão.
+  const mesesNovaVigencia = a.novaData !== '' ? vigenciaLiquidaMeses(contrato.dataInicioVigencia, a.novaData, alteracoes) : 0;
+  const vigenciaExcede = tipoSel.vigencia === true && mesesNovaVigencia > LIMITE_VIGENCIA_MESES;
 
-  function mudar(patch: Partial<typeof a>): void { setA((prev) => ({ ...prev, ...patch })); setMinuta(undefined); }
-  function reset(): void { setA({ ...ALT_INICIAL, dataEfeitos: hoje() }); setMinuta(undefined); }
+  function mudar(patch: Partial<typeof a>): void { setA((prev) => ({ ...prev, ...patch })); }
+  function reset(): void { setA({ ...ALT_INICIAL, dataEfeitos: hoje() }); }
 
   /** Data de produção de efeitos: escolhida pelo utilizador ou derivada do tipo. */
   function dataEfeito(): string {
-    if (tipoSel.prorrog) return hoje();
+    if (tipoSel.vigencia) return hoje();
     if (tipoSel.susp) return a.suspInicio;
     return a.dataEfeitos;
   }
@@ -333,8 +336,8 @@ function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Con
       }
       if (a.fundamentacao.trim() === '') { onErro('Indique a fundamentação da modificação.'); return; }
       if (tipoSel.valor && eurosParaCent(a.valor) <= 0) { onErro('Indique o valor acrescido (€ > 0).'); return; }
-      if (tipoSel.prorrog && a.novaData === '') { onErro('Indique a nova data de vigência da prorrogação.'); return; }
-      if (prorrogExcede && a.excecao.trim() === '') { onErro('A nova vigência excede 36 meses: indique a fundamentação da exceção (RN-202).'); return; }
+      if (tipoSel.vigencia && a.novaData === '') { onErro('Indique a nova data de vigência do contrato.'); return; }
+      if (vigenciaExcede && a.excecao.trim() === '') { onErro('A nova vigência excede 36 meses: indique a fundamentação da exceção (RN-202).'); return; }
       if (tipoSel.susp && a.suspInicio === '') { onErro('Indique a data de início da suspensão.'); return; }
       if (tipoSel.cessao && (a.novoNome.trim() === '' || a.novoNipc.trim() === '')) { onErro('Indique o novo prestador (nome e NIPC).'); return; }
       if (tipoSel.gestor && a.novoGestorId === '') { onErro('Selecione o novo gestor do contrato.'); return; }
@@ -342,7 +345,7 @@ function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Con
       await app.estrutura.registarAlteracao(contrato.id, {
         tipo: a.tipo, dataEfeito: dataEfeito(), descricao: tipoSel.r, fundamentacao: a.fundamentacao,
         ...(tipoSel.valor ? { valorAcrescido: eurosParaCent(a.valor) } : {}),
-        ...(tipoSel.prorrog ? { novaDataTermino: a.novaData, reprogramacaoFinanceira: a.reprog } : {}),
+        ...(tipoSel.vigencia ? { novaDataTermino: a.novaData, reprogramacaoFinanceira: a.reprog } : {}),
         ...(tipoSel.susp ? { suspensao: { dataInicio: a.suspInicio, ...(a.suspFim !== '' ? { dataFim: a.suspFim } : {}), suspendePrazoExecucao: a.suspExecucao } } : {}),
         ...(tipoSel.cessao ? { novoPrestador: { nome: a.novoNome.trim(), nipc: a.novoNipc.trim() } } : {}),
         ...(tipoSel.gestor ? { novoGestorId: a.novoGestorId } : {}),
@@ -350,25 +353,6 @@ function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Con
       }, app.utilizador());
       reset(); onMudou();
     } catch (e) { onErro(mensagemErro(e)); }
-  }
-
-  async function gerarMinuta(): Promise<void> {
-    onErro();
-    const agente = new AgenteCCPStub();
-    const m = await agente.gerarMinuta(tipoSel.susp
-      ? { tipo: 'SUSPENSAO_EXCECAO', numeroContrato: contrato.numero, objeto: contrato.objeto, fundamentacao: a.fundamentacao }
-      : { tipo: 'PRORROGACAO', numeroContrato: contrato.numero, objeto: contrato.objeto, dataTerminoAtual: contrato.dataTerminoContratual, ...(a.novaData !== '' ? { novaDataTermino: a.novaData, vigenciaProjetadaMeses: mesesProrrog } : {}), reprogramacaoFinanceira: a.reprog, fundamentacao: a.fundamentacao });
-    setMinuta(m); setMinutaGuardada(false);
-  }
-
-  async function guardarMinuta(): Promise<void> {
-    if (minuta === undefined) return;
-    await app.recomendacoes.criar({
-      contratoId: contrato.id, origem: 'AGENTE_CCP', titulo: minuta.titulo, texto: minuta.corpo,
-      ...(a.fundamentacao.trim() !== '' ? { fundamentacao: a.fundamentacao } : {}),
-      referenciaLegal: minuta.referencia, confianca: 0.7,
-    }, app.utilizador());
-    setMinutaGuardada(true);
   }
 
   return (
@@ -387,13 +371,13 @@ function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Con
       </div>
       <div className="sec" style={{ marginTop: -4, marginBottom: 8 }}>Base legal: {tipoSel.base}</div>
 
-      {tipoSel.valor && <div className="campo"><label>Valor acrescido (€)</label><input type="number" min={0} step="0.01" value={a.valor} onChange={(e) => mudar({ valor: e.target.value })} /></div>}
+      {tipoSel.valor && <div className="campo"><label>Valor acrescido (€)</label><input type="number" inputMode="decimal" min={0} step="0.01" value={a.valor} onChange={(e) => mudar({ valor: e.target.value })} placeholder="ex.: 42000,00" /></div>}
 
-      {tipoSel.prorrog && (
+      {tipoSel.vigencia && (
         <>
           <div className="g2">
             <div className="campo"><label>Nova data de vigência</label><input type="date" value={a.novaData} onChange={(e) => mudar({ novaData: e.target.value })} /></div>
-            <div className="campo"><label>Vigência resultante</label><div style={{ marginTop: 2, fontWeight: 600 }}>{a.novaData !== '' ? `${mesesProrrog.toFixed(1)} meses` : '—'}</div></div>
+            <div className="campo"><label>Vigência resultante (líquida)</label><div style={{ marginTop: 2, fontWeight: 600 }}>{a.novaData !== '' ? `${mesesNovaVigencia.toFixed(1)} meses` : '—'}</div></div>
           </div>
           <label className="check" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '2px 0 8px' }}><input type="checkbox" checked={a.reprog} onChange={(e) => mudar({ reprog: e.target.checked })} /> Houve reprogramação financeira dos encargos plurianuais</label>
         </>
@@ -441,30 +425,54 @@ function GestaoAlteracoes({ contrato, resumo, onMudou, onErro }: { contrato: Con
       ) : null}
 
       <div className="campo"><label>Fundamentação</label><textarea rows={2} value={a.fundamentacao} onChange={(e) => mudar({ fundamentacao: e.target.value })} /></div>
-      {prorrogExcede && (
+      {vigenciaExcede && (
         <div className="campo"><label>Fundamentação da exceção aos 36 meses (RN-202)</label><textarea rows={2} value={a.excecao} onChange={(e) => mudar({ excecao: e.target.value })} /></div>
       )}
 
       {tipoSel.valor && <div className="aviso" style={{ marginBottom: 10 }}>Os trabalhos/serviços complementares (modificação objetiva) atualizam o valor do contrato, até 50% do preço inicial <code>RN-301</code>.</div>}
-      {tipoSel.prorrog && <div className="aviso" style={{ marginBottom: 10 }}>A prorrogação é modificação <b>autónoma e fundamentada</b> — não decorre dos serviços complementares <code>RN-206</code>. Acima de 36 meses exige exceção fundamentada <code>RN-202</code>.</div>}
+      {tipoSel.vigencia && <div className="aviso" style={{ marginBottom: 10 }}>Esta modificação fixa a <b>nova data de vigência</b> do contrato (obrigatória). A vigência é contada <b>descontando os períodos de suspensão</b> e não deve exceder 36 meses; acima disso exige exceção fundamentada <code>RN-202</code>.</div>}
       {tipoSel.susp && <div className="aviso" style={{ marginBottom: 10 }}>A suspensão que desloca a execução pode empurrar a vigência além dos 36 meses; nesse caso, aviso e exceção fundamentada <code>RN-204</code>. Períodos não se podem sobrepor <code>RN-205</code>.</div>}
       {tipoSel.cessao && <div className="aviso" style={{ marginBottom: 10 }}>A cessão da posição contratual substitui o prestador do contrato (modificação subjetiva). Confirme os requisitos de habilitação do cessionário.</div>}
       {tipoSel.gestor && <div className="aviso" style={{ marginBottom: 10 }}>A substituição designa um novo gestor principal e cessa o anterior. Competência do <b>Gestor de Contrato</b> (RN-501).</div>}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button className="btn pri" onClick={() => void registar()}>{tipoSel.transicao ? 'Registar transição' : 'Registar modificação'}</button>
-        {(tipoSel.prorrog || tipoSel.susp) && <button className="btn sm" onClick={() => void gerarMinuta()}>✨ Gerar minuta (agente CCP)</button>}
       </div>
-      {minuta !== undefined && (
-        <div className="aviso" style={{ marginTop: 10 }}>
-          <b>{minuta.titulo}</b>
-          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: '6px 0' }}>{minuta.corpo}</pre>
-          <div className="sec">{minuta.referencia}</div>
-          <div style={{ marginTop: 8 }}>
-            {minutaGuardada ? <span className="pill p-verde">Guardada em Recomendações</span> : <button className="btn sm" onClick={() => void guardarMinuta()}>Guardar como recomendação</button>}
-          </div>
-        </div>
-      )}
+    </div></div>
+  );
+}
+
+/**
+ * Eliminação definitiva do contrato. A auditoria é append-only (ADR-07): os
+ * eventos de criação e de eliminação permanecem no registo mesmo depois de o
+ * contrato desaparecer. Exige confirmação pelo número do contrato e motivo.
+ */
+function EliminarContrato({ contrato, onErro }: { contrato: Contrato; onErro: (m?: string) => void }): ReactNode {
+  const navegar = useNavigate();
+  const [confirmacao, setConfirmacao] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const podeEliminar = confirmacao.trim() === contrato.numero && motivo.trim() !== '';
+
+  async function eliminar(): Promise<void> {
+    onErro();
+    try {
+      await app.contratos.eliminar(contrato.id, motivo, app.utilizador());
+      navegar('/contratos');
+    } catch (e) { onErro(mensagemErro(e)); }
+  }
+
+  return (
+    <div className="cartao" style={{ marginTop: 16, borderColor: 'var(--verm, #c0392b)' }}><h3>Eliminar contrato</h3><div className="corpo">
+      <div className="aviso" style={{ marginBottom: 10 }}>
+        A eliminação é <b>definitiva</b> e remove também perfis, modificações, afetações, registos de tempo,
+        documentos, compromissos, faturas e alertas do contrato. Os eventos de <b>criação e eliminação ficam
+        registados em Auditoria</b>.
+      </div>
+      <div className="g2">
+        <div className="campo"><label>Escreva o número do contrato para confirmar</label><input value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} placeholder={contrato.numero} /></div>
+        <div className="campo"><label>Motivo da eliminação</label><input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="ex.: registo criado por engano" /></div>
+      </div>
+      <button className="btn perigo" disabled={!podeEliminar} onClick={() => void eliminar()}>Eliminar contrato definitivamente</button>
     </div></div>
   );
 }

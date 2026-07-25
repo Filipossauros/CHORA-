@@ -54,6 +54,8 @@ select:focus,input:focus,textarea:focus{outline:2px solid var(--marca);outline-o
 .btn{height:34px;border-radius:7px;border:1px solid var(--linha-forte);background:var(--superficie);color:var(--texto);font-size:13px;font-weight:600;padding:0 13px;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
 .btn:hover{border-color:var(--marca)}
 .btn.pri{background:var(--marca);border-color:var(--marca);color:#fff}
+.btn.perigo{background:var(--vermelho);border-color:var(--vermelho);color:#fff}
+.btn.perigo:hover:not(:disabled){border-color:var(--vermelho);filter:brightness(.92)}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.sm{height:28px;font-size:12px;padding:0 9px}
 .barra-acoes{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}

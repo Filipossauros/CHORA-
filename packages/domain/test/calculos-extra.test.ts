@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Dotacao, PerfilContratual, Alteracao } from '../src/entidades/estrutura.js';
 import type { Contrato } from '../src/entidades/contrato.js';
 import { totalDotacoes, totalPrevistoPerfis, montanteLiquidoFatura } from '../src/calculos/financeira.js';
-import { anoFinalPortaria, portariaExigeReprogramacao } from '../src/calculos/prazos.js';
+import { anoFinalPortaria, portariaExigeReprogramacao, vigenciaLiquidaMeses } from '../src/calculos/prazos.js';
 import {
   periodosSuspensao,
   suspensoesSobrepoem,
@@ -77,6 +77,20 @@ describe('prazos — utilitários', () => {
       { dataInicio: '2026-01-01', dataFim: '2026-01-31', suspendePrazoExecucao: false },
       { dataInicio: '2026-06-01', dataFim: '2026-06-30', suspendePrazoExecucao: false },
     )).toBe(false);
+  });
+
+  it('vigenciaLiquidaMeses desconta as suspensões que suspendem a execução', () => {
+    const susp: Alteracao[] = [{
+      id: 's1', contratoId: 'c1', tipo: 'SUSPENSAO', dataEfeito: '2026-01-01', descricao: 'x', fundamentacao: 'y',
+      suspensao: { dataInicio: '2026-01-01', dataFim: '2026-04-01', suspendePrazoExecucao: true }, // ~90 dias
+      registadoEm: '2026-01-01T00:00:00.000Z', registadoPor: 'u', atualizadoEm: '2026-01-01T00:00:00.000Z', atualizadoPor: 'u',
+    }];
+    // 36 meses de calendário; com ~3 meses suspensos, a vigência líquida ronda 33.
+    expect(vigenciaLiquidaMeses('2025-01-01', '2028-01-01', [])).toBeCloseTo(36, 1);
+    expect(vigenciaLiquidaMeses('2025-01-01', '2028-01-01', susp)).toBeCloseTo(33, 0);
+    // Uma suspensão que NÃO suspende a execução não desconta.
+    const semEfeito: Alteracao[] = [{ ...susp[0]!, suspensao: { dataInicio: '2026-01-01', dataFim: '2026-04-01', suspendePrazoExecucao: false } }];
+    expect(vigenciaLiquidaMeses('2025-01-01', '2028-01-01', semEfeito)).toBeCloseTo(36, 1);
   });
 
   it('anoFinalPortaria e portariaExigeReprogramacao', () => {

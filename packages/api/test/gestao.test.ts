@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { montarApp, comoGestor } from './helpers.js';
+import { montarApp, comoGestor, comoRecurso } from './helpers.js';
 import type { Contexto } from '../src/contexto.js';
 
 let fechar: (() => Promise<void>) | undefined;
@@ -37,7 +37,7 @@ describe('estrutura contratual', () => {
 describe('alterações — prorrogação e suspensão', () => {
   const alt = (payload: Record<string, unknown>) => ({ tipo: 'PRORROGACAO', dataEfeito: '2026-06-01', descricao: 'x', fundamentacao: 'Necessidade fundamentada.', ...payload });
 
-  it('prorrogação desloca o término e preserva o término original (RN-206)', async () => {
+  it('prorrogação desloca o término e preserva o término original', async () => {
     const { app, ctx } = await montarApp();
     fechar = () => app.close();
     const id = await contrato(ctx); // início 2026-01-01, término 2027-12-31
@@ -104,6 +104,39 @@ describe('alterações — prorrogação e suspensão', () => {
     const sobreposta = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/alteracoes`, headers: comoGestor(), payload: { tipo: 'SUSPENSAO', dataEfeito: '2026-06-15', descricao: 'x', fundamentacao: 'y', suspensao: { dataInicio: '2026-06-15', dataFim: '2026-08-01', suspendePrazoExecucao: true } } });
     expect(sobreposta.statusCode).toBe(422);
     expect((sobreposta.json() as { regra: string }).regra).toBe('RN-205');
+  });
+});
+
+describe('eliminação de contrato', () => {
+  it('elimina o contrato e os dependentes, conservando o rasto em auditoria', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const id = await contrato(ctx);
+    expect((await ctx.repos.perfis.todos((p) => p.contratoId === id)).length).toBeGreaterThan(0);
+
+    const r = await app.inject({ method: 'DELETE', url: `/api/v1/contratos/${id}`, headers: comoGestor(), payload: { motivo: 'Registo criado por engano.' } });
+    expect(r.statusCode).toBe(200);
+
+    expect(await ctx.repos.contratos.obter(id)).toBeNull();
+    expect(await ctx.repos.perfis.todos((p) => p.contratoId === id)).toHaveLength(0);
+    expect(await ctx.repos.alteracoes.todos((a) => a.contratoId === id)).toHaveLength(0);
+    expect(await ctx.repos.afetacoes.todos((a) => a.contratoId === id)).toHaveLength(0);
+    expect(await ctx.repos.registosTempo.todos((t) => t.contratoId === id)).toHaveLength(0);
+
+    // Auditoria append-only: o rasto de criação e de eliminação permanece.
+    const eventos = await ctx.repos.eventosAuditoria.todos((e) => e.entidadeId === id);
+    expect(eventos.some((e) => e.operacao === 'ELIMINAR')).toBe(true);
+  });
+
+  it('eliminação sem motivo falha e o elemento não pode eliminar (403)', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const id = await contrato(ctx);
+    const semMotivo = await app.inject({ method: 'DELETE', url: `/api/v1/contratos/${id}`, headers: comoGestor(), payload: {} });
+    expect(semMotivo.statusCode).toBe(400);
+    const semPermissao = await app.inject({ method: 'DELETE', url: `/api/v1/contratos/${id}`, headers: comoRecurso(), payload: { motivo: 'x' } });
+    expect(semPermissao.statusCode).toBe(403);
+    expect(await ctx.repos.contratos.obter(id)).not.toBeNull();
   });
 });
 
