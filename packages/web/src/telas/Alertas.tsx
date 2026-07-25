@@ -10,6 +10,35 @@ import { calcularProjecao, gerarMapaProjecaoXlsx } from '../projecoes.js';
 interface Contexto { contratos: Contrato[]; perfis: PerfilContratual[]; aprovados: RegistoTempo[] }
 interface Sugestao { texto: string; alternativa?: PerfilAlternativo; nivel2?: string }
 
+const ROT_VIAB: Record<string, string> = { VIAVEL: 'Viável', CONDICIONADA: 'Condicionada', INVIÁVEL: 'Inviável', INVIAVEL: 'Inviável' };
+
+/**
+ * Janela de decisão: mostra a data-limite para agir e quanto falta. Se o prazo
+ * já passou, sinaliza-o — é o sinal mais forte que o alerta pode dar.
+ */
+function Janela({ alerta }: { alerta: Alerta }): ReactNode {
+  if (alerta.dataLimiteAcao === undefined) return <span className="sec">—</span>;
+  const dias = alerta.diasParaLimite ?? 0;
+  const cor = dias < 0 ? 'p-verm' : dias <= 15 ? 'p-verm' : dias <= 45 ? 'p-ambar' : 'p-azul';
+  return (
+    <span title={alerta.eventoAncora}>
+      <span className={`pill ${cor}`}>{alerta.dataLimiteAcao}</span>
+      <div className="sec">{dias < 0 ? `há ${-dias} dias` : `faltam ${dias} dias`}</div>
+    </span>
+  );
+}
+
+/** Ordena por urgência: prazo mais apertado primeiro, depois severidade. */
+function ordenarPorUrgencia(alertas: Alerta[]): Alerta[] {
+  const peso: Record<string, number> = { CRITICO: 0, AVISO: 1, INFO: 2 };
+  return [...alertas].sort((a, b) => {
+    const da = a.diasParaLimite ?? Number.MAX_SAFE_INTEGER;
+    const db = b.diasParaLimite ?? Number.MAX_SAFE_INTEGER;
+    if (da !== db) return da - db;
+    return (peso[a.severidade] ?? 3) - (peso[b.severidade] ?? 3);
+  });
+}
+
 export function Alertas(): ReactNode {
   const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
   const base = useAsync(async () => {
@@ -29,9 +58,16 @@ export function Alertas(): ReactNode {
   }
 
   async function guardarRecomendacao(al: Alerta, s: Sugestao): Promise<void> {
+    // A recomendação persiste a análise completa: sugestão, projeção e a escada
+    // de opções com viabilidade e fundamento, para ficar auditável.
+    const escada = (al.opcoes ?? [])
+      .map((o) => `${o.ordem}. [${ROT_VIAB[o.viabilidade] ?? o.viabilidade}] ${o.titulo} — ${o.detalhe}${o.fundamento !== undefined ? ` (${o.fundamento})` : ''}`)
+      .join('\n');
+    const prazo = al.dataLimiteAcao !== undefined ? `Agir até ${al.dataLimiteAcao} (${al.eventoAncora ?? 'janela de decisão'}).` : '';
     await app.recomendacoes.criar({
       contratoId: al.contratoId, origem: 'ALERTA', codigo: al.codigo,
-      titulo: al.titulo, texto: s.texto + (s.nivel2 !== undefined ? ` — ${s.nivel2}` : ''),
+      titulo: al.titulo,
+      texto: [s.texto + (s.nivel2 !== undefined ? ` — ${s.nivel2}` : ''), prazo, escada].filter((x) => x !== '').join('\n\n'),
       fundamentacao: al.detalhe, referenciaLegal: undefined, confianca: al.severidade === 'CRITICO' ? 0.9 : 0.75,
     }, app.utilizador());
     setGuardadas((g) => ({ ...g, [al.id]: true }));
@@ -46,22 +82,40 @@ export function Alertas(): ReactNode {
 
   return (
     <>
-      <Cabecalho titulo="Alertas" sub="Preocupações de execução do contrato (secção 11)" acoes={podeGerir ? <button className="btn" onClick={() => void executar()}>Executar job de alertas</button> : undefined} />
+      <Cabecalho titulo="Alertas" sub="Preocupações de execução do contrato, com janela de decisão e opções de atuação (secção 11)" acoes={podeGerir ? <button className="btn" onClick={() => void executar()}>Executar job de alertas</button> : undefined} />
       <div className="cartao"><table>
-        <thead><tr><th>Severidade</th><th>Código</th><th>Título</th><th>Detalhe</th><th></th></tr></thead>
-        <tbody>{(base.dados?.alertas ?? []).map((a) => { const s = sugestao[a.id]; return (
+        <thead><tr><th>Severidade</th><th>Código</th><th>Título</th><th>Detalhe</th><th>Agir até</th><th className="num">Impacto</th><th></th></tr></thead>
+        <tbody>{ordenarPorUrgencia(base.dados?.alertas ?? []).map((a) => { const s = sugestao[a.id]; return (
           <Fragment key={a.id}>
             <tr>
               <td><Severidade v={a.severidade} /></td>
               <td><code>{a.codigo}</code></td>
               <td className="prim">{a.titulo}</td>
               <td>{a.detalhe}</td>
-              <td style={{ whiteSpace: 'nowrap' }}><button className="btn sm" onClick={() => sugerir(a)}>✨ Sugestão (IA)</button></td>
+              <td className="tabnum" style={{ whiteSpace: 'nowrap' }}><Janela alerta={a} /></td>
+              <td className="num" style={{ whiteSpace: 'nowrap' }}>{a.impactoValor !== undefined ? formatarMoeda(a.impactoValor) : a.impactoMinutos !== undefined ? formatarHoras(a.impactoMinutos) : '—'}</td>
+              <td style={{ whiteSpace: 'nowrap' }}><button className="btn sm" onClick={() => sugerir(a)}>{(a.opcoes?.length ?? 0) > 0 ? `Opções (${a.opcoes!.length})` : '✨ Sugestão (IA)'}</button></td>
             </tr>
             {aberto === a.id && (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={7}>
                   <div className="aviso" style={{ margin: 0 }}>
+                    {(a.opcoes?.length ?? 0) > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <b>Opções de atuação</b> <span className="sec">(por atrito jurídico crescente)</span>
+                        <ol style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+                          {a.opcoes!.map((o) => (
+                            <li key={o.ordem} style={{ marginBottom: 6 }}>
+                              <span className={`pill ${o.viabilidade === 'VIAVEL' ? 'p-verde' : o.viabilidade === 'CONDICIONADA' ? 'p-ambar' : 'p-verm'}`}>{ROT_VIAB[o.viabilidade]}</span>{' '}
+                              <b>{o.titulo}</b>
+                              <div>{o.detalhe}</div>
+                              {o.fundamento !== undefined && <div className="sec">{o.fundamento}</div>}
+                              {o.impactoValor !== undefined && <div className="sec">Impacto: {formatarMoeda(o.impactoValor)}</div>}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
                     <b>Sugestão (IA · protótipo):</b> {s?.texto ?? 'A analisar…'}
                     {s?.nivel2 !== undefined && (
                       <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--linha)' }}>
@@ -85,7 +139,7 @@ export function Alertas(): ReactNode {
             )}
           </Fragment>
         ); })}
-        {base.dados?.alertas.length === 0 && <tr><td colSpan={5} className="vazio">Sem alertas.</td></tr>}</tbody>
+        {base.dados?.alertas.length === 0 && <tr><td colSpan={7} className="vazio">Sem alertas.</td></tr>}</tbody>
       </table></div>
     </>
   );
@@ -105,6 +159,16 @@ function textoProjecao(alt: PerfilAlternativo): string {
  * segundo nível com projeção e exportação para Excel.
  */
 function sugestaoIA(a: Alerta, ctx: Contexto): Sugestao {
+  // Alertas com escada de opções já trazem a análise no próprio alerta; a
+  // sugestão limita-se a remeter para as opções e para o prazo.
+  if ((a.opcoes?.length ?? 0) > 0) {
+    const viaveis = a.opcoes!.filter((o) => o.viabilidade === 'VIAVEL');
+    return {
+      texto: viaveis.length > 0
+        ? `Há ${viaveis.length} caminho(s) sem atrito jurídico: comece por «${viaveis[0]!.titulo}». As restantes opções exigem autorização ou modificação contratual.`
+        : 'Não há caminhos diretos: todas as opções exigem autorização, modificação contratual ou novo procedimento. Atue dentro da janela de decisão indicada.',
+    };
+  }
   if (a.codigo === 'AL-PERFIL-80' || a.codigo === 'AL-PERFIL-90') {
     const alt = perfisIdenticosDisponiveis(a.contratoId, ctx.contratos, ctx.perfis, ctx.aprovados).flatMap((r) => r.alternativas)[0];
     if (alt !== undefined) {
@@ -125,7 +189,15 @@ function sugestaoIA(a: Alerta, ctx: Contexto): Sugestao {
     'AL-VIGENCIA-36M': 'Reveja o prazo de vigência e fundamente a exceção ao limite (RN-202) se aplicável.',
     'AL-SUSPENSAO-VIGENCIA': 'As suspensões deslocam a execução e projetam a vigência para além dos 36 meses; registe a exceção fundamentada (RN-204).',
     'AL-PORTARIA-REPROGRAMAR': 'A vigência ultrapassa o último ano coberto pela portaria de extensão de encargos; promova a reprogramação da portaria para manter a execução plurianual.',
-    'AL-TRANSICAO-ANO': 'Pondere transitar o saldo por executar para o ano económico seguinte (sem portaria, até 50% do valor contratualizado), fundamentando.',
+    'AL-PORTARIA-LIMITA-VIGENCIA': 'A portaria está a travar a vigência abaixo do máximo legal: reprogramá-la permite levar o contrato até ao limite dos 36 meses, aproveitando o valor contratado.',
+    'AL-PORTARIA-ANO-INSUFICIENTE': 'A dotação do ano esgota-se antes do fim do ano; reprograme a repartição anual ou contenha a execução até 31/12.',
+    'AL-EXECUCAO-EXCEDE-ANO': 'A execução projetada excede a dotação repartida para o ano: sem reprogramação da portaria haverá execução sem cobertura orçamental.',
+    'AL-FIM-ANO-ECONOMICO': 'Instrua o pedido de transição do saldo para o ano seguinte antes do fecho do ano económico (sem portaria, até 50% do valor contratualizado), fundamentando.',
+    'AL-FOLGA-SEM-TEMPO': 'Vai sobrar valor por executar no término: reforce o ritmo de execução, prorrogue a vigência com nova data ou transite o saldo — decida dentro da janela indicada.',
+    'AL-CAPACIDADE-INSUFICIENTE': 'As horas contratadas não chegam ao término: pondere trabalhos complementares dentro do teto de 50% (RN-301) ou reduza o ritmo de afetação.',
+    'AL-NOVO-PROCEDIMENTO': 'Inicie a preparação do novo procedimento: a data-limite já considera a duração do concurso e, se aplicável, o visto prévio do Tribunal de Contas.',
+    'AL-SUSPENSAO-ABERTA': 'Delimite o período de suspensão ou levante-a: uma suspensão sem termo é achado frequente em auditoria.',
+    'AL-EXECUCAO-FORA-VIGENCIA': 'Há execução registada fora da vigência ou em período suspenso: reveja os registos e corrija, pois não há cobertura contratual para esse tempo.',
     'AL-COMPLEMENTARES-40': 'Acompanhe o acumulado de trabalhos complementares face ao limite legal de 50% (RN-301).',
     'AL-COMPLEMENTARES-45': 'Está próximo do limite de 50% de trabalhos complementares; evite novos acréscimos sem análise.',
     'AL-VISTO-PENDENTE': 'Confirme a submissão ao Tribunal de Contas; não deve haver execução relevante sem visto (salvo visto tácito).',

@@ -13,7 +13,7 @@ const NAV = [
     { to: '/recursos', rot: 'Recursos' },
     { to: '/relatorios', rot: 'Relatórios' }, { to: '/previsoes', rot: 'Previsões' },
     { to: '/alertas', rot: 'Alertas' }, { to: '/recomendacoes', rot: 'Recomendações' },
-    { to: '/regras', rot: 'Regras' },
+    { to: '/regras', rot: 'Regras e alertas' },
     { to: '/auditoria', rot: 'Auditoria' }, { to: '/acessos', rot: 'Acessos' },
   ] },
 ];

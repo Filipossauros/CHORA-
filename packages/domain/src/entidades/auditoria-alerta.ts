@@ -1,10 +1,28 @@
 import { z } from 'zod';
 import { zSeveridadeAlerta } from '../enums/index.js';
-import { zInstanteISO } from '../tipos/primitivos.js';
+import { zCent, zDataISO, zInstanteISO } from '../tipos/primitivos.js';
+
+/**
+ * Opção de atuação proposta com um alerta ("escada de opções"), ordenada por
+ * atrito jurídico crescente. É sempre indicativa: quem decide é o gestor.
+ */
+export const zOpcaoAlerta = z.object({
+  ordem: z.number().int().nonnegative(), // 1 = menor atrito
+  titulo: z.string().min(1),
+  detalhe: z.string().min(1),
+  viabilidade: z.enum(['VIAVEL', 'CONDICIONADA', 'INVIAVEL']),
+  fundamento: z.string().optional(), // base legal / regra aplicável
+  impactoValor: zCent.optional(), // diferencial de custo, quando quantificável
+});
+export type OpcaoAlerta = z.infer<typeof zOpcaoAlerta>;
 
 /**
  * Alerta gerado por job (secção 11). Não é Auditável (não tem autor humano);
  * tem `geradoEm`.
+ *
+ * Além do sinal, o alerta transporta a JANELA DE DECISÃO (`dataLimiteAcao`: até
+ * quando é preciso agir, calculada para trás a partir do evento com o prazo de
+ * instrução do ato), o IMPACTO quantificado e a ESCADA DE OPÇÕES.
  */
 export const zAlerta = z.object({
   id: z.string().min(1),
@@ -17,6 +35,18 @@ export const zAlerta = z.object({
   geradoEm: zInstanteISO,
   lidoEm: zInstanteISO.optional(),
   notificadoEm: zInstanteISO.optional(),
+  /** Data-limite para agir (janela de decisão). */
+  dataLimiteAcao: zDataISO.optional(),
+  /** Dias que faltam até à data-limite; negativo se já passou. */
+  diasParaLimite: z.number().int().optional(),
+  /** Evento a que a janela se refere (ex.: 'fecho do ano económico'). */
+  eventoAncora: z.string().optional(),
+  /** Impacto financeiro quantificado (€, em cêntimos). */
+  impactoValor: zCent.optional(),
+  /** Impacto em horas (minutos), quando aplicável. */
+  impactoMinutos: z.number().int().optional(),
+  /** Escada de opções de atuação. */
+  opcoes: z.array(zOpcaoAlerta).optional(),
 });
 export type Alerta = z.infer<typeof zAlerta>;
 

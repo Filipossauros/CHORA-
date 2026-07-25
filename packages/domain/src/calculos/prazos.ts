@@ -142,6 +142,43 @@ export function portariaExigeReprogramacao(contrato: Contrato): boolean {
   return anoTermino > anoFinal;
 }
 
+/** Montante que a portaria reparte para um dado ano económico (0 se não cobre). */
+export function montantePortariaAno(contrato: Contrato, ano: number): number {
+  const rep = contrato.portariaExtensaoEncargos?.reparticaoAnual;
+  return rep?.find((r) => r.ano === ano)?.montante ?? 0;
+}
+
+/**
+ * Vigência máxima admissível do contrato: a data de término mais longínqua
+ * compatível com o limite de 36 meses de vigência LÍQUIDA (descontadas as
+ * suspensões da execução). É o teto legal contra o qual se mede o quanto a
+ * portaria está a limitar o contrato.
+ */
+export function terminoMaximoAdmissivel(
+  contrato: Contrato,
+  alteracoes: ReadonlyArray<Alteracao>,
+): DataISO {
+  const diasSuspensos = diasSuspensaoExecucao(alteracoes, contrato.dataTerminoContratual);
+  const diasLimite = Math.round(LIMITE_VIGENCIA_MESES * DIAS_POR_MES) + diasSuspensos;
+  return adicionarDias(contrato.dataInicioVigencia, diasLimite);
+}
+
+/**
+ * Meses de vigência que se ganhariam se a portaria fosse reprogramada para
+ * cobrir até ao teto legal. Zero quando a portaria não é o fator limitante.
+ */
+export function mesesGanhosComReprogramacao(
+  contrato: Contrato,
+  alteracoes: ReadonlyArray<Alteracao>,
+): number {
+  const anoFinal = anoFinalPortaria(contrato);
+  if (anoFinal === undefined) return 0;
+  const tetoPortaria = `${anoFinal}-12-31`;
+  const tetoLegal = terminoMaximoAdmissivel(contrato, alteracoes);
+  if (tetoLegal <= tetoPortaria) return 0; // a portaria não limita
+  return Math.max(0, mesesEntre(tetoPortaria, tetoLegal));
+}
+
 /**
  * Fim efetivo de vigência (RN-203): o primeiro de dataTerminoContratual ou a
  * data de esgotamento das horas/valor disponíveis, quando esta for conhecida.

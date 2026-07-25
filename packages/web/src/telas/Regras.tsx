@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { CATALOGO_REGRAS, CATALOGO_ALERTAS } from '@chora/domain';
+import { CATALOGO_REGRAS, CATALOGO_ALERTAS, FAMILIAS_ALERTAS } from '@chora/domain';
 import { Cabecalho } from '../app/Shell.js';
 import { Severidade } from '../comum.js';
 
@@ -18,20 +18,26 @@ export function Regras(): ReactNode {
     .filter((r) => t === '' || `${r.codigo} ${r.descricao} ${r.base}`.toLowerCase().includes(t))
     .sort((a, b) => (a.codigo < b.codigo ? -1 : 1)), [t]);
 
-  const alertas = useMemo(() => [...CATALOGO_ALERTAS]
-    .filter((a) => t === '' || `${a.codigo} ${a.titulo} ${a.descricao} ${a.regraRelacionada ?? ''} ${a.base ?? ''}`.toLowerCase().includes(t))
-    .sort((a, b) => (a.codigo < b.codigo ? -1 : 1)), [t]);
+  const alertas = useMemo(() => CATALOGO_ALERTAS
+    .filter((a) => t === '' || `${a.codigo} ${a.titulo} ${a.descricao} ${a.familia} ${a.regraRelacionada ?? ''} ${a.base ?? ''}`.toLowerCase().includes(t)), [t]);
+
+  const comJanela = alertas.filter((a) => a.temJanelaDecisao === true).length;
 
   return (
     <>
-      <Cabecalho titulo="Regras" sub="Regras determinísticas que condicionam decisões e alertas — transparentes e auditáveis" acoes={
+      <Cabecalho titulo="Regras e alertas" sub="Todas as regras de negócio e todos os alertas da aplicação — transparentes e auditáveis" acoes={
         <input placeholder="Pesquisar…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 240 }} />
       } />
-      <div className="aviso" style={{ marginBottom: 12 }}>As <b>regras de negócio</b> (RN-xxx) são a única camada que <b>bloqueia</b> ou condiciona decisões. As <b>regras de alertas</b> (AL-xxx) sinalizam preocupações de execução — são sempre consultivas. As sugestões inteligentes (previsões, agente CCP) são indicativas e não vinculativas.</div>
+      <div className="aviso" style={{ marginBottom: 12 }}>
+        As <b>regras de negócio</b> (RN-xxx) são a única camada que <b>bloqueia</b> ou condiciona decisões.
+        Os <b>alertas</b> (AL-xxx) sinalizam preocupações de execução e são sempre consultivos; os que têm
+        <b> janela de decisão</b> indicam a data-limite para agir, calculada para trás a partir do
+        evento-âncora com o prazo de instrução do ato (parametrizado na base legal versionada).
+      </div>
 
       <div className="abas" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <button className={`btn sm ${aba === 'negocio' ? 'pri' : ''}`} onClick={() => setAba('negocio')}>Regras de negócio ({regras.length})</button>
-        <button className={`btn sm ${aba === 'alertas' ? 'pri' : ''}`} onClick={() => setAba('alertas')}>Regras de alertas ({alertas.length})</button>
+        <button className={`btn sm ${aba === 'alertas' ? 'pri' : ''}`} onClick={() => setAba('alertas')}>Alertas ({alertas.length}{comJanela > 0 ? ` · ${comJanela} com janela` : ''})</button>
       </div>
 
       {aba === 'negocio' ? (
@@ -49,19 +55,32 @@ export function Regras(): ReactNode {
           ))}{regras.length === 0 && <tr><td colSpan={6} className="vazio">Sem regras para a pesquisa.</td></tr>}</tbody>
         </table></div>
       ) : (
-        <div className="cartao"><table>
-          <thead><tr><th>Código</th><th>Alerta</th><th>Condição</th><th>Severidade base</th><th>Regra ligada</th><th>Base legal</th></tr></thead>
-          <tbody>{alertas.map((a) => (
-            <tr key={a.codigo}>
-              <td className="prim"><code>{a.codigo}</code></td>
-              <td>{a.titulo}</td>
-              <td className="sec">{a.descricao}</td>
-              <td><Severidade v={a.severidadeBase} /></td>
-              <td className="sec">{a.regraRelacionada !== undefined ? <code>{a.regraRelacionada}</code> : '—'}</td>
-              <td className="sec">{a.base ?? '—'}</td>
-            </tr>
-          ))}{alertas.length === 0 && <tr><td colSpan={6} className="vazio">Sem alertas para a pesquisa.</td></tr>}</tbody>
-        </table></div>
+        <>
+          {FAMILIAS_ALERTAS.map((fam) => {
+            const daFamilia = alertas.filter((a) => a.familia === fam);
+            if (daFamilia.length === 0) return null;
+            return (
+              <div className="cartao" key={fam} style={{ marginBottom: 16 }}>
+                <h3>{fam}</h3>
+                <table>
+                  <thead><tr><th>Código</th><th>Alerta</th><th>Condição</th><th>Severidade base</th><th>Janela de decisão</th><th>Regra ligada</th><th>Base legal</th></tr></thead>
+                  <tbody>{daFamilia.map((a) => (
+                    <tr key={a.codigo}>
+                      <td className="prim"><code>{a.codigo}</code></td>
+                      <td>{a.titulo}</td>
+                      <td className="sec">{a.descricao}</td>
+                      <td><Severidade v={a.severidadeBase} /></td>
+                      <td className="sec">{a.temJanelaDecisao === true ? <span className="pill p-ambar" title={a.eventoAncora}>{a.eventoAncora ?? 'sim'}</span> : '—'}</td>
+                      <td className="sec">{a.regraRelacionada !== undefined ? <code>{a.regraRelacionada}</code> : '—'}</td>
+                      <td className="sec">{a.base ?? '—'}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            );
+          })}
+          {alertas.length === 0 && <div className="cartao"><table><tbody><tr><td className="vazio">Sem alertas para a pesquisa.</td></tr></tbody></table></div>}
+        </>
       )}
     </>
   );

@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { CATALOGO_REGRAS, FAMILIAS_REGRAS, CATALOGO_ALERTAS } from '../packages/domain/src/index.js';
+import { CATALOGO_REGRAS, FAMILIAS_REGRAS, CATALOGO_ALERTAS, FAMILIAS_ALERTAS } from '../packages/domain/src/index.js';
 import { gerarOpenApi } from '../packages/api/src/openapi/documento.js';
 
 /**
@@ -48,15 +48,24 @@ function gerarCatalogoAlertas(): string {
     'para facilidade de gestão. Os alertas são sempre **consultivos**: sinalizam',
     'preocupações de execução, não bloqueiam decisões.',
     '',
+    'Os alertas com **janela de decisão** indicam a data-limite para agir, calculada',
+    'para trás a partir do evento-âncora com o prazo de instrução do ato (parametrizado',
+    'na base legal versionada). Nesses, a severidade escala à medida que a janela se fecha.',
+    '',
     `Total de alertas: **${CATALOGO_ALERTAS.length}**.`,
     '',
-    '| Código | Alerta | Condição | Severidade base | Regra ligada | Base legal / nota |',
-    '|---|---|---|---|---|---|',
   ];
-  for (const a of [...CATALOGO_ALERTAS].sort((x, y) => (x.codigo < y.codigo ? -1 : 1))) {
-    linhas.push(`| ${a.codigo} | ${a.titulo} | ${a.descricao} | ${a.severidadeBase} | ${a.regraRelacionada ?? '—'} | ${a.base ?? '—'} |`);
+  for (const familia of FAMILIAS_ALERTAS) {
+    const daFamilia = CATALOGO_ALERTAS.filter((a) => a.familia === familia);
+    if (daFamilia.length === 0) continue;
+    linhas.push(`## ${familia}`, '');
+    linhas.push('| Código | Alerta | Condição | Severidade base | Janela de decisão | Regra ligada | Base legal / nota |');
+    linhas.push('|---|---|---|---|---|---|---|');
+    for (const a of daFamilia) {
+      linhas.push(`| ${a.codigo} | ${a.titulo} | ${a.descricao} | ${a.severidadeBase} | ${a.temJanelaDecisao === true ? a.eventoAncora ?? 'sim' : '—'} | ${a.regraRelacionada ?? '—'} | ${a.base ?? '—'} |`);
+    }
+    linhas.push('');
   }
-  linhas.push('');
   return linhas.join('\n');
 }
 

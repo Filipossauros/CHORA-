@@ -20,6 +20,16 @@ export const BASE_LEGAL: ReadonlyArray<ParametroLegal> = [
   { chave: 'TRANSICAO_ANO_PCT', valor: 0.5, vigenteDe: '2012-02-14', referencia: 'LCPA (Lei n.º 8/2012) e DL n.º 127/2012 — transição de encargos sem portaria de extensão (a confirmar pelo agente CCP).' },
   { chave: 'VIGENCIA_MAX_MESES', valor: 36, vigenteDe: '2008-07-30', referencia: 'CCP — limite de vigência (RN-202).' },
   { chave: 'COMPLEMENTARES_MAX_PCT', valor: 0.5, vigenteDe: '2008-07-30', referencia: 'CCP, art. 370.º n.º 4 — limite de serviços complementares (RN-301).' },
+
+  // Prazos de INSTRUÇÃO dos atos (em dias). Determinam a JANELA DE DECISÃO: a
+  // data-limite para agir calcula-se para trás, a partir do evento-âncora.
+  // São prazos organizacionais (não legais em sentido estrito) e por isso ficam
+  // aqui, versionados e ajustáveis sem tocar no código dos alertas.
+  { chave: 'INSTRUCAO_TRANSICAO_DIAS', valor: 45, vigenteDe: '2012-02-14', referencia: 'Prazo de instrução do pedido de transição de saldo antes do fecho do ano económico (LCPA / DL n.º 127/2012).' },
+  { chave: 'INSTRUCAO_PORTARIA_DIAS', valor: 75, vigenteDe: '2012-08-21', referencia: 'Prazo de instrução da reprogramação de portaria de extensão de encargos (envolve tutela e Finanças).' },
+  { chave: 'INSTRUCAO_MODIFICACAO_DIAS', valor: 30, vigenteDe: '2008-07-30', referencia: 'Prazo de instrução de uma modificação objetiva (complementares / prorrogação), CCP art. 311.º e ss.' },
+  { chave: 'INSTRUCAO_PROCEDIMENTO_MESES', valor: 5, vigenteDe: '2008-07-30', referencia: 'Duração típica de um procedimento concursal até à celebração do contrato (CCP).' },
+  { chave: 'INSTRUCAO_VISTO_MESES', valor: 3, vigenteDe: '1997-08-26', referencia: 'Acréscimo de prazo por fiscalização prévia do Tribunal de Contas (LOPTC, Lei n.º 98/97).' },
 ];
 
 /** Parâmetro legal em vigor à data indicada (ou o mais recente, por omissão). */
