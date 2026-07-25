@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { calcularConsumoPerfil, valorPrevistoPerfil, mesDeData } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import { exigirUtilizador } from '../servidor/seguranca.js';
 import { ErroProibido, ErroValidacao } from '../erros/problema.js';
 import { podeExecutar } from '../auth/permissoes.js';
 import { JobAlertas } from '../alertas/job-alertas.js';
+import { ServicoAlertas } from '../servicos/alertas.js';
 
 export function rotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
   app.get('/api/v1/relatorios/horas-por-perfil', async (req) => {
@@ -105,8 +107,40 @@ export function rotasAlertas(app: FastifyInstance, ctx: Contexto): void {
   app.post('/api/v1/jobs/alertas/_executar', async (req) => {
     const u = exigirUtilizador(req);
     if (!podeExecutar(u.papeis, 'gerir.contratos')) throw new ErroProibido('Sem competência.');
-    const alertas = await new JobAlertas(ctx).executar();
-    return { gerados: alertas.length, alertas };
+    const r = await new JobAlertas(ctx).reconciliar();
+    return { gerados: r.alertas.length, novas: r.novas.length, resolvidas: r.resolvidas.length, reabertas: r.reabertas.length, alertas: r.alertas };
+  });
+
+  const servicoAlertas = new ServicoAlertas(ctx);
+
+  /** Decisões pendentes (abertas ou em curso), a base da fila "Hoje". */
+  app.get('/api/v1/decisoes', async (req) => {
+    exigirUtilizador(req);
+    const q = req.query as Record<string, string | undefined>;
+    return { dados: await servicoAlertas.pendentes(q['contratoId']) };
+  });
+
+  app.post('/api/v1/alertas/:id/em-curso', async (req) => {
+    const u = exigirUtilizador(req);
+    if (!podeExecutar(u.papeis, 'gerir.contratos')) throw new ErroProibido('Sem competência.');
+    const { id } = req.params as { id: string };
+    return servicoAlertas.marcarEmCurso(id, u);
+  });
+
+  app.post('/api/v1/alertas/:id/dispensar', async (req) => {
+    const u = exigirUtilizador(req);
+    if (!podeExecutar(u.papeis, 'gerir.contratos')) throw new ErroProibido('Sem competência.');
+    const { id } = req.params as { id: string };
+    const p = z.object({ motivo: z.string().min(1), dias: z.number().int().positive().default(30) }).safeParse(req.body);
+    if (!p.success) throw new ErroValidacao('A dispensa exige motivo e período.', p.error.issues);
+    return servicoAlertas.dispensar(id, p.data.motivo, p.data.dias, u);
+  });
+
+  app.post('/api/v1/alertas/:id/reabrir', async (req) => {
+    const u = exigirUtilizador(req);
+    if (!podeExecutar(u.papeis, 'gerir.contratos')) throw new ErroProibido('Sem competência.');
+    const { id } = req.params as { id: string };
+    return servicoAlertas.reabrir(id, u);
   });
 }
 

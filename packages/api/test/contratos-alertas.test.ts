@@ -59,6 +59,68 @@ describe('alertas e auditoria', () => {
     expect(codigos.has('AL-PUBLICITACAO')).toBe(false);
   });
 
+  it('reexecutar o job não duplica decisões (identidade estável)', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const p = () => app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    const r1 = (await p()).json() as { gerados: number; novas: number };
+    const r2 = (await p()).json() as { gerados: number; novas: number };
+    expect(r1.novas).toBeGreaterThan(0);
+    expect(r2.gerados).toBe(r1.gerados); // mesmo total
+    expect(r2.novas).toBe(0); // nada é novo na segunda passagem
+  });
+
+  it('dispensar tira a decisão da fila e reabre quando agrava', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    const antes = (await app.inject({ method: 'GET', url: '/api/v1/decisoes', headers: comoGestor() })).json() as { dados: Array<{ id: string; codigo: string; severidade: string }> };
+    const alvo = antes.dados.find((a) => a.severidade !== 'CRITICO')!;
+
+    const d = await app.inject({ method: 'POST', url: `/api/v1/alertas/${alvo.id}/dispensar`, headers: comoGestor(), payload: { motivo: 'tratado fora', dias: 30 } });
+    expect(d.statusCode).toBe(200);
+    const depois = (await app.inject({ method: 'GET', url: '/api/v1/decisoes', headers: comoGestor() })).json() as { dados: unknown[] };
+    expect(depois.dados.length).toBe(antes.dados.length - 1);
+
+    // Reexecutar não a traz de volta enquanto a dispensa durar.
+    await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    const aindaDispensada = await ctx.repos.alertas.obter(alvo.id);
+    expect(aindaDispensada?.estado).toBe('DISPENSADA');
+
+    // Agravar a severidade reabre.
+    await ctx.repos.alertas.guardar({ ...aindaDispensada!, severidade: 'INFO' });
+    await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    expect((await ctx.repos.alertas.obter(alvo.id))?.estado).toBe('ABERTA');
+  });
+
+  it('dispensar sem motivo falha; o elemento não pode dispensar', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    const lista = (await app.inject({ method: 'GET', url: '/api/v1/decisoes', headers: comoGestor() })).json() as { dados: Array<{ id: string }> };
+    const id = lista.dados[0]!.id;
+    expect((await app.inject({ method: 'POST', url: `/api/v1/alertas/${id}/dispensar`, headers: comoGestor(), payload: { dias: 30 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: `/api/v1/alertas/${id}/dispensar`, headers: comoRecurso(), payload: { motivo: 'x', dias: 30 } })).statusCode).toBe(403);
+  });
+
+  it('registar a transição resolve automaticamente a decisão que a pedia', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    const pendentes = (await app.inject({ method: 'GET', url: '/api/v1/decisoes', headers: comoGestor() })).json() as { dados: Array<{ id: string; codigo: string; contratoId: string }> };
+    const fimAno = pendentes.dados.find((a) => a.codigo === 'AL-FIM-ANO-ECONOMICO')!;
+    expect(fimAno).toBeDefined();
+
+    const { ServicoContratos } = await import('../src/servicos/contratos.js');
+    await new ServicoContratos(ctx).transitarAnoEconomico(
+      fimAno.contratoId, 1000_00, '2027-06-30', 'Saldo por executar.',
+      { utilizadorId: 'oid-gestor-contrato', papeis: ['GESTOR_CONTRATO'], projetoId: 'proj-P1', validoAte: '2030-01-01T00:00:00.000Z' },
+    );
+    const resolvida = await ctx.repos.alertas.obter(fimAno.id);
+    expect(resolvida?.estado).toBe('RESOLVIDA');
+    expect(resolvida?.motivoResolucao).toContain('Transição');
+  });
+
   it('os alertas compostos trazem janela de decisão, impacto e opções', async () => {
     const { app } = await montarApp();
     fechar = () => app.close();

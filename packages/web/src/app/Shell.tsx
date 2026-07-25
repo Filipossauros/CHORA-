@@ -1,30 +1,60 @@
-import { useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { decisoesPendentes } from '@chora/domain';
 import { app, UTILIZADORES } from '../porta/aplicacao-local.js';
+import { useMudancas } from '../comum.js';
 
+/**
+ * Navegação orientada ao TRABALHO, não à arquitetura.
+ *
+ * Passou de 13 destinos para 5: «Hoje» colapsa Alertas, Previsões e
+ * Recomendações — eram a mesma pergunta separada por quem a produzia. O que é
+ * documentação (Regras e alertas), administração (Auditoria, Acessos) ou
+ * consulta (Recursos, Previsões, Recomendações) vive numa gaveta, acessível mas
+ * fora do caminho do trabalho diário.
+ */
 const NAV = [
-  { grupo: 'Painel', itens: [{ to: '/', rot: 'Visão geral', fim: true }] },
-  { grupo: 'Gestão', itens: [
+  { grupo: 'Trabalho', itens: [
+    { to: '/', rot: 'Hoje', fim: true },
     { to: '/contratos', rot: 'Contratos' },
+    { to: '/registos', rot: 'Registos e aprovações' },
+    { to: '/faturacao', rot: 'Faturação' },
   ] },
-  { grupo: 'Operação', itens: [{ to: '/registos', rot: 'Registos de tempo' }, { to: '/aprovacoes', rot: 'Aprovações' }] },
-  { grupo: 'Financeiro', itens: [{ to: '/faturacao', rot: 'Faturação' }] },
-  { grupo: 'Análise', itens: [
-    { to: '/recursos', rot: 'Recursos' },
-    { to: '/relatorios', rot: 'Relatórios' }, { to: '/previsoes', rot: 'Previsões' },
-    { to: '/alertas', rot: 'Alertas' }, { to: '/recomendacoes', rot: 'Recomendações' },
-    { to: '/regras', rot: 'Regras e alertas' },
-    { to: '/auditoria', rot: 'Auditoria' }, { to: '/acessos', rot: 'Acessos' },
-  ] },
+  { grupo: 'Análise', itens: [{ to: '/relatorios', rot: 'Relatórios' }] },
+];
+
+/** Gaveta: transparência, administração e consulta. */
+const GAVETA = [
+  { to: '/regras', rot: 'Regras e alertas' },
+  { to: '/previsoes', rot: 'Previsões' },
+  { to: '/recomendacoes', rot: 'Recomendações' },
+  { to: '/recursos', rot: 'Recursos' },
+  { to: '/auditoria', rot: 'Auditoria' },
+  { to: '/acessos', rot: 'Acessos' },
 ];
 
 const embebido = new URLSearchParams(location.search).get('host') === 'ado';
 
 export function Shell({ children }: { children: ReactNode }): ReactNode {
   const [uid, setUid] = useState(app.utilizador().utilizadorId);
+  const [gavetaAberta, setGavetaAberta] = useState(false);
+  const [pendentes, setPendentes] = useState(0);
+  const [vencidas, setVencidas] = useState(0);
   const navegar = useNavigate();
   const local = useLocation();
   const naRaiz = local.pathname === '/';
+
+  // Contagem de decisões pendentes no menu — o sinal que traz o gestor de volta.
+  const contar = useCallback(() => {
+    void (async () => {
+      const abertas = decisoesPendentes(await app.ctx.repos.alertas.todos());
+      setPendentes(abertas.length);
+      setVencidas(abertas.filter((a) => (a.diasParaLimite ?? 1) < 0).length);
+    })();
+  }, []);
+  useEffect(contar, [contar, local.pathname, uid]);
+  // Reage também a mutações feitas noutra vista (dispensa, ato registado).
+  useMudancas(contar);
 
   function trocarUtilizador(id: string): void {
     app.setUtilizador(id);
@@ -41,16 +71,32 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
 
   return (
     <div className={`app${embebido ? ' embebido' : ''}`}>
-      <aside className="lateral">
+      <aside className="lateral" style={{ display: 'flex', flexDirection: 'column' }}>
         <div className="marca"><div className="logo">C+</div><div><b>CHORA+</b><span>Controlo de horas</span></div></div>
         {NAV.map((g) => (
           <div key={g.grupo}>
             <div className="grupo">{g.grupo}</div>
             {g.itens.map((i) => (
-              <NavLink key={i.to} to={i.to} end={('fim' in i && i.fim) || false} className={({ isActive }) => `nav-i${isActive ? ' ativo' : ''}`}>{i.rot}</NavLink>
+              <NavLink key={i.to} to={i.to} end={('fim' in i && i.fim) || false} className={({ isActive }) => `nav-i${isActive ? ' ativo' : ''}`}>
+                {i.rot}
+                {i.to === '/' && pendentes > 0 && <span className="cnt" style={vencidas > 0 ? { background: 'var(--vermelho)', color: '#fff' } : undefined}>{pendentes}</span>}
+              </NavLink>
             ))}
           </div>
         ))}
+        <div style={{ marginTop: 'auto', paddingTop: 14 }}>
+          <button
+            onClick={() => setGavetaAberta(!gavetaAberta)}
+            aria-expanded={gavetaAberta}
+            className="grupo"
+            style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, fontFamily: 'inherit' }}
+          >
+            <span aria-hidden="true">⚙</span> Configuração e transparência <span style={{ marginLeft: 'auto' }}>{gavetaAberta ? '▾' : '▸'}</span>
+          </button>
+          {gavetaAberta && GAVETA.map((i) => (
+            <NavLink key={i.to} to={i.to} className={({ isActive }) => `nav-i${isActive ? ' ativo' : ''}`}>{i.rot}</NavLink>
+          ))}
+        </div>
       </aside>
       <div className="principal">
         <div className="conteudo" key={uid} style={{ paddingTop: 30 }}>

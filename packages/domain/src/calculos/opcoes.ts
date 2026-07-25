@@ -8,6 +8,7 @@ import { calcularConsumoPerfil } from './consumo.js';
 import { valorPrevistoPerfil, complementaresAcumulados } from './financeira.js';
 import { valorHoraVigente } from './preco-perfil.js';
 import { valorLegal } from '../legal/base-legal.js';
+import { semelhancaPerfil, LIMIAR_SEMELHANCA } from '../ia/similaridade.js';
 
 /**
  * ESCADA DE OPÇÕES — quando um perfil se esgota, a aplicação não se limita a
@@ -47,6 +48,8 @@ export interface AlternativaPerfil {
   mesmaEntidade: boolean;
   /** Diferencial de valor/hora face ao perfil em risco (positivo = mais caro). */
   diferencaValorHora: Cent;
+  /** Semelhança do nome do perfil (1 = igual). Ver `ia/similaridade`. */
+  semelhanca: number;
 }
 
 /** Saldo de minutos e de valor de um perfil. */
@@ -71,13 +74,15 @@ export function alternativasParaPerfil(
   aprovados: ReadonlyArray<RegistoTempo>,
   hoje: DataISO,
 ): AlternativaPerfil[] {
-  const nomeAlvo = perfilEmRisco.nome.trim().toLowerCase();
   const valorHoraAlvo = valorHoraComparavel(perfilEmRisco, hoje);
   const alternativas: AlternativaPerfil[] = [];
 
   for (const outro of perfis) {
     if (outro.contratoId === contratoEmRisco.id) continue;
-    if (outro.nome.trim().toLowerCase() !== nomeAlvo) continue;
+    // Correspondência por SEMELHANÇA e não por igualdade exata: «Consultor
+    // Funcional» tem de encontrar «Consultor Funcional Sénior» (ia/similaridade).
+    const semelhanca = semelhancaPerfil(perfilEmRisco.nome, outro.nome);
+    if (semelhanca < LIMIAR_SEMELHANCA) continue;
     const contrato = contratos.find((c) => c.id === outro.contratoId);
     if (contrato === undefined || contrato.estado !== 'EM_VIGOR') continue;
     const s = saldo(outro, aprovados);
@@ -90,10 +95,15 @@ export function alternativasParaPerfil(
       entidadeNipc: contrato.prestador.nipc,
       mesmaEntidade: contrato.prestador.nipc === contratoEmRisco.prestador.nipc,
       diferencaValorHora: valorHora - valorHoraAlvo,
+      semelhanca,
     });
   }
-  // Mesma entidade primeiro; depois o mais barato.
-  return alternativas.sort((a, b) => (a.mesmaEntidade === b.mesmaEntidade ? a.valorHora - b.valorHora : a.mesmaEntidade ? -1 : 1));
+  // Mesma entidade primeiro; depois o mais parecido; depois o mais barato.
+  return alternativas.sort((a, b) => {
+    if (a.mesmaEntidade !== b.mesmaEntidade) return a.mesmaEntidade ? -1 : 1;
+    if (Math.abs(a.semelhanca - b.semelhanca) > 0.01) return b.semelhanca - a.semelhanca;
+    return a.valorHora - b.valorHora;
+  });
 }
 
 /** Perfis do MESMO contrato com saldo, para reafectação interna. */
@@ -156,7 +166,7 @@ export function escadaOpcoesPerfil(e: EntradaEscada): OpcaoAlerta[] {
   for (const a of mesmas.slice(0, 2)) {
     opcoes.push({
       ordem: ordem++, titulo: `Mobilizar para o contrato ${a.contratoNumero} (mesma entidade)`,
-      detalhe: `O contrato ${a.contratoNumero} tem o perfil «${a.perfilNome}» com ${h(a.minutosDisponiveis)} e ${eur(a.valorDisponivel)} disponíveis, da mesma entidade executante. A substituição/afetação é direta.`,
+      detalhe: `O contrato ${a.contratoNumero} tem o perfil «${a.perfilNome}»${a.semelhanca < 0.999 ? ` (papel equivalente, ${Math.round(a.semelhanca * 100)}% de correspondência)` : ''} com ${h(a.minutosDisponiveis)} e ${eur(a.valorDisponivel)} disponíveis, da mesma entidade executante. A substituição/afetação é direta.`,
       viabilidade: 'VIAVEL',
       fundamento: 'RN-701 — perfil e entidade executante coincidem.',
     });

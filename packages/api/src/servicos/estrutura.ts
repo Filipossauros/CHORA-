@@ -9,6 +9,7 @@ import {
 import type { Contexto } from '../contexto.js';
 import { ErroNaoEncontrado, ErroValidacao } from '../erros/problema.js';
 import type { ContextoUtilizador } from '../auth/token-validator.js';
+import { ServicoAlertas, ATO_RESOLVE } from './alertas.js';
 
 /**
  * Tipos de modificação que fixam uma nova data de vigência do contrato. Para
@@ -201,6 +202,11 @@ export class ServicoEstrutura {
     }
 
     await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Alteracao', entidadeId: alt.id, operacao: `ALTERAR:${dados.tipo}`, resultado: 'PERMITIDO', depois: alt });
+    // Supressão automática: a modificação fecha as decisões que a pediam.
+    const resolve = ATO_RESOLVE[dados.tipo];
+    if (resolve !== undefined && resolve.length > 0) {
+      await new ServicoAlertas(this.ctx).resolverPorAto(contratoId, resolve, `Modificação registada: ${dados.descricao}.`);
+    }
     return alt;
   }
 

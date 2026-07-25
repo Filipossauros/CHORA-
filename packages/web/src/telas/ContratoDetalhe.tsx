@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { vigenciaLiquidaMeses, ESTADOS_CONTRATO, LIMITE_VIGENCIA_MESES, type Afetacao, type Alteracao, type Contrato, type EstadoContrato, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
+import { decisoesPendentes, vigenciaLiquidaMeses, ESTADOS_CONTRATO, LIMITE_VIGENCIA_MESES, type Alerta, type Afetacao, type Alteracao, type Contrato, type EstadoContrato, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
 import { app, AZURE_USERS, nomeAzure, prestadorAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
 import { calcularCapacidade } from '../capacidade.js';
+import { ExtrairDocumento } from '../componentes/ExtrairDocumento.js';
 
 const RECURSOS_AZURE = AZURE_USERS.filter((u) => u.prestador !== undefined);
 function rotularOperacao(op: string): string {
@@ -23,14 +24,19 @@ function resumirEvento(e: { operacao: string; regraViolada?: string; depois?: un
   return e.regraViolada ?? '—';
 }
 
-const TABS = ['Ficha', 'Estrutura', 'Afetações', 'Execução financeira', 'Capacidade', 'Modificações'] as const;
+/**
+ * Três separadores em vez de seis: Estrutura, Afetações e Capacidade
+ * respondiam todos a «quem trabalha e com que saldo» e juntam-se à execução
+ * financeira num só — «Execução».
+ */
+const TABS = ['Execução', 'Ficha', 'Modificações'] as const;
 type Tab = (typeof TABS)[number];
 
 export function ContratoDetalhe(): ReactNode {
   const { id = '' } = useParams();
   const [params] = useSearchParams();
   const tabPedido = params.get('tab');
-  const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Ficha');
+  const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Execução');
   const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
   // O ciclo de vida do contrato (estado) é competência do gestor de contrato (RN-501).
   const ehGestorContrato = app.papeisAtuais().includes('GESTOR_CONTRATO');
@@ -40,7 +46,7 @@ export function ContratoDetalhe(): ReactNode {
   // A mesma rota /contratos/:id é reutilizada entre contratos (não remonta):
   // ao mudar de contrato, repõe o separador pedido no URL (ou a Ficha) e fecha a edição.
   useEffect(() => {
-    setTab((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Ficha');
+    setTab((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Execução');
     setEditar(false);
     setErro(undefined);
   }, [id, tabPedido]);
@@ -54,7 +60,8 @@ export function ContratoDetalhe(): ReactNode {
     const eventos = (await app.ctx.repos.eventosAuditoria.todos((e) => e.entidade === 'Contrato' && e.entidadeId === id)).sort((a, b) => (a.ocorridoEm < b.ocorridoEm ? 1 : -1));
     const recursos = await app.ctx.repos.recursos.todos();
     const resumo = await app.contratos.resumoExecucao(id) as ResumoExec;
-    return { contrato, perfis, afetacoes, alteracoes, aprovados, eventos, recursos, resumo };
+    const decisoes = decisoesPendentes(await app.ctx.repos.alertas.todos((a) => a.contratoId === id));
+    return { contrato, perfis, afetacoes, alteracoes, aprovados, eventos, recursos, resumo, decisoes };
   }, [id]);
 
   const dados = base.dados;
@@ -63,9 +70,9 @@ export function ContratoDetalhe(): ReactNode {
 
   return (
     <>
-      <Cabecalho titulo={`${c.numero} · ${c.objeto}`} sub="Detalhe do contrato (fase de execução)" acoes={<Estado v={c.estado} />} />
+      <Cabecalho titulo={`${c.numero} · ${c.objeto}`} sub="Detalhe do contrato (fase de execução)" acoes={<><DecisoesResumo alertas={dados.decisoes} /><Estado v={c.estado} /></>} />
       {erro !== undefined && erro !== '' && <div className="erro-cx">⚠ {erro}</div>}
-      <div className="seps">{TABS.filter((t) => t !== 'Capacidade' || c.tipologia === 'BOLSA_HORAS').map((t) => <button key={t} className={`sep${tab === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
+      <div className="seps">{TABS.map((t) => <button key={t} className={`sep${tab === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
 
       {tab === 'Ficha' && (editar ? <FichaEdicao contrato={c} podeAlterarEstado={ehGestorContrato} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
         <div className="cartao">
@@ -81,7 +88,10 @@ export function ContratoDetalhe(): ReactNode {
         </div></div>
       ))}
 
-      {tab === 'Estrutura' && (
+      {tab === 'Execução' && (
+        <>
+      {(
+
         <div style={{ display: 'grid', gridTemplateColumns: podeGerir && c.tipologia === 'BOLSA_HORAS' ? '1fr 320px' : '1fr', gap: 16 }}>
           <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'BOLSA_HORAS' ? ' (bolsa de horas)' : ''}</h3><table>
             <thead><tr><th>Perfil</th><th className="num">Horas</th><th className="num">€/hora vigente</th></tr></thead>
@@ -93,11 +103,11 @@ export function ContratoDetalhe(): ReactNode {
         </div>
       )}
 
-      {tab === 'Afetações' && (
+      {(
         <GestaoAfetacoes contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} podeGerir={podeGerir} onMudou={() => base.recarregar()} onErro={setErro} />
       )}
 
-      {tab === 'Execução financeira' && (
+      {(
         <>
           <div className="grelha-kpi">
             <div className="kpi"><div className="rot">Valor inicial do contrato</div><div className="val">{formatarMoeda(dados.resumo.valorInicialContrato)}</div></div>
@@ -118,7 +128,9 @@ export function ContratoDetalhe(): ReactNode {
         </>
       )}
 
-      {tab === 'Capacidade' && c.tipologia === 'BOLSA_HORAS' && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
+      {c.tipologia === 'BOLSA_HORAS' && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
+        </>
+      )}
 
       {tab === 'Modificações' && (
         <>
@@ -233,6 +245,17 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
         )}
       </div></div>
     </div>
+    <div style={{ marginTop: 16 }}>
+      <ExtrairDocumento
+        tipo="PORTARIA"
+        onConfirmar={async (campos) => {
+          const numero = campos['numero'];
+          if (numero !== undefined && numero.trim() !== '') {
+            setF((prev) => ({ ...prev, numeroPortariaExtensaoEncargos: numero }));
+          }
+        }}
+      />
+    </div>
     {podeAlterarEstado && <EliminarContrato contrato={contrato} onErro={onErro} />}
     </>
   );
@@ -261,6 +284,21 @@ function NovoPerfil({ contrato, onCriado, onErro }: { contrato: Contrato; onCria
       <div className="aviso" style={{ marginBottom: 10 }}>O total dos perfis não pode exceder o valor do contrato <code>RN-105</code>.</div>
       <button className="btn pri" style={{ width: '100%', justifyContent: 'center' }} onClick={() => void criar()}>Criar perfil</button>
     </div></div>
+  );
+}
+
+/** Decisões pendentes do contrato, no cabeçalho — o detalhe abre já a dizer o que está mal. */
+function DecisoesResumo({ alertas }: { alertas: Alerta[] }): ReactNode {
+  const navegar = useNavigate();
+  if (alertas.length === 0) return <span className="pill p-verde">Sem decisões pendentes</span>;
+  const criticas = alertas.filter((a) => a.severidade === 'CRITICO').length;
+  return (
+    <button
+      className={`pill ${criticas > 0 ? 'p-verm' : 'p-ambar'}`}
+      style={{ border: 'none', cursor: 'pointer', font: 'inherit', fontWeight: 600 }}
+      title={alertas.map((a) => a.titulo).join(' · ')}
+      onClick={() => navegar('/')}
+    >{alertas.length} decisõe(s) pendente(s)</button>
   );
 }
 

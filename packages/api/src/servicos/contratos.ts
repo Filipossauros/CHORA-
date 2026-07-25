@@ -7,6 +7,7 @@ import {
 import type { Contexto } from '../contexto.js';
 import { ErroConflitoEstado, ErroNaoEncontrado, ErroValidacao } from '../erros/problema.js';
 import type { ContextoUtilizador } from '../auth/token-validator.js';
+import { ServicoAlertas, ATO_RESOLVE } from './alertas.js';
 
 export class ServicoContratos {
   constructor(private readonly ctx: Contexto) {}
@@ -125,6 +126,8 @@ export class ServicoContratos {
     };
     await this.ctx.repos.alteracoes.guardar(alt);
     await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: id, operacao: 'TRANSICAO_ANO_ECONOMICO', resultado: 'PERMITIDO', antes: contrato, depois: atualizado });
+    // Supressão automática: o ato fecha as decisões que o pediam.
+    await new ServicoAlertas(this.ctx).resolverPorAto(id, ATO_RESOLVE['TRANSICAO_ANO_ECONOMICO'] ?? [], 'Transição de saldo registada.');
     return atualizado;
   }
 

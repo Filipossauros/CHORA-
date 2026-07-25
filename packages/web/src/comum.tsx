@@ -72,6 +72,22 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): { dados: T |
 }
 
 /** Extrai a mensagem apresentável de um erro (código de regra quando existe). */
+/**
+ * Sinal de que os dados mudaram, para vistas que não estão no ecrã atual
+ * reagirem — nomeadamente o contador de decisões no menu, que de outro modo
+ * ficaria desatualizado após uma dispensa ou um ato.
+ */
+const EVENTO_DADOS = 'chora:dados';
+export function notificarMudanca(): void {
+  window.dispatchEvent(new CustomEvent(EVENTO_DADOS));
+}
+export function useMudancas(aoMudar: () => void): void {
+  useEffect(() => {
+    window.addEventListener(EVENTO_DADOS, aoMudar);
+    return () => window.removeEventListener(EVENTO_DADOS, aoMudar);
+  });
+}
+
 export function mensagemErro(e: unknown): string {
   if (e instanceof ErroApi) return e.mensagem;
   if (typeof e === 'object' && e !== null && 'codigo' in e && 'message' in e) {

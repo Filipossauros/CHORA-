@@ -119,6 +119,18 @@ export const SEVERIDADES_ALERTA = ['INFO', 'AVISO', 'CRITICO'] as const;
 export type SeveridadeAlerta = (typeof SEVERIDADES_ALERTA)[number];
 export const zSeveridadeAlerta = z.enum(SEVERIDADES_ALERTA);
 
+/**
+ * Ciclo de vida de um alerta (decisão). Evita a fadiga: a reconciliação do job
+ * respeita o estado em vez de regerar tudo de raiz.
+ * - ABERTA: a condição verifica-se e não houve ato.
+ * - EM_CURSO: o gestor abriu uma opção ou guardou recomendação.
+ * - RESOLVIDA: o ato foi registado (ou a condição deixou de se verificar).
+ * - DISPENSADA: dispensada com motivo, por um período.
+ */
+export const ESTADOS_ALERTA = ['ABERTA', 'EM_CURSO', 'RESOLVIDA', 'DISPENSADA'] as const;
+export type EstadoAlerta = (typeof ESTADOS_ALERTA)[number];
+export const zEstadoAlerta = z.enum(ESTADOS_ALERTA);
+
 export const ESTADOS_RECOMENDACAO = ['PROPOSTA', 'ACEITE', 'REJEITADA'] as const;
 export type EstadoRecomendacao = (typeof ESTADOS_RECOMENDACAO)[number];
 export const zEstadoRecomendacao = z.enum(ESTADOS_RECOMENDACAO);

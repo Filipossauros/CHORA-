@@ -6,8 +6,9 @@ import {
   preverPerfil, preverContrato, ritmoValorDia, escadaOpcoesPerfil,
   janelaTransicaoAno, janelaReprogramacaoPortaria, janelaModificacao, janelaNovoProcedimento,
   fimAnoEconomico, diaDeInstante, diasEntre, adicionarDias,
-  type Alerta, type OpcaoAlerta, type SeveridadeAlerta, type Contrato, type DataISO,
-  type JanelaDecisao,
+  reconciliarAlertas, chaveAlerta,
+  type Alerta, type AlertaCalculado, type OpcaoAlerta, type SeveridadeAlerta, type Contrato, type DataISO,
+  type JanelaDecisao, type ResultadoReconciliacao,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 
@@ -33,6 +34,8 @@ export class NotifierConsola implements Notifier {
 
 /** Campos opcionais que enriquecem um alerta. */
 interface Extras {
+  /** Distingue ocorrências legítimas do mesmo código (ex.: o perfil). */
+  referencia?: string;
   janela?: JanelaDecisao;
   impactoValor?: number;
   impactoMinutos?: number;
@@ -52,14 +55,14 @@ export class JobAlertas {
   private novoAlerta(
     contratoId: string, codigo: string, severidade: SeveridadeAlerta,
     titulo: string, detalhe: string, destinatarioId: string, extras: Extras = {},
-  ): Alerta {
-    const { janela, impactoValor, impactoMinutos, opcoes } = extras;
+  ): AlertaCalculado {
+    const { referencia, janela, impactoValor, impactoMinutos, opcoes } = extras;
     return {
-      id: this.ctx.ids.novo('alr'), contratoId, codigo,
+      contratoId, codigo, chave: chaveAlerta(contratoId, codigo, referencia),
       // Quando há janela de decisão, a severidade escala com a proximidade do
       // limite; nunca desce abaixo da severidade base da regra.
       severidade: janela !== undefined ? maiorSeveridade(severidade, janela.severidade) : severidade,
-      titulo, detalhe, destinatarioId, geradoEm: this.ctx.relogio.agora(),
+      titulo, detalhe, destinatarioId,
       ...(janela !== undefined ? {
         dataLimiteAcao: janela.dataLimiteAcao,
         diasParaLimite: janela.diasParaLimite,
@@ -82,9 +85,18 @@ export class JobAlertas {
     return ` Tem de agir até ${j.dataLimiteAcao} (faltam ${j.diasParaLimite} dias), por causa do ${j.eventoAncora}.`;
   }
 
+  /** Executa o job e devolve o estado final de todas as decisões. */
   async executar(): Promise<Alerta[]> {
+    return (await this.reconciliar()).alertas;
+  }
+
+  /**
+   * Executa o job e devolve o detalhe da reconciliação — quais decisões são
+   * novas, quais foram resolvidas e quais reabriram.
+   */
+  async reconciliar(): Promise<ResultadoReconciliacao> {
     const hoje = diaDeInstante(this.ctx.relogio.agora());
-    const gerados: Alerta[] = [];
+    const calculados: AlertaCalculado[] = [];
     const todosContratos = await this.ctx.repos.contratos.todos();
     const todosPerfis = await this.ctx.repos.perfis.todos();
     const recursos = await this.ctx.repos.recursos.todos();
@@ -101,7 +113,7 @@ export class JobAlertas {
       const valorDisponivel = Math.max(0, contrato.precoContratualAtual - valorExecutado);
       const temPortaria = contrato.portariaExtensaoEncargos !== undefined || contrato.numeroPortariaExtensaoEncargos !== undefined;
 
-      gerados.push(
+      calculados.push(
         ...this.tempoDinheiro(contrato, hoje, meses, valorDisponivel, temPortaria, aprovados, destinatario),
         ...this.coberturaPlurianual(contrato, hoje, alteracoes, aprovados, destinatario),
         ...this.capacidade(contrato, hoje, perfis, alteracoes, aprovados, todosContratos, todosPerfis, recursos, destinatario),
@@ -118,24 +130,35 @@ export class JobAlertas {
         const sev: SeveridadeAlerta = limite < hoje ? 'CRITICO' : 'AVISO';
         const contrato = await this.ctx.repos.contratos.obter(f.contratoId);
         const destinatario = contrato !== null ? this.gestorPrincipal(contrato.gestores) : 'sem-gestor';
-        gerados.push(this.novoAlerta(f.contratoId, 'AL-FATURA-PRAZO', sev, 'Prazo de pagamento de fatura', `Fatura ${f.numero} com prazo ${limite}.`, destinatario));
+        calculados.push(this.novoAlerta(f.contratoId, 'AL-FATURA-PRAZO', sev, 'Prazo de pagamento de fatura', `Fatura ${f.numero} com prazo ${limite}.`, destinatario, { referencia: f.id }));
       }
     }
 
-    for (const alerta of gerados) {
-      const notificado: Alerta = { ...alerta, notificadoEm: this.ctx.relogio.agora() };
+    // RECONCILIAÇÃO — em vez de regerar tudo, cruza as decisões calculadas com
+    // as existentes por identidade estável: conserva o estado e a decisão do
+    // gestor, resolve o que deixou de se verificar e reabre o que agravou.
+    const agora = this.ctx.relogio.agora();
+    const existentes = await this.ctx.repos.alertas.todos();
+    const r = reconciliarAlertas(existentes, calculados, agora, hoje, () => this.ctx.ids.novo('alr'));
+
+    for (const alerta of r.alertas) {
+      await this.ctx.repos.alertas.guardar(alerta);
+    }
+    // Só se notifica o que é efetivamente novo ou reabriu — não a cada execução.
+    for (const alerta of [...r.novas, ...r.reabertas]) {
+      const notificado: Alerta = { ...alerta, notificadoEm: agora };
       await this.ctx.repos.alertas.guardar(notificado);
       await this.notifier.notificar(notificado, notificado.destinatarioId);
     }
-    return gerados;
+    return r;
   }
 
   // ─── A · Tempo × dinheiro ────────────────────────────────────────────────
   private tempoDinheiro(
     contrato: Contrato, hoje: DataISO, meses: number, valorDisponivel: number,
     temPortaria: boolean, aprovados: Parameters<typeof preverContrato>[1], destinatario: string,
-  ): Alerta[] {
-    const out: Alerta[] = [];
+  ): AlertaCalculado[] {
+    const out: AlertaCalculado[] = [];
 
     // AL-FOLGA-SEM-TEMPO — ao ritmo recente sobra dinheiro quando a vigência acaba.
     const previsao = preverContrato(contrato, aprovados, hoje);
@@ -157,7 +180,7 @@ export class JobAlertas {
         out.push(this.novoAlerta(contrato.id, 'AL-FIM-ANO-ECONOMICO', 'AVISO',
           'Transição de saldo a pedir antes do fecho do ano',
           `O contrato tem ${eur(valorDisponivel)} por executar e não tem portaria de extensão de encargos. Para o saldo poder ser executado em ${Number(hoje.slice(0, 4)) + 1}, a transição tem de ser pedida antes do fecho de ${fimAnoEconomico(hoje)}.` + this.prazo(j),
-          destinatario, { janela: j, impactoValor: valorDisponivel }));
+          destinatario, { referencia: hoje.slice(0, 4), janela: j, impactoValor: valorDisponivel }));
       }
     }
 
@@ -172,12 +195,12 @@ export class JobAlertas {
         out.push(this.novoAlerta(contrato.id, 'AL-EXECUCAO-EXCEDE-ANO', 'CRITICO',
           'Execução projetada excede a dotação do ano',
           `A execução projetada para ${ano} (${eur(Math.round(projetadoAno))}) excede o montante repartido pela portaria para esse ano (${eur(dotacaoAno)}). É necessário reprogramar a portaria ou conter a execução.`,
-          destinatario, { impactoValor: Math.round(projetadoAno - dotacaoAno) }));
+          destinatario, { referencia: String(ano), impactoValor: Math.round(projetadoAno - dotacaoAno) }));
       } else if (projetadoAno > dotacaoAno * 0.9) {
         out.push(this.novoAlerta(contrato.id, 'AL-PORTARIA-ANO-INSUFICIENTE', 'AVISO',
           'Dotação do ano esgota-se antes do fim do ano',
           `Ao ritmo recente, a dotação de ${ano} (${eur(dotacaoAno)}) fica praticamente esgotada antes de ${fimAnoEconomico(hoje)} (projeção: ${eur(Math.round(projetadoAno))}).`,
-          destinatario));
+          destinatario, { referencia: String(ano) }));
       }
     }
 
@@ -196,8 +219,8 @@ export class JobAlertas {
     contrato: Contrato, hoje: DataISO,
     alteracoes: Parameters<typeof mesesGanhosComReprogramacao>[1],
     _aprovados: unknown, destinatario: string,
-  ): Alerta[] {
-    const out: Alerta[] = [];
+  ): AlertaCalculado[] {
+    const out: AlertaCalculado[] = [];
     const anoFinal = anoFinalPortaria(contrato);
     if (anoFinal === undefined) return out;
 
@@ -232,8 +255,8 @@ export class JobAlertas {
     todosPerfis: Awaited<ReturnType<Contexto['repos']['perfis']['todos']>>,
     recursos: Awaited<ReturnType<Contexto['repos']['recursos']['todos']>>,
     destinatario: string,
-  ): Alerta[] {
-    const out: Alerta[] = [];
+  ): AlertaCalculado[] {
+    const out: AlertaCalculado[] = [];
 
     for (const p of perfis) {
       const consumo = calcularConsumoPerfil(p, aprovados.filter((r) => r.perfilId === p.id));
@@ -251,7 +274,7 @@ export class JobAlertas {
         out.push(this.novoAlerta(contrato.id, 'AL-PERFIL-ESGOTA-ANTES-TERMINO', 'AVISO',
           `Perfil ${p.nome} esgota-se antes do término`,
           `Ao ritmo recente, as horas do perfil «${p.nome}» esgotam-se a ${prev.dataEsgotamento}, antes do término da vigência (${contrato.dataTerminoContratual}). Restam ${horas(prev.minutosRestantes)}.` + this.prazo(j),
-          destinatario, { janela: j, impactoMinutos: prev.minutosRestantes, opcoes }));
+          destinatario, { referencia: p.id, janela: j, impactoMinutos: prev.minutosRestantes, opcoes }));
       }
 
       // AL-PERFIL-80 / -90 (RN-505 consultiva)
@@ -259,7 +282,7 @@ export class JobAlertas {
       if (!rp.ok) {
         const pico = Math.max(consumo.percentagemHoras, pctValor);
         out.push(this.novoAlerta(contrato.id, pico >= 0.9 ? 'AL-PERFIL-90' : 'AL-PERFIL-80', pico >= 0.9 ? 'CRITICO' : 'AVISO',
-          `Consumo do perfil ${p.nome}`, `Consumo a ${(pico * 100).toFixed(0)}%.`, destinatario));
+          `Consumo do perfil ${p.nome}`, `Consumo a ${(pico * 100).toFixed(0)}%.`, destinatario, { referencia: p.id }));
       }
     }
 
@@ -293,8 +316,8 @@ export class JobAlertas {
   }
 
   // ─── D · Fim de ciclo ────────────────────────────────────────────────────
-  private fimDeCiclo(contrato: Contrato, hoje: DataISO, meses: number, destinatario: string): Alerta[] {
-    const out: Alerta[] = [];
+  private fimDeCiclo(contrato: Contrato, hoje: DataISO, meses: number, destinatario: string): AlertaCalculado[] {
+    const out: AlertaCalculado[] = [];
 
     // AL-NOVO-PROCEDIMENTO — trabalha para trás a partir do término.
     const exigeVisto = contrato.vistoTribunalContasNecessario;
@@ -327,8 +350,8 @@ export class JobAlertas {
     alteracoes: Awaited<ReturnType<Contexto['repos']['alteracoes']['todos']>>,
     aprovados: Awaited<ReturnType<Contexto['repos']['registosTempo']['todos']>>,
     destinatario: string,
-  ): Alerta[] {
-    const out: Alerta[] = [];
+  ): AlertaCalculado[] {
+    const out: AlertaCalculado[] = [];
     const suspensoes = periodosSuspensao(alteracoes);
 
     // AL-SUSPENSAO-VIGENCIA (RN-204 consultiva)

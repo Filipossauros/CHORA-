@@ -5,6 +5,7 @@ import {
 import type { Contexto } from '../contexto.js';
 import { ErroNaoEncontrado } from '../erros/problema.js';
 import type { ContextoUtilizador } from '../auth/token-validator.js';
+import { ServicoAlertas, ATO_RESOLVE } from './alertas.js';
 
 export interface NovaAfetacao {
   contratoId: string;
@@ -84,6 +85,8 @@ export class ServicoAfetacoes {
     await this.ctx.repos.afetacoes.guardar(anterior);
     await this.ctx.repos.afetacoes.guardar(sucessora);
     await this.ctx.auditoria.registar({ utilizadorId: utilizador.utilizadorId, entidade: 'Afetacao', entidadeId: sucessora.id, operacao: 'SUBSTITUIR', resultado: 'PERMITIDO', antes: atual, depois: sucessora });
+    // Supressão automática: a substituição fecha as decisões de perfil.
+    await new ServicoAlertas(this.ctx).resolverPorAto(atual.contratoId, ATO_RESOLVE['SUBSTITUICAO_AFETACAO'] ?? [], 'Substituição de afetação registada.');
     return { anterior, sucessora };
   }
 }
