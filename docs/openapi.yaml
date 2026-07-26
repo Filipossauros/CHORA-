@@ -189,6 +189,208 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problema"
+  /api/v1/contratos/{id}/entregaveis:
+    get:
+      summary: Lista os entregáveis do contrato e a repartição do preço
+      tags:
+        - Entregáveis
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Entregáveis e repartição
+        404:
+          description: Não encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+    post:
+      summary: Cria entregável (valor em euros e/ou percentagem do contrato)
+      tags:
+        - Entregáveis
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        201:
+          description: Entregável criado
+        400:
+          description: "Sem valor, ou contrato não é chave-na-mão"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+        403:
+          description: Papel insuficiente
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+        422:
+          description: Violação de regra (RN-112)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  /api/v1/entregaveis/{entId}:
+    patch:
+      summary: Atualiza entregável ainda não faturado
+      tags:
+        - Entregáveis
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: entId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Entregável atualizado
+        400:
+          description: Já faturado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+        422:
+          description: Violação de regra (RN-112)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+    delete:
+      summary: Remove entregável ainda não faturado
+      tags:
+        - Entregáveis
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: entId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Entregável removido
+        400:
+          description: Já faturado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+        404:
+          description: Não encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  /api/v1/entregaveis/{entId}/entrega:
+    post:
+      summary: Assinala a entrega — facto gerador da faturação (RN-608)
+      tags:
+        - Entregáveis
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: entId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Entrega registada
+        403:
+          description: Papel insuficiente
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+        404:
+          description: Não encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  /api/v1/entregaveis/{entId}/anular-entrega:
+    post:
+      summary: Anula a entrega mediante motivo (bloqueado após faturação)
+      tags:
+        - Entregáveis
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: entId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Entrega anulada
+        400:
+          description: Já faturado ou motivo em falta
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+  /api/v1/contratos/{id}/bolsa-horas:
+    put:
+      summary: Define o valor da bolsa de horas do contrato chave-na-mão
+      tags:
+        - Entregáveis
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Valor definido
+        400:
+          description: Contrato não é chave-na-mão
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+        422:
+          description: Violação de regra (RN-112)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
   /api/v1/contratos/{id}/excecoes:
     post:
       summary: Regista exceção fundamentada a limite legal

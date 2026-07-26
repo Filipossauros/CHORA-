@@ -1,5 +1,5 @@
 import type { Cent, Minutos } from '../tipos/primitivos.js';
-import type { EstadoFatura, TipoDocumentoFatura } from '../enums/index.js';
+import type { EstadoFatura, TipoDocumentoFatura, TipoFaturacao } from '../enums/index.js';
 import { conforme, violada, type Regra } from '../erros/regra.js';
 
 /** RN-601 — fatura associada a contrato e a compromisso válido, com saldo suficiente. */
@@ -28,21 +28,31 @@ export const RN_601: Regra<{
   },
 };
 
-/** RN-602 — conferência só inicia com fatura e relatório de horas em PDF presentes. */
-export const RN_602: Regra<{ tiposDocumentosPresentes: ReadonlyArray<TipoDocumentoFatura> }> = {
+/**
+ * RN-602 — conferência só inicia com os dois documentos em PDF presentes. O
+ * segundo documento depende do que se está a liquidar: tempo prestado exige o
+ * relatório de horas do fornecedor; um entregável exige o auto de entrega, que é
+ * o documento que titula o facto gerador da faturação.
+ */
+export const RN_602: Regra<{
+  tiposDocumentosPresentes: ReadonlyArray<TipoDocumentoFatura>;
+  tipoFaturacao?: TipoFaturacao;
+}> = {
   codigo: 'RN-602',
   descricao:
-    'A conferência só pode iniciar-se estando presentes os dois documentos obrigatórios em PDF: a fatura e o relatório de horas do fornecedor.',
+    'A conferência só pode iniciar-se estando presentes os dois documentos obrigatórios em PDF: a fatura e, consoante o tipo de faturação, o relatório de horas do fornecedor (bolsa de horas) ou o auto de entrega (entregável).',
   requisito: 'RF26, RF31',
   base: 'O circuito de validação técnica funciona sobre PDF. Ver secção 5.3.2.',
   excecaoFundamentavel: false,
-  avaliar({ tiposDocumentosPresentes }) {
+  avaliar({ tiposDocumentosPresentes, tipoFaturacao }) {
+    const entregavel = tipoFaturacao === 'ENTREGAVEL';
+    const suporte: TipoDocumentoFatura = entregavel ? 'AUTO_ENTREGA' : 'RELATORIO_HORAS_FORNECEDOR';
     const temFatura = tiposDocumentosPresentes.includes('FATURA');
-    const temRelatorio = tiposDocumentosPresentes.includes('RELATORIO_HORAS_FORNECEDOR');
-    if (!temFatura || !temRelatorio) {
+    const temSuporte = tiposDocumentosPresentes.includes(suporte);
+    if (!temFatura || !temSuporte) {
       return violada(
-        'Faltam documentos obrigatórios: são necessários a fatura e o relatório de horas do fornecedor.',
-        { temFatura, temRelatorio },
+        `Faltam documentos obrigatórios: são necessários a fatura e ${entregavel ? 'o auto de entrega' : 'o relatório de horas do fornecedor'}.`,
+        { temFatura, temSuporte, suporte },
       );
     }
     return conforme;
@@ -181,6 +191,53 @@ export const RN_607: Regra<{ totalFaturado: Cent; novoMontante: Cent; precoContr
   },
 };
 
+/**
+ * RN-608 — só se fatura o que está entregue. Num contrato de preço fixo o facto
+ * gerador da faturação é a entrega do resultado, não a passagem do tempo.
+ */
+export const RN_608: Regra<{ tipoFaturacao: string; entregavelIdentificado: boolean; entregue: boolean }> = {
+  codigo: 'RN-608',
+  descricao:
+    'A faturação de um entregável exige que este esteja identificado na fatura e assinalado como entregue.',
+  requisito: 'novo',
+  base: 'Nos contratos de preço fixo o facto gerador da faturação é a entrega e aceitação do resultado.',
+  excecaoFundamentavel: false,
+  avaliar({ tipoFaturacao, entregavelIdentificado, entregue }) {
+    if (tipoFaturacao !== 'ENTREGAVEL') return conforme;
+    if (!entregavelIdentificado) {
+      return violada('Uma fatura de entregável tem de identificar o entregável que liquida.');
+    }
+    if (!entregue) {
+      return violada('O entregável ainda não está assinalado como entregue: não pode ser faturado.');
+    }
+    return conforme;
+  },
+};
+
+/**
+ * RN-609 — o montante faturado tem de corresponder ao valor do entregável.
+ * No preço fixo não há faturação parcial nem por medição: ou se entrega e se
+ * paga o valor acordado, ou não se fatura.
+ */
+export const RN_609: Regra<{ tipoFaturacao: string; montanteFatura: Cent; valorEntregavel: Cent }> = {
+  codigo: 'RN-609',
+  descricao:
+    'O montante de uma fatura de entregável tem de corresponder exatamente ao valor do entregável.',
+  requisito: 'novo',
+  base: 'No preço fixo não há faturação parcial nem por medição do entregável.',
+  excecaoFundamentavel: false,
+  avaliar({ tipoFaturacao, montanteFatura, valorEntregavel }) {
+    if (tipoFaturacao !== 'ENTREGAVEL') return conforme;
+    if (montanteFatura !== valorEntregavel) {
+      return violada(
+        'O montante da fatura não corresponde ao valor do entregável.',
+        { montanteFatura, valorEntregavel, diferenca: montanteFatura - valorEntregavel },
+      );
+    }
+    return conforme;
+  },
+};
+
 export const REGRAS_FATURACAO = [
   RN_601,
   RN_602,
@@ -190,4 +247,6 @@ export const REGRAS_FATURACAO = [
   RN_605,
   RN_606,
   RN_607,
+  RN_608,
+  RN_609,
 ] as const;

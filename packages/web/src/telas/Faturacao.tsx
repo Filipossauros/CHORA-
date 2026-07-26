@@ -1,19 +1,30 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { jsPDF } from 'jspdf';
+import { estadoEntregavel, type Entregavel, type TipoFaturacao } from '@chora/domain';
 import { app, nomeAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Estado, eurosParaCent, formatarHoras, formatarMoeda, horasParaMin, hoje, mensagemErro, useAsync } from '../comum.js';
 
 interface LinhaConf { perfilId?: string; recursoId?: string; quantidadeFatura: number; quantidadeAprovada: number; valorFatura: number; valorAprovado: number }
+interface Conferencia { linhas: LinhaConf[]; conforme: boolean; entregavel?: { designacao: string; valor: number; entregue: boolean; entregueEm?: string }; motivo?: string }
 interface Relatorio { decisao: string; motivo?: string; frase: string; geradoEm: string }
 interface OcrLinha { perfilId?: string; recursoId?: string; horas: number; valorHora: number; conf: number }
 interface OcrResultado { numero: string; numeroConf: number; linhas: OcrLinha[] }
-type TipoDoc = 'FATURA' | 'RELATORIO_HORAS_FORNECEDOR';
+type TipoDoc = 'FATURA' | 'RELATORIO_HORAS_FORNECEDOR' | 'AUTO_ENTREGA';
 
-const TIPOS_DOC: Array<{ tipo: TipoDoc; rot: string }> = [
-  { tipo: 'FATURA', rot: 'Fatura (PDF)' },
-  { tipo: 'RELATORIO_HORAS_FORNECEDOR', rot: 'Relatório de horas do fornecedor (PDF)' },
-];
+/**
+ * Documentos exigidos pela conferência (RN-602). O segundo depende do que se
+ * liquida: tempo prestado exige o relatório de horas; um entregável exige o
+ * auto de entrega, que é o documento que titula o facto gerador da faturação.
+ */
+function tiposDoc(tipo: TipoFaturacao): Array<{ tipo: TipoDoc; rot: string }> {
+  return [
+    { tipo: 'FATURA', rot: 'Fatura (PDF)' },
+    tipo === 'ENTREGAVEL'
+      ? { tipo: 'AUTO_ENTREGA' as TipoDoc, rot: 'Auto de entrega (PDF)' }
+      : { tipo: 'RELATORIO_HORAS_FORNECEDOR' as TipoDoc, rot: 'Relatório de horas do fornecedor (PDF)' },
+  ];
+}
 
 async function sha256(file: File): Promise<string> {
   const hash = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
@@ -47,35 +58,60 @@ export function Faturacao(): ReactNode {
   const podeGerir = app.papeisAtuais().includes('GESTOR_CONTRATO');
   const [contratoId, setContratoId] = useState('');
   const [faturaId, setFaturaId] = useState('');
-  const [conf, setConf] = useState<{ linhas: LinhaConf[]; conforme: boolean }>();
+  const [conf, setConf] = useState<Conferencia>();
   const [ocr, setOcr] = useState<OcrResultado>();
   const [relatorio, setRelatorio] = useState<Relatorio>();
   const [motivoInval, setMotivoInval] = useState('');
   const [erro, setErro] = useState<string>();
   // Nova conferência (entrada por upload / carregamento manual).
-  const [nova, setNova] = useState({ numero: '', periodoDe: '', periodoAte: '', montanteSemIva: '', montanteIva: '' });
+  const [nova, setNova] = useState({ numero: '', periodoDe: '', periodoAte: '', montanteSemIva: '', montanteIva: '', tipo: 'BOLSA_HORAS' as TipoFaturacao, entregavelId: '' });
   const [pend, setPend] = useState<Partial<Record<TipoDoc, File>>>({});
   const refs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const base = useAsync(async () => {
     const contratos = await app.ctx.repos.contratos.todos();
     const cid = contratoId || contratos[0]?.id || '';
+    const contrato = cid !== '' ? await app.ctx.repos.contratos.obter(cid) : null;
     const faturas = await app.ctx.repos.faturas.todos((f) => f.contratoId === cid);
     const fatura = faturaId !== '' ? await app.ctx.repos.faturas.obter(faturaId) : null;
-    return { contratos, cid, faturas, fatura };
+    // Só um entregável entregue e ainda por faturar pode titular uma fatura (RN-608).
+    const entregaveis = contrato?.tipologia === 'CHAVE_NA_MAO' ? await app.entregaveis.listar(cid) : [];
+    return { contratos, cid, contrato, faturas, fatura, entregaveis };
   }, [contratoId, faturaId, relatorio, ocr]);
 
   if (base.dados === undefined) return <p className="vazio">A carregar…</p>;
-  const { contratos, cid, faturas, fatura } = base.dados;
+  const { contratos, cid, contrato, faturas, fatura, entregaveis } = base.dados;
+  const chaveNaMao = contrato?.tipologia === 'CHAVE_NA_MAO';
+  const faturaveis = entregaveis.filter((e: Entregavel) => estadoEntregavel(e) === 'ENTREGUE');
+  const entregavelSel = faturaveis.find((e: Entregavel) => e.id === nova.entregavelId);
+  // Documentos exigidos: os da nova conferência seguem o tipo escolhido; os de
+  // uma fatura já criada seguem o tipo com que foi criada.
+  const docsNova = tiposDoc(nova.tipo);
+  const docsFatura = tiposDoc(fatura?.tipo ?? 'BOLSA_HORAS');
 
   function reset(): void { setConf(undefined); setOcr(undefined); setRelatorio(undefined); setMotivoInval(''); setErro(undefined); }
-  function novaConferencia(): void { setFaturaId(''); setPend({}); setNova({ numero: '', periodoDe: '', periodoAte: '', montanteSemIva: '', montanteIva: '' }); reset(); }
+  /**
+   * Limpa o formulário. Num contrato chave-na-mão a faturação corrente é a dos
+   * entregáveis — a bolsa de horas é a exceção —, pelo que é esse o tipo por
+   * omissão. `paraContrato` permite escolher já para o contrato acabado de
+   * selecionar, antes de o estado refletir a mudança.
+   */
+  function novaConferencia(paraContrato?: string): void {
+    const alvo = contratos.find((c) => c.id === (paraContrato ?? cid));
+    const tipo: TipoFaturacao = alvo?.tipologia === 'CHAVE_NA_MAO' ? 'ENTREGAVEL' : 'BOLSA_HORAS';
+    setFaturaId(''); setPend({});
+    setNova({ numero: '', periodoDe: '', periodoAte: '', montanteSemIva: '', montanteIva: '', tipo, entregavelId: '' });
+    reset();
+  }
 
   async function criarConferencia(): Promise<void> {
     setErro(undefined);
     const semIva = eurosParaCent(nova.montanteSemIva); const iva = eurosParaCent(nova.montanteIva);
     if (nova.numero.trim() === '' || nova.periodoDe === '' || nova.periodoAte === '' || semIva <= 0) {
       setErro('Indique o nº da fatura, o período e o montante s/ IVA (€ > 0).'); return;
+    }
+    if (nova.tipo === 'ENTREGAVEL' && nova.entregavelId === '') {
+      setErro('Uma fatura de entregável tem de identificar o entregável que liquida (RN-608).'); return;
     }
     try {
       const u = app.utilizador();
@@ -86,8 +122,10 @@ export function Faturacao(): ReactNode {
         compromissoId: comp.id, numero: nova.numero.trim(),
         dataEmissao: hoje(), dataRececao: hoje(), periodoDe: nova.periodoDe, periodoAte: nova.periodoAte,
         montanteSemIva: semIva, montanteIva: Number.isFinite(iva) && iva > 0 ? iva : 0,
+        tipo: nova.tipo,
+        ...(nova.tipo === 'ENTREGAVEL' ? { entregavelId: nova.entregavelId } : {}),
       }, u);
-      for (const { tipo } of TIPOS_DOC) {
+      for (const { tipo } of docsNova) {
         const file = pend[tipo];
         if (file !== undefined) {
           const hash = await sha256(file);
@@ -138,7 +176,7 @@ export function Faturacao(): ReactNode {
   }
 
   async function iniciar(): Promise<void> { if (fatura === null) return; setErro(undefined); try { await app.faturas.iniciarConferencia(fatura.id, app.utilizador()); base.recarregar(); } catch (e) { setErro(mensagemErro(e)); } }
-  async function conferir(): Promise<void> { if (fatura === null) return; setErro(undefined); try { setConf(await app.faturas.conferir(fatura.id) as { linhas: LinhaConf[]; conforme: boolean }); } catch (e) { setErro(mensagemErro(e)); } }
+  async function conferir(): Promise<void> { if (fatura === null) return; setErro(undefined); try { setConf(await app.faturas.conferir(fatura.id) as Conferencia); } catch (e) { setErro(mensagemErro(e)); } }
 
   async function decidir(decisao: 'VALIDADA' | 'INVALIDADA', motivo?: string): Promise<void> {
     if (fatura === null) return; setErro(undefined);
@@ -171,8 +209,8 @@ export function Faturacao(): ReactNode {
     <>
       <Cabecalho titulo="Conferência de faturas" sub="Carregar/registar a fatura · OCR · conferência determinística · decisão" acoes={
         <>
-          {fatura !== null && <button className="btn" onClick={novaConferencia}>+ Nova conferência</button>}
-          <select value={cid} onChange={(e) => { setContratoId(e.target.value); novaConferencia(); }}>{contratos.map((c) => <option key={c.id} value={c.id}>{c.numero}</option>)}</select>
+          {fatura !== null && <button className="btn" onClick={() => novaConferencia()}>+ Nova conferência</button>}
+          <select value={cid} onChange={(e) => { setContratoId(e.target.value); novaConferencia(e.target.value); }}>{contratos.map((c) => <option key={c.id} value={c.id}>{c.numero}</option>)}</select>
         </>
       } />
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
@@ -182,6 +220,32 @@ export function Faturacao(): ReactNode {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
           <div className="cartao"><h3>Nova conferência de fatura</h3><div className="corpo">
             {!podeGerir && <div className="aviso">Só o gestor de contrato inicia conferências.</div>}
+            {chaveNaMao && (
+              <>
+                <div className="g2">
+                  <div className="campo"><label>Tipo de faturação *</label>
+                    <select value={nova.tipo} onChange={(e) => setNova({ ...nova, tipo: e.target.value as TipoFaturacao, entregavelId: '' })}>
+                      <option value="ENTREGAVEL">Entregável</option>
+                      <option value="BOLSA_HORAS">Bolsa de horas</option>
+                    </select>
+                  </div>
+                  {nova.tipo === 'ENTREGAVEL' && (
+                    <div className="campo"><label>Entregável a liquidar *</label>
+                      <select value={nova.entregavelId} onChange={(e) => { const sel = faturaveis.find((x: Entregavel) => x.id === e.target.value); setNova({ ...nova, entregavelId: e.target.value, ...(sel !== undefined ? { montanteSemIva: String(sel.valor / 100) } : {}) }); }}>
+                        <option value="">— selecionar —</option>
+                        {faturaveis.map((e: Entregavel) => <option key={e.id} value={e.id}>{e.designacao} · {formatarMoeda(e.valor)}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                {nova.tipo === 'ENTREGAVEL' && faturaveis.length === 0 && (
+                  <div className="aviso" style={{ marginBottom: 10, borderColor: 'var(--ambar)' }}>Não há entregáveis assinalados como entregues e por faturar. A entrega é o facto gerador da faturação <code>RN-608</code> — assinale-a no separador Entregáveis do contrato.</div>
+                )}
+                {entregavelSel !== undefined && (
+                  <div className="aviso" style={{ marginBottom: 10 }}>Entregue em <b>{entregavelSel.entregueEm ?? '—'}</b>. O montante s/ IVA tem de ser exatamente <b>{formatarMoeda(entregavelSel.valor)}</b> <code>RN-609</code>.</div>
+                )}
+              </>
+            )}
             <div className="g3">
               <div className="campo"><label>Nº da fatura *</label><input value={nova.numero} onChange={(e) => setNova({ ...nova, numero: e.target.value })} placeholder="FT-2026-010" /></div>
               <div className="campo"><label>Período de *</label><input type="date" value={nova.periodoDe} onChange={(e) => setNova({ ...nova, periodoDe: e.target.value })} /></div>
@@ -192,7 +256,7 @@ export function Faturacao(): ReactNode {
               <div className="campo"><label>IVA (€)</label><input type="number" min={0} step="0.01" value={nova.montanteIva} onChange={(e) => setNova({ ...nova, montanteIva: e.target.value })} /></div>
             </div>
             <div className="g2">
-              {TIPOS_DOC.map(({ tipo, rot }) => (
+              {docsNova.map(({ tipo, rot }) => (
                 <div key={tipo}>
                   <div className="campo" style={{ margin: 0 }}><label>{rot}</label></div>
                   <div className={`dropzone${pend[tipo] !== undefined ? ' ok' : ''}`} onClick={() => podeGerir && refs.current[`n-${tipo}`]?.click()} style={{ cursor: podeGerir ? 'pointer' : 'default' }}>
@@ -202,16 +266,16 @@ export function Faturacao(): ReactNode {
                 </div>
               ))}
             </div>
-            <div className="aviso" style={{ margin: '4px 0 12px' }}>Os PDF são selados pelo hash SHA-256 <code>RN-602-A</code>; a conferência exige a fatura e o relatório de horas <code>RN-602</code>. O nº pode ser lido/confirmado por OCR no passo seguinte.</div>
+            <div className="aviso" style={{ margin: '4px 0 12px' }}>Os PDF são selados pelo hash SHA-256 <code>RN-602-A</code>; a conferência exige a fatura e {nova.tipo === 'ENTREGAVEL' ? 'o auto de entrega' : 'o relatório de horas'} <code>RN-602</code>. O nº pode ser lido/confirmado por OCR no passo seguinte.</div>
             <button className="btn pri" disabled={!podeGerir} onClick={() => void criarConferencia()}>Iniciar conferência</button>
           </div></div>
 
           <div className="cartao"><h3>Retomar / histórico</h3><table>
             <tbody>
               {emCurso.length > 0 && <tr><td colSpan={2} className="sec" style={{ fontWeight: 600 }}>Em curso</td></tr>}
-              {emCurso.map((f) => <tr key={f.id} className="click" onClick={() => { setFaturaId(f.id); reset(); }}><td className="prim">{f.numero}<div className="sec">{f.periodoDe.slice(0, 7)}</div></td><td><Estado v={f.estado} /></td></tr>)}
+              {emCurso.map((f) => <tr key={f.id} className="click" onClick={() => { setFaturaId(f.id); reset(); }}><td className="prim">{f.numero}<div className="sec">{f.periodoDe.slice(0, 7)} · {f.tipo === 'ENTREGAVEL' ? 'entregável' : 'bolsa de horas'}</div></td><td><Estado v={f.estado} /></td></tr>)}
               {decididas.length > 0 && <tr><td colSpan={2} className="sec" style={{ fontWeight: 600, paddingTop: 10 }}>Decididas</td></tr>}
-              {decididas.map((f) => <tr key={f.id} className="click" onClick={() => { setFaturaId(f.id); reset(); }}><td className="prim">{f.numero}<div className="sec">{f.periodoDe.slice(0, 7)}</div></td><td><Estado v={f.estado} /></td></tr>)}
+              {decididas.map((f) => <tr key={f.id} className="click" onClick={() => { setFaturaId(f.id); reset(); }}><td className="prim">{f.numero}<div className="sec">{f.periodoDe.slice(0, 7)} · {f.tipo === 'ENTREGAVEL' ? 'entregável' : 'bolsa de horas'}</div></td><td><Estado v={f.estado} /></td></tr>)}
               {faturas.length === 0 && <tr><td colSpan={2} className="vazio">Sem faturas neste contrato.</td></tr>}
             </tbody>
           </table></div>
@@ -224,8 +288,9 @@ export function Faturacao(): ReactNode {
             ))}
           </div>
 
-          <div className="cartao" style={{ marginBottom: 16 }}><h3>{fatura.numero} · {fatura.periodoDe} a {fatura.periodoAte}<span style={{ marginLeft: 'auto' }}><Estado v={fatura.estado} /></span></h3><div className="corpo" style={{ fontSize: 12.5, color: 'var(--texto-suave)' }}>
+          <div className="cartao" style={{ marginBottom: 16 }}><h3>{fatura.numero} · {fatura.periodoDe} a {fatura.periodoAte}<span className={`pill ${fatura.tipo === 'ENTREGAVEL' ? 'p-azul' : 'p-ard'}`} style={{ marginLeft: 8 }}>{fatura.tipo === 'ENTREGAVEL' ? 'Entregável' : 'Bolsa de horas'}</span><span style={{ marginLeft: 'auto' }}><Estado v={fatura.estado} /></span></h3><div className="corpo" style={{ fontSize: 12.5, color: 'var(--texto-suave)' }}>
             Montante s/ IVA {formatarMoeda(fatura.montanteSemIva)} · IVA {formatarMoeda(fatura.montanteIva)}
+            {fatura.tipo === 'ENTREGAVEL' && <> · liquida o entregável <b>{entregaveis.find((e: Entregavel) => e.id === fatura.entregavelId)?.designacao ?? fatura.entregavelId ?? '—'}</b></>}
           </div></div>
 
           {/* Etapa 1–2: documentos + OCR (fatura RECEBIDA) */}
@@ -233,7 +298,7 @@ export function Faturacao(): ReactNode {
             <>
               <div className="cartao" style={{ marginBottom: 16 }}><h3>1 · Documentos</h3><div className="corpo">
                 <div className="g2">
-                  {TIPOS_DOC.map(({ tipo, rot }) => { const doc = fatura.documentos.find((d) => d.tipo === tipo); return (
+                  {docsFatura.map(({ tipo, rot }) => { const doc = fatura.documentos.find((d) => d.tipo === tipo); return (
                     <div key={tipo}>
                       <div className="campo" style={{ margin: 0 }}><label>{rot}</label></div>
                       <div className={`dropzone${doc !== undefined ? ' ok' : ''}`} onClick={() => podeGerir && refs.current[tipo]?.click()} style={{ cursor: podeGerir ? 'pointer' : 'default' }}>
@@ -245,7 +310,17 @@ export function Faturacao(): ReactNode {
                 </div>
               </div></div>
 
-              {podeGerir && (
+              {podeGerir && fatura.tipo === 'ENTREGAVEL' && (
+                <div className="cartao"><h3>2 · Extração automática (OCR — stub)</h3><div className="corpo">
+                  <p className="sec" style={{ marginTop: 0 }}>
+                    Numa fatura de entregável não há linhas de tempo a extrair: o que se confere é o entregável — assinalado como entregue e pelo valor exato <code>RN-608</code> <code>RN-609</code>.
+                  </p>
+                  <button className="btn pri" disabled={fatura.documentos.length < 2} onClick={() => void iniciar()}>Iniciar conferência →</button>
+                  {fatura.documentos.length < 2 && <span className="sec" style={{ marginLeft: 10 }}>Requer a fatura e o auto de entrega.</span>}
+                </div></div>
+              )}
+
+              {podeGerir && fatura.tipo !== 'ENTREGAVEL' && (
                 <div className="cartao"><h3>2 · Extração automática (OCR — stub)</h3><div className="corpo">
                   {ocr === undefined ? (
                     <><p className="sec" style={{ marginTop: 0 }}>Interpreta os PDF e propõe o nº da fatura e as linhas (com grau de confiança), revisíveis antes de confirmar.</p>
@@ -276,10 +351,35 @@ export function Faturacao(): ReactNode {
 
           {/* Etapa 3–4: conferência + decisão (sempre manual, sem devolução) */}
           {fatura.estado === 'EM_CONFERENCIA' && (
-            <div className="cartao"><h3>3 · Conferência determinística <code>RN-603</code></h3><div className="corpo">
+            <div className="cartao"><h3>3 · Conferência determinística <code>{fatura.tipo === 'ENTREGAVEL' ? 'RN-608 · RN-609' : 'RN-603'}</code></h3><div className="corpo">
               {conf === undefined ? (
-                <><p className="sec" style={{ marginTop: 0 }}>Compara as linhas da fatura com os registos de tempo aprovados do período.</p>
+                <><p className="sec" style={{ marginTop: 0 }}>{fatura.tipo === 'ENTREGAVEL' ? 'Compara a fatura com o entregável que diz liquidar: tem de estar assinalado como entregue e o montante tem de corresponder ao valor do entregável.' : 'Compara as linhas da fatura com os registos de tempo aprovados do período.'}</p>
                 <button className="btn pri" onClick={() => void conferir()}>Conferir</button></>
+              ) : fatura.tipo === 'ENTREGAVEL' ? (
+                <>
+                  <table>
+                    <thead><tr><th>Entregável</th><th>Entregue</th><th className="num">Valor do entregável</th><th className="num">Montante faturado</th><th>Resultado</th></tr></thead>
+                    <tbody><tr style={{ background: conf.conforme ? undefined : 'var(--vermelho-b)' }}>
+                      <td className="prim">{conf.entregavel?.designacao ?? '—'}</td>
+                      <td>{conf.entregavel?.entregue === true ? conf.entregavel.entregueEm ?? 'sim' : 'não'}</td>
+                      <td className="num">{formatarMoeda(conf.entregavel?.valor ?? 0)}</td>
+                      <td className="num">{formatarMoeda(fatura.montanteSemIva)}</td>
+                      <td>{conf.conforme ? <Estado v="VALIDADA" /> : <Estado v="INVALIDADA" />}</td>
+                    </tr></tbody>
+                  </table>
+                  {conf.conforme
+                    ? <div style={{ margin: '10px 12px' }} className="aviso">Entregável entregue e montante coincidente: a fatura pode ser validada.</div>
+                    : <div style={{ margin: '10px 12px' }} className="erro-cx">{conf.motivo ?? 'A fatura não corresponde ao entregável que liquida.'} <code>RN-608</code> <code>RN-609</code></div>}
+                  <div style={{ marginTop: 6 }}>
+                    <button className="btn pri" disabled={!conf.conforme} onClick={() => void decidir('VALIDADA')}>Validar</button>
+                  </div>
+                  <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--linha)' }}>
+                    <div style={{ marginBottom: 6 }}><b style={{ fontSize: 13 }}>Invalidar fatura</b></div>
+                    <p className="sec" style={{ marginTop: 0 }}>O motivo é obrigatório e fica no relatório de evidência.</p>
+                    <textarea rows={3} value={motivoInval} onChange={(e) => setMotivoInval(e.target.value)} placeholder="Motivo da invalidação…" style={{ width: '100%' }} />
+                    <div style={{ marginTop: 8 }}><button className="btn" style={{ borderColor: 'var(--vermelho)', color: 'var(--vermelho)' }} disabled={motivoInval.trim() === ''} onClick={() => void decidir('INVALIDADA', motivoInval)}>Invalidar fatura</button></div>
+                  </div>
+                </>
               ) : (
                 <>
                   <table>

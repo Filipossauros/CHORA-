@@ -148,6 +148,7 @@ export class ServicoContratos {
     const repos = this.ctx.repos;
     const doContrato = (e: { contratoId: string }): boolean => e.contratoId === id;
     for (const p of await repos.perfis.todos(doContrato)) await repos.perfis.remover(p.id);
+    for (const e of await repos.entregaveis.todos(doContrato)) await repos.entregaveis.remover(e.id);
     for (const a of await repos.alteracoes.todos(doContrato)) await repos.alteracoes.remover(a.id);
     for (const a of await repos.afetacoes.todos(doContrato)) await repos.afetacoes.remover(a.id);
     for (const r of await repos.registosTempo.todos(doContrato)) await repos.registosTempo.remover(r.id);

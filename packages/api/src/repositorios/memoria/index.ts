@@ -6,6 +6,7 @@ import type {
   Contrato,
   DocumentoHabilitacao,
   Dotacao,
+  Entregavel,
   EventoAuditoria,
   Fatura,
   Lote,
@@ -31,6 +32,7 @@ export interface Repositorios {
   contratos: Repository<Contrato>;
   dotacoes: Repository<Dotacao>;
   perfis: Repository<PerfilContratual>;
+  entregaveis: Repository<Entregavel>;
   alteracoes: Repository<Alteracao>;
   recursos: Repository<Recurso>;
   afetacoes: Repository<Afetacao>;
@@ -80,6 +82,7 @@ export function criarRepositoriosMemoria(): Repositorios {
     contratos: new RepositorioMemoria('contratos'),
     dotacoes: new RepositorioMemoria('dotacoes'),
     perfis: new RepositorioMemoria('perfis'),
+    entregaveis: new RepositorioMemoria('entregaveis'),
     alteracoes: new RepositorioMemoria('alteracoes'),
     recursos: new RepositorioMemoria('recursos'),
     afetacoes: new RepositorioMemoria('afetacoes'),

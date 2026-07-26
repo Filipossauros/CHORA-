@@ -6,6 +6,7 @@ import { exigirUtilizador } from '../servidor/seguranca.js';
 import { ErroProibido, ErroValidacao } from '../erros/problema.js';
 import { podeExecutar } from '../auth/permissoes.js';
 import { ServicoEstrutura } from '../servicos/estrutura.js';
+import { ServicoEntregaveis } from '../servicos/entregaveis.js';
 
 function parse<T>(s: z.ZodType<T>, corpo: unknown): T { const r = s.safeParse(corpo); if (!r.success) throw new ErroValidacao('Corpo inválido.', r.error.issues); return r.data; }
 function exigirGestao(papeis: import('@chora/domain').PapelAplicacional[]): void {
@@ -22,10 +23,58 @@ const zAlteracao = z.object({
   novoGestorId: z.string().optional(),
   excecaoVigencia: z.string().optional(),
 });
+const zEntregavel = z.object({
+  designacao: z.string().min(1), descricao: z.string().optional(),
+  valor: zCentNaoNegativo.optional(), percentagemContrato: z.number().min(0).max(1).optional(),
+  dataPrevista: zDataISO.optional(),
+});
+const zEntrega = z.object({ entregueEm: zDataISO, nota: z.string().optional() });
 const zHabilitacao = z.object({ tipo: zTipoDocumentoHabilitacao, emitidoEm: zDataISO, validoAte: zDataISO, referencia: z.string().optional() });
 
 export function rotasEstrutura(app: FastifyInstance, ctx: Contexto): void {
   const servico = new ServicoEstrutura(ctx);
+  const entregaveis = new ServicoEntregaveis(ctx);
+
+  // ─── Entregáveis (contratos chave-na-mão) ────────────────────────────────
+  app.get('/api/v1/contratos/:id/entregaveis', async (req) => {
+    exigirUtilizador(req); const { id } = req.params as { id: string };
+    return { dados: await entregaveis.listar(id), reparticao: await entregaveis.reparticao(id) };
+  });
+  app.post('/api/v1/contratos/:id/entregaveis', async (req, reply) => {
+    const u = exigirUtilizador(req); exigirGestao(u.papeis);
+    const { id } = req.params as { id: string };
+    await reply.status(201).send(await entregaveis.criar(id, parse(zEntregavel, req.body), u));
+  });
+  app.patch('/api/v1/entregaveis/:entId', async (req) => {
+    const u = exigirUtilizador(req); exigirGestao(u.papeis);
+    const { entId } = req.params as { entId: string };
+    return entregaveis.atualizar(entId, parse(zEntregavel.partial(), req.body), u);
+  });
+  app.delete('/api/v1/entregaveis/:entId', async (req) => {
+    const u = exigirUtilizador(req); exigirGestao(u.papeis);
+    const { entId } = req.params as { entId: string };
+    await entregaveis.remover(entId, u);
+    return { removido: entId };
+  });
+  /** Assinala a entrega — facto gerador da faturação (RN-608). */
+  app.post('/api/v1/entregaveis/:entId/entrega', async (req) => {
+    const u = exigirUtilizador(req); exigirGestao(u.papeis);
+    const { entId } = req.params as { entId: string };
+    const d = parse(zEntrega, req.body);
+    return entregaveis.registarEntrega(entId, d.entregueEm, d.nota, u);
+  });
+  app.post('/api/v1/entregaveis/:entId/anular-entrega', async (req) => {
+    const u = exigirUtilizador(req); exigirGestao(u.papeis);
+    const { entId } = req.params as { entId: string };
+    const { motivo } = parse(z.object({ motivo: z.string().min(1) }), req.body);
+    return entregaveis.anularEntrega(entId, motivo, u);
+  });
+  app.put('/api/v1/contratos/:id/bolsa-horas', async (req) => {
+    const u = exigirUtilizador(req); exigirGestao(u.papeis);
+    const { id } = req.params as { id: string };
+    const { valor } = parse(z.object({ valor: zCentNaoNegativo }), req.body);
+    return entregaveis.definirBolsaHoras(id, valor, u);
+  });
 
   app.get('/api/v1/contratos/:id/perfis', async (req) => {
     exigirUtilizador(req); const { id } = req.params as { id: string };

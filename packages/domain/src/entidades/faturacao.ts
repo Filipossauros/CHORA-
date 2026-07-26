@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zEstadoFatura, zTipoDocumentoFatura } from '../enums/index.js';
+import { zEstadoFatura, zTipoDocumentoFatura, zTipoFaturacao } from '../enums/index.js';
 import {
   zAnoCivil,
   zAuditavel,
@@ -51,6 +51,13 @@ export const zFatura = zAuditavel.extend({
   contratoId: z.string().min(1),
   compromissoId: z.string().optional(),
   numero: z.string().min(1),
+  /**
+   * O que a fatura liquida. Por omissão BOLSA_HORAS (tempo prestado), que é o
+   * comportamento de todos os contratos exceto os entregáveis de chave-na-mão.
+   */
+  tipo: zTipoFaturacao.default('BOLSA_HORAS'),
+  /** Entregável liquidado, obrigatório quando `tipo` é ENTREGAVEL (RN-608). */
+  entregavelId: z.string().optional(),
   documentos: z.array(zDocumentoFatura),
   referenciaSistemaFaturacao: z.string().optional(),
   dataEmissao: zDataISO,

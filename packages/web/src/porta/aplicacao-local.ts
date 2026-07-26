@@ -1,7 +1,7 @@
 import {
   criarContexto, semear, resumoSeed, JobAlertas, FakeTokenValidator, UTILIZADORES_DEV,
   ServicoContratos, ServicoRegistosTempo, ServicoProcedimentos, ServicoEstrutura,
-  ServicoAfetacoes, ServicoFaturas, ServicoRecursos, ServicoAcessos, ServicoRecomendacoes,
+  ServicoAfetacoes, ServicoFaturas, ServicoRecursos, ServicoAcessos, ServicoRecomendacoes, ServicoEntregaveis,
   type Contexto, type Repositorios, type ContextoUtilizador,
 } from '@chora/api/nucleo';
 import { relogioSistema, type PapelAplicacional } from '@chora/domain';
@@ -35,7 +35,7 @@ function criarReposLocais(): Repositorios {
   const r = <T extends { id: string }>(nome: string) => new RepositorioLocalStorage<T>(nome);
   return {
     procedimentos: r('procedimentos'), lotes: r('lotes'), contratos: r('contratos'),
-    dotacoes: r('dotacoes'), perfis: r('perfis'), alteracoes: r('alteracoes'),
+    dotacoes: r('dotacoes'), perfis: r('perfis'), alteracoes: r('alteracoes'), entregaveis: r('entregaveis'),
     recursos: r('recursos'), afetacoes: r('afetacoes'), registosTempo: r('registosTempo'),
     compromissos: r('compromissos'), faturas: r('faturas'), documentosHabilitacao: r('documentosHabilitacao'),
     alertas: r('alertas'), eventosAuditoria: r('eventosAuditoria'), contratoProjetos: r('contratoProjetos'),
@@ -56,6 +56,7 @@ export class AplicacaoLocal {
   readonly recursos: ServicoRecursos;
   readonly acessos: ServicoAcessos;
   readonly recomendacoes: ServicoRecomendacoes;
+  readonly entregaveis: ServicoEntregaveis;
   private utilizadorId = 'oid-gestor-contrato';
 
   constructor() {
@@ -70,6 +71,7 @@ export class AplicacaoLocal {
     this.recursos = new ServicoRecursos(this.ctx);
     this.acessos = new ServicoAcessos(this.ctx);
     this.recomendacoes = new ServicoRecomendacoes(this.ctx);
+    this.entregaveis = new ServicoEntregaveis(this.ctx);
   }
 
   /** Semeia se estiver vazio (primeiro arranque) e gera os alertas. */

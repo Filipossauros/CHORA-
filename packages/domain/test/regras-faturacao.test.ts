@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_605, RN_606, RN_607,
+  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_605, RN_606, RN_607, RN_608, RN_609,
   type LinhaConferencia,
 } from '../src/rules/faturacao.js';
 
@@ -56,4 +56,28 @@ describe('RN-606 deduções refletidas no líquido', () => {
 describe('RN-607 total faturado ≤ preço atual', () => {
   it('positivo', () => expect(RN_607.avaliar({ totalFaturado: 3000, novoMontante: 1000, precoContratualAtual: 5000 }).ok).toBe(true));
   it('negativo', () => expect(RN_607.avaliar({ totalFaturado: 4500, novoMontante: 1000, precoContratualAtual: 5000 }).ok).toBe(false));
+});
+
+describe('RN-602 documentos por tipo de faturação', () => {
+  it('positivo — entregável com auto de entrega', () => expect(RN_602.avaliar({ tiposDocumentosPresentes: ['FATURA', 'AUTO_ENTREGA'], tipoFaturacao: 'ENTREGAVEL' }).ok).toBe(true));
+  it('negativo — entregável com relatório de horas em vez do auto', () => expect(RN_602.avaliar({ tiposDocumentosPresentes: ['FATURA', 'RELATORIO_HORAS_FORNECEDOR'], tipoFaturacao: 'ENTREGAVEL' }).ok).toBe(false));
+  it('negativo — bolsa de horas com auto de entrega em vez do relatório', () => expect(RN_602.avaliar({ tiposDocumentosPresentes: ['FATURA', 'AUTO_ENTREGA'], tipoFaturacao: 'BOLSA_HORAS' }).ok).toBe(false));
+});
+
+describe('RN-608 faturação de entregável exige entrega', () => {
+  it('não se aplica a faturação de bolsa de horas', () => expect(RN_608.avaliar({ tipoFaturacao: 'BOLSA_HORAS', entregavelIdentificado: false, entregue: false }).ok).toBe(true));
+  it('positivo — identificado e entregue', () => expect(RN_608.avaliar({ tipoFaturacao: 'ENTREGAVEL', entregavelIdentificado: true, entregue: true }).ok).toBe(true));
+  it('negativo — entregável não identificado', () => expect(RN_608.avaliar({ tipoFaturacao: 'ENTREGAVEL', entregavelIdentificado: false, entregue: true }).ok).toBe(false));
+  it('negativo — ainda não entregue', () => expect(RN_608.avaliar({ tipoFaturacao: 'ENTREGAVEL', entregavelIdentificado: true, entregue: false }).ok).toBe(false));
+});
+
+describe('RN-609 montante da fatura igual ao valor do entregável', () => {
+  it('não se aplica a faturação de bolsa de horas', () => expect(RN_609.avaliar({ tipoFaturacao: 'BOLSA_HORAS', montanteFatura: 100, valorEntregavel: 999 }).ok).toBe(true));
+  it('positivo — montante exato', () => expect(RN_609.avaliar({ tipoFaturacao: 'ENTREGAVEL', montanteFatura: 30_000_00, valorEntregavel: 30_000_00 }).ok).toBe(true));
+  it('negativo — faturação parcial não é admitida', () => {
+    const r = RN_609.avaliar({ tipoFaturacao: 'ENTREGAVEL', montanteFatura: 15_000_00, valorEntregavel: 30_000_00 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.dados?.diferenca).toBe(-15_000_00);
+  });
+  it('negativo — montante superior ao entregável', () => expect(RN_609.avaliar({ tipoFaturacao: 'ENTREGAVEL', montanteFatura: 31_000_00, valorEntregavel: 30_000_00 }).ok).toBe(false));
 });

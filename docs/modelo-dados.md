@@ -13,10 +13,16 @@
 | `alteracoes` | — | `contratoId` | `{contratoId:1, dataEfeito:-1}` |
 | `afetacoes` | — | `contratoId`, `perfilId`, `recursoId` | `{contratoId:1, ativa:1}`; `{recursoId:1, ativa:1}` |
 | `registosTempo` | — | `afetacaoId` (+ desnormalizações) | `{recursoId:1, data:-1}`; `{contratoId:1, estado:1, data:-1}`; `{workItemId:1}`; `{projetoId:1, data:-1}` |
-| `faturas` | `linhas[]`, `deducoes[]` | `contratoId`, `compromissoId` | `{contratoId:1, dataRececao:-1}`; `{numero:1, contratoId:1}` único |
+| `entregaveis` | — | `contratoId`, `faturaId` | `{contratoId:1, ordem:1}`; `{contratoId:1, entregue:1}` |
+| `faturas` | `linhas[]`, `deducoes[]` | `contratoId`, `compromissoId`, `entregavelId` | `{contratoId:1, dataRececao:-1}`; `{numero:1, contratoId:1}` único |
 | `documentosHabilitacao` | — | `contratoId` | `{validoAte:1}` |
 | `alertas` | — | `contratoId` | `{destinatarioId:1, lidoEm:1}` |
 | `eventosAuditoria` | — | — | `{entidade:1, entidadeId:1, ocorridoEm:-1}`; `{utilizadorId:1, ocorridoEm:-1}`; TTL **não aplicar** |
+
+`entregaveis` (contratos chave-na-mão) fica em coleção própria, e não embebido
+em `contratos` como os perfis: muda de estado ao ritmo da execução — entrega,
+depois faturação — e é referenciado pela fatura que o liquida, ao passo que os
+perfis são estrutura estável do contrato.
 
 ## Mapeamento de tipos para BSON
 

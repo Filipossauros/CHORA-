@@ -96,15 +96,57 @@ export async function semear(ctx: Contexto): Promise<void> {
     await repos.afetacoes.guardar(afBH);
   }
 
-  // Contrato E — CHAVE-NA-MÃO (empreitada de preço fixo). Não tem perfis
-  // contratuais nem separador de capacidade: paga-se o resultado, não as horas.
+  // Contrato E — CHAVE-NA-MÃO: paga-se o resultado, não as horas. O preço
+  // reparte-se por ENTREGÁVEIS (160 000 €) e por uma BOLSA DE HORAS reservada a
+  // trabalhos não previstos (30 000 €), sobrando 10 000 € por atribuir. Um
+  // entregável já entregue e faturado, outro entregue por faturar (é o que se
+  // pode faturar já) e dois previstos.
   const contratoCM = contratoBase({
     id: ids.novo('ctr'), numero: 'C-2026-CM1', tipologia: 'CHAVE_NA_MAO',
     objeto: 'Empreitada chave-na-mão de plataforma digital',
     precoContratualInicial: 200_000_00, precoContratualAtual: 200_000_00, numeroLote: 3,
-    dataInicioVigencia: isoMeses(-1), dataTerminoContratual: isoMeses(11), dataTerminoOriginal: isoMeses(11),
+    bolsaHorasValor: 30_000_00,
+    dataInicioVigencia: isoMeses(-8), dataTerminoContratual: isoMeses(11), dataTerminoOriginal: isoMeses(11),
   });
   await repos.contratos.guardar(contratoCM);
+
+  const entregaveisCM: Array<{ designacao: string; valor: number; entregue: boolean; entregueEm?: string; dataPrevista: string }> = [
+    { designacao: 'E1 · Levantamento e desenho da solução', valor: 30_000_00, entregue: true, entregueEm: isoMeses(-6), dataPrevista: isoMeses(-6) },
+    { designacao: 'E2 · Módulo de gestão documental', valor: 60_000_00, entregue: true, entregueEm: isoMeses(-1), dataPrevista: isoMeses(-1) },
+    { designacao: 'E3 · Integração com sistemas centrais', valor: 50_000_00, entregue: false, dataPrevista: isoMeses(4) },
+    { designacao: 'E4 · Formação e transferência de conhecimento', valor: 20_000_00, entregue: false, dataPrevista: isoMeses(9) },
+  ];
+  const idsEntregaveis: string[] = [];
+  for (const [i, e] of entregaveisCM.entries()) {
+    const id = ids.novo('ent');
+    idsEntregaveis.push(id);
+    await repos.entregaveis.guardar({
+      id, contratoId: contratoCM.id, ordem: i + 1, designacao: e.designacao,
+      valor: e.valor, percentagemContrato: e.valor / contratoCM.precoContratualAtual,
+      dataPrevista: e.dataPrevista, entregue: e.entregue,
+      ...(e.entregueEm !== undefined ? { entregueEm: e.entregueEm, registadoEntreguePor: 'oid-gestor-contrato' } : {}),
+      ...audit,
+    });
+  }
+
+  // Perfis e afetação da componente BOLSA DE HORAS do chave-na-mão: existem
+  // para os trabalhos não previstos, pelo que não é obrigatório preenchê-los.
+  const perfilCMBolsa: PerfilContratual = {
+    id: ids.novo('perf'), contratoId: contratoCM.id, nome: 'Programador Full-stack',
+    quantidadePrevista: 30_000, consomeBolsaValor: true, consomeTrabalhosComplementares: false, perfilDeGestao: false,
+    precos: [{ valorHora: 4500, vigenteDe: isoMeses(-8) }], ...audit, // 500 h
+  };
+  await repos.perfis.guardar(perfilCMBolsa);
+  const afCM: Afetacao = { id: ids.novo('afe'), contratoId: contratoCM.id, perfilId: perfilCMBolsa.id, recursoId: 'oid-recurso-02', projetoIds: [], vigenteDe: isoMeses(-8), ativa: true, ...audit };
+  await repos.afetacoes.guardar(afCM);
+  await repos.registosTempo.guardar({
+    id: ids.novo('rt'), afetacaoId: afCM.id, contratoId: contratoCM.id, perfilId: perfilCMBolsa.id, recursoId: 'oid-recurso-02',
+    projetoId: 'azure-devops', workItemId: 5001, data: isoMeses(-2), duracao: 4_800, // 80 h
+    descricaoAtividade: 'Trabalhos não previstos — ajustes pedidos em sede de aceitação',
+    tipoDotacaoConsumida: 'BOLSA_VALOR', valorHoraAplicado: 4500, valorImputado: 80 * 4500,
+    estado: 'APROVADO', aprovadoPor: 'oid-gestor-contrato', aprovadoEm: agora,
+    criadoEm: agora, criadoPor: 'oid-recurso-02', atualizadoEm: agora, atualizadoPor: 'oid-recurso-02',
+  });
 
   // Contrato F — BOLSA DE HORAS com um perfil quase esgotado (~95 %), para
   // acionar o alerta AL-PERFIL-90 e demonstrar a sugestão de IA: existe um
@@ -218,11 +260,13 @@ export async function semear(ctx: Contexto): Promise<void> {
     return {
       contratoId: contratoA.id, compromissoId: compromisso.id, documentos: [],
       dataEmissao: '2026-03-01', dataRececao: '2026-03-02', periodoDe: '2026-02-01', periodoAte: '2026-02-28',
-      montanteSemIva: 40000, montanteIva: 9200, linhas: [], estado: 'RECEBIDA', ...audit, ...over,
+      montanteSemIva: 40000, montanteIva: 9200, linhas: [], estado: 'RECEBIDA',
+      tipo: 'BOLSA_HORAS', ...audit, ...over,
     };
   }
   const docFatura = { tipo: 'FATURA' as const, ficheiroRef: 'arq://f1', nomeOriginal: 'fatura.pdf', hashSha256: 'a'.repeat(64), tamanhoBytes: 1024, recebidoEm: agora, carregadoPor: 'oid-gestor-contrato' };
   const docRelatorio = { tipo: 'RELATORIO_HORAS_FORNECEDOR' as const, ficheiroRef: 'arq://r1', nomeOriginal: 'horas.pdf', hashSha256: 'b'.repeat(64), tamanhoBytes: 2048, recebidoEm: agora, carregadoPor: 'oid-gestor-contrato' };
+  const docAuto = { tipo: 'AUTO_ENTREGA' as const, ficheiroRef: 'arq://a1', nomeOriginal: 'auto-entrega.pdf', hashSha256: 'c'.repeat(64), tamanhoBytes: 1536, recebidoEm: agora, carregadoPor: 'oid-gestor-contrato' };
 
   // Fatura 1 — completa e conforme.
   await repos.faturas.guardar(fatura({ id: ids.novo('fat'), numero: 'FT-001', documentos: [docFatura, docRelatorio],
@@ -232,6 +276,26 @@ export async function semear(ctx: Contexto): Promise<void> {
   // Fatura 3 — divergência de quantidade (aciona RN-603).
   await repos.faturas.guardar(fatura({ id: ids.novo('fat'), numero: 'FT-003', documentos: [docFatura, docRelatorio],
     linhas: [{ perfilId: perfilSenior.id, recursoId: 'oid-recurso-01', quantidade: 600, valorHora: 5000, montante: 50000, origem: 'MANUAL' }] }));
+
+  // Faturação do contrato chave-na-mão: o E1 (entregue) já foi liquidado por
+  // uma fatura do tipo ENTREGAVEL, pelo montante exato do entregável (RN-609).
+  // O E2 está entregue mas por faturar — é o que se pode faturar já.
+  const cmpCM: Compromisso = { id: ids.novo('cmp'), contratoId: contratoCM.id, numero: 'CMP-2026-CM', montante: 200_000_00, ano: Number(agora.slice(0, 4)), emitidoEm: isoMeses(-8), ...audit };
+  await repos.compromissos.guardar(cmpCM);
+  const idE1 = idsEntregaveis[0];
+  if (idE1 !== undefined) {
+    const fatE1 = ids.novo('fat');
+    await repos.faturas.guardar({
+      id: fatE1, contratoId: contratoCM.id, compromissoId: cmpCM.id, numero: 'FT-CM-001',
+      tipo: 'ENTREGAVEL', entregavelId: idE1,
+      documentos: [docFatura, docAuto], linhas: [],
+      dataEmissao: isoMeses(-6), dataRececao: isoMeses(-6), periodoDe: isoMeses(-8), periodoAte: isoMeses(-6),
+      montanteSemIva: 30_000_00, montanteIva: 6_900_00, estado: 'PAGA',
+      montanteAprovado: 30_000_00, ...audit,
+    });
+    const e1 = await repos.entregaveis.obter(idE1);
+    if (e1 !== null) await repos.entregaveis.guardar({ ...e1, faturaId: fatE1, faturadoEm: agora });
+  }
 
   await semearCenariosDeAlerta(ctx, { agora, audit, gestores, isoMeses, procNumero: proc.numero });
 }
@@ -449,7 +513,7 @@ async function semearCenariosDeAlerta(ctx: Contexto, c: ContextoCenarios): Promi
     periodoDe: isoMeses(-4), periodoAte: isoMeses(-3),
     montanteSemIva: 12_000_00, montanteIva: 2_760_00,
     dataLimitePagamento: isoMeses(-1), // prazo já ultrapassado
-    estado: 'VALIDADA', ...audit,
+    estado: 'VALIDADA', tipo: 'BOLSA_HORAS', ...audit,
   });
 }
 

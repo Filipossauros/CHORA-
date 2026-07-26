@@ -18,6 +18,13 @@ const TIPOS_PROC: Array<{ v: TipoProcedimento; r: string }> = [
 ];
 
 interface PerfilForm { nome: string; horas: string; valorHora: string }
+/** Linha de entregável no registo: o valor indica-se em euros OU em % do contrato. */
+interface EntregavelForm { designacao: string; modo: 'VALOR' | 'PCT'; valor: string; percentagem: string; dataPrevista: string }
+const ENTREGAVEL_VAZIO: EntregavelForm = { designacao: '', modo: 'VALOR', valor: '', percentagem: '', dataPrevista: '' };
+/** Valor em cêntimos de uma linha de entregável, seja qual for o modo de indicação. */
+function valorEntregavel(e: EntregavelForm, precoCent: number): number {
+  return e.modo === 'VALOR' ? eurosParaCent(e.valor) : Math.round(precoCent * ((Number(e.percentagem.replace(',', '.')) || 0) / 100));
+}
 
 const agenteCCP = new AgenteCCPStub();
 
@@ -32,6 +39,8 @@ export function NovoContrato(): ReactNode {
     gestor: 'oid-gestor-contrato', tipologia: 'BOLSA_HORAS' as TipologiaContrato,
   });
   const [perfis, setPerfis] = useState<PerfilForm[]>([{ nome: '', horas: '', valorHora: '' }]);
+  const [entregaveis, setEntregaveis] = useState<EntregavelForm[]>([{ ...ENTREGAVEL_VAZIO }]);
+  const [bolsaHoras, setBolsaHoras] = useState('');
 
   function upd(campo: string, valor: unknown): void { setF({ ...f, [campo]: valor }); }
 
@@ -45,9 +54,25 @@ export function NovoContrato(): ReactNode {
   const vistoOk = !f.visto || f.dataVisto !== '';
   const estadoInicial: EstadoContrato = vistoOk ? 'EM_VIGOR' : 'AGUARDA_VISTO';
 
+  // Chave-na-mão: o preço reparte-se por entregáveis (valor e/ou % do contrato);
+  // a bolsa de horas é uma reserva opcional para trabalhos não previstos, cujo
+  // único elemento obrigatório é o valor. Ambos têm de caber no preço (RN-112).
+  const chaveNaMao = f.tipologia === 'CHAVE_NA_MAO';
+  const entregaveisPreenchidos = entregaveis.filter((e) => e.designacao.trim() !== '');
+  const totalEntregaveis = entregaveisPreenchidos.reduce((s, e) => s + valorEntregavel(e, precoCent), 0);
+  const bolsaCent = eurosParaCent(bolsaHoras);
+  const porAtribuir = precoCent - totalEntregaveis - bolsaCent;
+  const entregaveisSemValor = entregaveisPreenchidos.filter((e) => valorEntregavel(e, precoCent) <= 0).length;
+  const estruturaOk = !chaveNaMao || (entregaveisPreenchidos.length > 0 && entregaveisSemValor === 0 && porAtribuir >= 0);
+
   async function gravar(): Promise<void> {
     setErro(undefined);
     if (precoCent <= 0) { setErro('Indique o preço contratual total (€ > 0).'); return; }
+    if (chaveNaMao) {
+      if (entregaveisPreenchidos.length === 0) { setErro('Um contrato chave-na-mão tem de ter pelo menos um entregável identificado (RN-111).'); return; }
+      if (entregaveisSemValor > 0) { setErro('Cada entregável tem de ter valor: indique-o em euros ou em percentagem do contrato (RN-111).'); return; }
+      if (porAtribuir < 0) { setErro('Os entregáveis e a bolsa de horas excedem o preço contratual (RN-112).'); return; }
+    }
     const agora = app.ctx.relogio.agora();
     const u = app.utilizador();
     const contrato: Contrato = {
@@ -73,13 +98,25 @@ export function NovoContrato(): ReactNode {
           await app.estrutura.criarPerfil(contrato.id, { nome: p.nome, quantidadePrevista: horasParaMin(Number(p.horas) || 0), consomeBolsaValor: false, consomeTrabalhosComplementares: false, perfilDeGestao: false, valorHora: eurosParaCent(p.valorHora), vigenteDe: f.dataInicio }, u);
         }
       }
+      // Chave-na-mão: entregáveis (obrigatórios) e bolsa de horas (opcional; se
+      // existir, o valor é o único elemento obrigatório da componente).
+      if (chaveNaMao) {
+        if (bolsaCent > 0) await app.entregaveis.definirBolsaHoras(contrato.id, bolsaCent, u);
+        for (const e of entregaveisPreenchidos) {
+          await app.entregaveis.criar(contrato.id, {
+            designacao: e.designacao,
+            ...(e.modo === 'VALOR' ? { valor: eurosParaCent(e.valor) } : { percentagemContrato: (Number(e.percentagem.replace(',', '.')) || 0) / 100 }),
+            ...(e.dataPrevista !== '' ? { dataPrevista: e.dataPrevista } : {}),
+          }, u);
+        }
+      }
       navegar(`/contratos/${contrato.id}`);
     } catch (e) { setErro(mensagemErro(e)); }
   }
 
   return (
     <>
-      <Cabecalho titulo="Novo contrato" sub="Registo de um contrato assinado (fase de execução)" acoes={<><button className="btn" onClick={() => navegar('/contratos')}>Cancelar</button><button className="btn pri" onClick={() => void gravar()} disabled={f.numero === '' || f.objeto === '' || f.dataTermino === ''}>Gravar contrato</button></>} />
+      <Cabecalho titulo="Novo contrato" sub="Registo de um contrato assinado (fase de execução)" acoes={<><button className="btn" onClick={() => navegar('/contratos')}>Cancelar</button><button className="btn pri" onClick={() => void gravar()} disabled={f.numero === '' || f.objeto === '' || f.dataTermino === '' || !estruturaOk}>Gravar contrato</button></>} />
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
       {alertaVisto && (
         <div className="aviso" style={{ marginBottom: 12, borderColor: 'var(--ambar)' }}>
@@ -134,7 +171,44 @@ export function NovoContrato(): ReactNode {
             ))}
           </div>
         )}
-        <div className="aviso" style={{ marginTop: 12 }}>Validado ao gravar: número único <code>RN-101</code> e vigência <code>RN-201</code>/<code>RN-202</code>. O lote não é obrigatório.</div>
+        {chaveNaMao && (
+          <div style={{ border: '1px solid var(--linha)', borderRadius: 8, padding: 12, marginTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}><b style={{ fontSize: 13 }}>Entregáveis (obrigatório)</b><button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setEntregaveis([...entregaveis, { ...ENTREGAVEL_VAZIO }])}>+ Entregável</button></div>
+            <div className="sec" style={{ marginBottom: 8 }}>Num contrato chave-na-mão não se paga tempo, paga-se resultado: o preço reparte-se por entregáveis, cada um valendo uma fatia do contrato — indicada em euros ou em percentagem do valor total.</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 150px 150px 36px', gap: 8, marginBottom: 6, fontSize: 11, color: 'var(--texto-suave)', fontWeight: 600 }}>
+              <span>Designação</span><span>Indicar por</span><span>Valor / %</span><span>Data prevista</span><span></span>
+            </div>
+            {entregaveis.map((e, i) => {
+              const mudar = (patch: Partial<EntregavelForm>): void => setEntregaveis(entregaveis.map((x, j) => j === i ? { ...x, ...patch } : x));
+              const cent = valorEntregavel(e, precoCent);
+              return (
+                <div key={i} style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 150px 150px 36px', gap: 8, alignItems: 'center' }}>
+                    <input placeholder="ex.: E1 · Análise e desenho" value={e.designacao} onChange={(ev) => mudar({ designacao: ev.target.value })} />
+                    <select value={e.modo} onChange={(ev) => mudar({ modo: ev.target.value as 'VALOR' | 'PCT' })}><option value="VALOR">Euros</option><option value="PCT">% do contrato</option></select>
+                    {e.modo === 'VALOR'
+                      ? <input type="number" inputMode="decimal" min={0} step="0.01" placeholder="€" value={e.valor} onChange={(ev) => mudar({ valor: ev.target.value })} />
+                      : <input type="number" inputMode="decimal" min={0} max={100} step="0.01" placeholder="%" value={e.percentagem} onChange={(ev) => mudar({ percentagem: ev.target.value })} />}
+                    <input type="date" value={e.dataPrevista} onChange={(ev) => mudar({ dataPrevista: ev.target.value })} />
+                    <button className="btn sm" title="Eliminar entregável" disabled={entregaveis.length === 1} onClick={() => setEntregaveis(entregaveis.filter((_, j) => j !== i))} style={{ justifyContent: 'center' }}>✕</button>
+                  </div>
+                  {e.designacao.trim() !== '' && (
+                    <div className="sec" style={{ marginTop: 3 }}>{formatarMoeda(cent)} · {precoCent > 0 ? Math.round((cent / precoCent) * 1000) / 10 : 0}% do contrato</div>
+                  )}
+                </div>
+              );
+            })}
+            <div className="campo" style={{ maxWidth: 320, marginTop: 10 }}><label>Bolsa de horas do contrato (€) — opcional</label><input type="number" inputMode="decimal" min={0} step="0.01" value={bolsaHoras} onChange={(e) => setBolsaHoras(e.target.value)} placeholder="ex.: 30000,00" /></div>
+            <div className="sec" style={{ marginBottom: 8 }}>A bolsa de horas reserva-se a <b>trabalhos não previstos</b>. Por ser uma reserva, o <b>valor é o único elemento obrigatório</b> — os perfis e as horas registam-se depois, no detalhe do contrato, à medida que surgem.</div>
+            <div className="aviso" style={{ marginBottom: 0, ...(porAtribuir < 0 ? { borderColor: 'var(--vermelho)' } : {}) }}>
+              Entregáveis <b>{formatarMoeda(totalEntregaveis)}</b> + bolsa de horas <b>{formatarMoeda(bolsaCent)}</b> = <b>{formatarMoeda(totalEntregaveis + bolsaCent)}</b> de {formatarMoeda(precoCent)}.
+              {porAtribuir < 0
+                ? <> Excede o preço contratual em <b>{formatarMoeda(-porAtribuir)}</b> <code>RN-112</code>.</>
+                : <> Por atribuir: <b>{formatarMoeda(porAtribuir)}</b>.</>}
+            </div>
+          </div>
+        )}
+        <div className="aviso" style={{ marginTop: 12 }}>Validado ao gravar: número único <code>RN-101</code> e vigência <code>RN-201</code>/<code>RN-202</code>. O lote não é obrigatório.{chaveNaMao && <> Nos contratos chave-na-mão, pelo menos um entregável com valor <code>RN-111</code> e o teto do preço contratual <code>RN-112</code>.</>}</div>
       </div></div>
     </>
   );

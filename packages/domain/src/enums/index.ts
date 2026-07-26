@@ -94,6 +94,8 @@ export const zEstadoFatura = z.enum(ESTADOS_FATURA);
 export const TIPOS_DOCUMENTO_FATURA = [
   'FATURA',
   'RELATORIO_HORAS_FORNECEDOR',
+  /** Auto/termo de entrega — o documento que titula a entrega de um entregável. */
+  'AUTO_ENTREGA',
   'NOTA_CREDITO',
   'OUTRO',
 ] as const;
@@ -118,6 +120,15 @@ export const zTipoDocumentoHabilitacao = z.enum(TIPOS_DOCUMENTO_HABILITACAO);
 export const SEVERIDADES_ALERTA = ['INFO', 'AVISO', 'CRITICO'] as const;
 export type SeveridadeAlerta = (typeof SEVERIDADES_ALERTA)[number];
 export const zSeveridadeAlerta = z.enum(SEVERIDADES_ALERTA);
+
+/**
+ * O que a fatura liquida. Num contrato chave-na-mão convivem os dois: os
+ * entregáveis (preço fixo por resultado) e a bolsa de horas para trabalhos não
+ * previstos, que funciona como em qualquer contrato de bolsa.
+ */
+export const TIPOS_FATURACAO = ['ENTREGAVEL', 'BOLSA_HORAS'] as const;
+export type TipoFaturacao = (typeof TIPOS_FATURACAO)[number];
+export const zTipoFaturacao = z.enum(TIPOS_FATURACAO);
 
 /**
  * Ciclo de vida de um alerta (decisão). Evita a fadiga: a reconciliação do job

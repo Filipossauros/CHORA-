@@ -1,6 +1,7 @@
 import type { Contrato } from '../entidades/contrato.js';
 import type { Dotacao, Alteracao, PerfilContratual } from '../entidades/estrutura.js';
 import type { Fatura } from '../entidades/faturacao.js';
+import type { Entregavel } from '../entidades/entregavel.js';
 import type { Cent } from '../tipos/primitivos.js';
 
 /**
@@ -54,6 +55,52 @@ export function percentagemComplementares(
     return 0;
   }
   return complementaresAcumulados(alteracoes) / contrato.precoContratualInicial;
+}
+
+/**
+ * Reparte o preço contratual de um contrato chave-na-mão pelas suas duas
+ * parcelas: os entregáveis (preço fixo por resultado) e a bolsa de horas
+ * (trabalhos não previstos).
+ */
+export interface ReparticaoChaveNaMao {
+  totalEntregaveis: Cent;
+  bolsaHorasValor: Cent;
+  /** Parcela do preço ainda não atribuída a entregáveis nem à bolsa. */
+  porAtribuir: Cent;
+  entregues: Cent;
+  faturados: Cent;
+  /** Já entregue mas ainda por faturar — o que é possível faturar agora. */
+  faturavelAgora: Cent;
+}
+
+export function repartirChaveNaMao(
+  precoContratualAtual: Cent,
+  entregaveis: ReadonlyArray<Entregavel>,
+  bolsaHorasValor: Cent = 0,
+): ReparticaoChaveNaMao {
+  const totalEntregaveis = entregaveis.reduce((s, e) => s + e.valor, 0);
+  const entregues = entregaveis.filter((e) => e.entregue).reduce((s, e) => s + e.valor, 0);
+  const faturados = entregaveis.filter((e) => e.faturaId !== undefined).reduce((s, e) => s + e.valor, 0);
+  return {
+    totalEntregaveis, bolsaHorasValor,
+    porAtribuir: Math.max(0, precoContratualAtual - totalEntregaveis - bolsaHorasValor),
+    entregues, faturados,
+    faturavelAgora: Math.max(0, entregues - faturados),
+  };
+}
+
+/**
+ * Converte uma percentagem do preço contratual no valor correspondente. O
+ * registo guarda sempre o valor, para que a faturação tenha um montante único e
+ * inequívoco contra o qual conferir (RN-609).
+ */
+export function valorDaPercentagem(precoContratual: Cent, percentagem: number): Cent {
+  return Math.round(precoContratual * percentagem);
+}
+
+/** Fração do preço contratual que um valor representa (0..1). */
+export function percentagemDoValor(precoContratual: Cent, valor: Cent): number {
+  return precoContratual > 0 ? valor / precoContratual : 0;
 }
 
 /** Montante líquido aprovado de uma fatura (montanteAprovado menos deduções). */

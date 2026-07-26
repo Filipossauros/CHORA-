@@ -172,6 +172,60 @@ export const RN_110: Regra<{ fundamentacao: string; dataEfeito: DataISO }> = {
   },
 };
 
+/**
+ * RN-111 — um contrato chave-na-mão paga resultado, não tempo: tem de ter os
+ * entregáveis identificados, cada um com o valor que representa.
+ */
+export const RN_111: Regra<{
+  tipologia: string;
+  numeroEntregaveis: number;
+  entregaveisSemValor: number;
+}> = {
+  codigo: 'RN-111',
+  descricao:
+    'Um contrato chave-na-mão tem de ter pelo menos um entregável identificado, e todos os entregáveis têm de ter valor associado.',
+  requisito: 'novo',
+  base: 'No preço fixo paga-se o resultado: a faturação é por entregável, pelo que estes têm de estar definidos.',
+  excecaoFundamentavel: false,
+  avaliar({ tipologia, numeroEntregaveis, entregaveisSemValor }) {
+    if (tipologia !== 'CHAVE_NA_MAO') return conforme;
+    if (numeroEntregaveis === 0) {
+      return violada('Um contrato chave-na-mão tem de ter pelo menos um entregável identificado.');
+    }
+    if (entregaveisSemValor > 0) {
+      return violada('Todos os entregáveis têm de ter valor (em euros ou em percentagem do contrato).', { entregaveisSemValor });
+    }
+    return conforme;
+  },
+};
+
+/**
+ * RN-112 — o somatório dos entregáveis e da bolsa de horas não pode exceder o
+ * preço contratual: são as duas parcelas em que o preço se reparte.
+ */
+export const RN_112: Regra<{
+  precoContratualAtual: Cent;
+  totalEntregaveis: Cent;
+  bolsaHorasValor: Cent;
+}> = {
+  codigo: 'RN-112',
+  descricao:
+    'A soma do valor dos entregáveis com o valor da bolsa de horas não pode exceder o preço contratual atual.',
+  requisito: 'novo',
+  base: 'O preço contratual é o teto da despesa: as componentes em que se reparte não o podem ultrapassar.',
+  excecaoFundamentavel: false,
+  avaliar({ precoContratualAtual, totalEntregaveis, bolsaHorasValor }) {
+    const soma = totalEntregaveis + bolsaHorasValor;
+    if (soma > precoContratualAtual) {
+      return violada(
+        'A soma dos entregáveis com a bolsa de horas excede o preço contratual atual.',
+        { precoContratualAtual, totalEntregaveis, bolsaHorasValor, soma, excesso: soma - precoContratualAtual },
+      );
+    }
+    return conforme;
+  },
+};
+
 export const REGRAS_CONTRATOS = [
   RN_101,
   RN_102,
@@ -181,4 +235,6 @@ export const REGRAS_CONTRATOS = [
   RN_106,
   RN_107,
   RN_110,
+  RN_111,
+  RN_112,
 ] as const;

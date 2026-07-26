@@ -6,6 +6,7 @@ import { Cabecalho } from '../app/Shell.js';
 import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
 import { calcularCapacidade } from '../capacidade.js';
 import { ExtrairDocumento } from '../componentes/ExtrairDocumento.js';
+import { Entregaveis } from './Entregaveis.js';
 
 const RECURSOS_AZURE = AZURE_USERS.filter((u) => u.prestador !== undefined);
 function rotularOperacao(op: string): string {
@@ -27,10 +28,14 @@ function resumirEvento(e: { operacao: string; regraViolada?: string; depois?: un
 /**
  * Três separadores em vez de seis: Estrutura, Afetações e Capacidade
  * respondiam todos a «quem trabalha e com que saldo» e juntam-se à execução
- * financeira num só — «Execução».
+ * financeira num só — «Execução». «Entregáveis» só existe nos contratos
+ * chave-na-mão, onde o preço se reparte por resultados em vez de horas.
  */
-const TABS = ['Execução', 'Ficha', 'Modificações'] as const;
+const TABS = ['Execução', 'Entregáveis', 'Ficha', 'Modificações'] as const;
 type Tab = (typeof TABS)[number];
+function tabsDe(c: Contrato): readonly Tab[] {
+  return TABS.filter((t) => t !== 'Entregáveis' || c.tipologia === 'CHAVE_NA_MAO');
+}
 
 export function ContratoDetalhe(): ReactNode {
   const { id = '' } = useParams();
@@ -67,14 +72,19 @@ export function ContratoDetalhe(): ReactNode {
   const dados = base.dados;
   if (dados === undefined || dados.contrato === null) return <p className="vazio">A carregar…</p>;
   const c = dados.contrato;
+  const tabs = tabsDe(c);
+  // Um separador pedido no URL que não exista nesta tipologia cai na Execução.
+  const tabAtiva: Tab = tabs.includes(tab) ? tab : 'Execução';
 
   return (
     <>
       <Cabecalho titulo={`${c.numero} · ${c.objeto}`} sub="Detalhe do contrato (fase de execução)" acoes={<><DecisoesResumo alertas={dados.decisoes} /><Estado v={c.estado} /></>} />
       {erro !== undefined && erro !== '' && <div className="erro-cx">⚠ {erro}</div>}
-      <div className="seps">{TABS.map((t) => <button key={t} className={`sep${tab === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
+      <div className="seps">{tabs.map((t) => <button key={t} className={`sep${tabAtiva === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
 
-      {tab === 'Ficha' && (editar ? <FichaEdicao contrato={c} podeAlterarEstado={ehGestorContrato} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
+      {tabAtiva === 'Entregáveis' && <Entregaveis contrato={c} podeGerir={podeGerir} onErro={setErro} />}
+
+      {tabAtiva === 'Ficha' && (editar ? <FichaEdicao contrato={c} podeAlterarEstado={ehGestorContrato} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
         <div className="cartao">
           {podeGerir && <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}><button className="btn" onClick={() => { setEditar(true); setErro(undefined); }}>Alterar dados</button></div>}
           <div className="corpo g3">
@@ -88,18 +98,18 @@ export function ContratoDetalhe(): ReactNode {
         </div></div>
       ))}
 
-      {tab === 'Execução' && (
+      {tabAtiva === 'Execução' && (
         <>
       {(
 
-        <div style={{ display: 'grid', gridTemplateColumns: podeGerir && c.tipologia === 'BOLSA_HORAS' ? '1fr 320px' : '1fr', gap: 16 }}>
-          <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'BOLSA_HORAS' ? ' (bolsa de horas)' : ''}</h3><table>
+        <div style={{ display: 'grid', gridTemplateColumns: podeGerir ? '1fr 320px' : '1fr', gap: 16 }}>
+          <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'CHAVE_NA_MAO' ? ' (bolsa de horas do contrato)' : ' (bolsa de horas)'}</h3><table>
             <thead><tr><th>Perfil</th><th className="num">Horas</th><th className="num">€/hora vigente</th></tr></thead>
             <tbody>{dados.perfis.map((p) => { const ultimo = p.precos[p.precos.length - 1]; return (
               <tr key={p.id}><td><div className="prim">{p.nome}</div>{p.consomeBolsaValor && <div className="sec">consome bolsa de valor</div>}</td><td className="num">{formatarHoras(p.quantidadePrevista)}</td><td className="num">{ultimo ? formatarMoeda(ultimo.valorHora) : '—'}</td></tr>
-            ); })}{dados.perfis.length === 0 && <tr><td colSpan={3} className="vazio">{c.tipologia === 'CHAVE_NA_MAO' ? 'Contrato chave-na-mão: sem perfis contratuais.' : 'Sem perfis.'}</td></tr>}</tbody>
+            ); })}{dados.perfis.length === 0 && <tr><td colSpan={3} className="vazio">{c.tipologia === 'CHAVE_NA_MAO' ? 'Sem perfis. Num contrato chave-na-mão os perfis são facultativos — servem apenas a bolsa de horas para trabalhos não previstos.' : 'Sem perfis.'}</td></tr>}</tbody>
           </table></div>
-          {podeGerir && c.tipologia === 'BOLSA_HORAS' && <NovoPerfil contrato={c} onCriado={() => base.recarregar()} onErro={setErro} />}
+          {podeGerir && <NovoPerfil contrato={c} onCriado={() => base.recarregar()} onErro={setErro} />}
         </div>
       )}
 
@@ -128,11 +138,11 @@ export function ContratoDetalhe(): ReactNode {
         </>
       )}
 
-      {c.tipologia === 'BOLSA_HORAS' && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
+      {dados.perfis.length > 0 && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
         </>
       )}
 
-      {tab === 'Modificações' && (
+      {tabAtiva === 'Modificações' && (
         <>
           {ehGestorContrato && <GestaoAlteracoes contrato={c} resumo={dados.resumo} alteracoes={dados.alteracoes} onMudou={() => base.recarregar()} onErro={setErro} />}
           <div className="cartao" style={{ marginBottom: 16 }}><h3>Registo de modificações (auditoria do contrato)</h3><table>
@@ -261,7 +271,11 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
   );
 }
 
-/** Criação manual de um perfil contratual (bolsa de horas) no detalhe. */
+/**
+ * Criação manual de um perfil contratual no detalhe. Nos contratos chave-na-mão
+ * os perfis servem a componente de bolsa de horas (trabalhos não previstos) e
+ * são facultativos — o que é obrigatório é o valor da bolsa.
+ */
 function NovoPerfil({ contrato, onCriado, onErro }: { contrato: Contrato; onCriado: () => void; onErro: (m?: string) => void }): ReactNode {
   const [p, setP] = useState({ nome: '', horas: '', valorHora: '' });
   async function criar(): Promise<void> {

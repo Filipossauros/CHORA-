@@ -1,16 +1,27 @@
 import {
-  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, exigir, ViolacaoRegra,
+  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, exigir, ViolacaoRegra,
   totalFaturado, dentroDoIntervalo, maquinaFatura,
   type Fatura, type Compromisso, type DataISO, type Cent, type AnoCivil,
-  type LinhaConferencia,
+  type LinhaConferencia, type TipoFaturacao,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import type { RelatorioEvidencia } from '../repositorios/memoria/index.js';
-import { ErroConflitoEstado, ErroNaoEncontrado } from '../erros/problema.js';
+import { ErroConflitoEstado, ErroNaoEncontrado, ErroValidacao } from '../erros/problema.js';
 import type { ContextoUtilizador } from '../auth/token-validator.js';
 
 type DocFatura = Fatura['documentos'][number];
 type LinhaFatura = Fatura['linhas'][number];
+
+/**
+ * Resultado da conferência. `linhas` só é povoada quando se liquida tempo; numa
+ * fatura de entregável o que se confere é o entregável, devolvido em `entregavel`.
+ */
+export interface ResultadoConferencia {
+  linhas: LinhaConferencia[];
+  conforme: boolean;
+  entregavel?: { designacao: string; valor: Cent; entregue: boolean; entregueEm?: DataISO };
+  motivo?: string;
+}
 
 export class ServicoFaturas {
   constructor(private readonly ctx: Contexto) {}
@@ -29,14 +40,45 @@ export class ServicoFaturas {
     return c;
   }
 
-  async criarFatura(contratoId: string, dados: Omit<Fatura, 'id' | 'documentos' | 'linhas' | 'estado' | 'criadoEm' | 'criadoPor' | 'atualizadoEm' | 'atualizadoPor' | 'contratoId'>, u: ContextoUtilizador): Promise<Fatura> {
+  async criarFatura(
+    contratoId: string,
+    dados: Omit<Fatura, 'id' | 'documentos' | 'linhas' | 'estado' | 'tipo' | 'criadoEm' | 'criadoPor' | 'atualizadoEm' | 'atualizadoPor' | 'contratoId'> & { tipo?: TipoFaturacao },
+    u: ContextoUtilizador,
+  ): Promise<Fatura> {
     const agora = this.ctx.relogio.agora();
+    // Por omissão a fatura liquida tempo prestado: é o comportamento de todos os
+    // contratos, exceto os entregáveis dos chave-na-mão.
+    const tipo: TipoFaturacao = dados.tipo ?? 'BOLSA_HORAS';
+
+    // RN-608/RN-609 — uma fatura de entregável exige entregável identificado,
+    // assinalado como entregue, e montante igual ao valor do entregável.
+    if (tipo === 'ENTREGAVEL') {
+      const entregavel = dados.entregavelId !== undefined ? await this.ctx.repos.entregaveis.obter(dados.entregavelId) : null;
+      exigir(RN_608, {
+        tipoFaturacao: tipo,
+        entregavelIdentificado: entregavel !== null,
+        entregue: entregavel?.entregue ?? false,
+      });
+      if (entregavel!.contratoId !== contratoId) {
+        throw new ErroValidacao('O entregável indicado pertence a outro contrato.');
+      }
+      if (entregavel!.faturaId !== undefined) {
+        throw new ErroValidacao('O entregável já foi faturado.');
+      }
+      exigir(RN_609, { tipoFaturacao: tipo, montanteFatura: dados.montanteSemIva, valorEntregavel: entregavel!.valor });
+    }
+
     const fatura: Fatura = {
       id: this.ctx.ids.novo('fat'), contratoId, documentos: [], linhas: [], estado: 'RECEBIDA',
-      ...dados,
+      ...dados, tipo,
       criadoEm: agora, criadoPor: u.utilizadorId, atualizadoEm: agora, atualizadoPor: u.utilizadorId,
     };
     await this.ctx.repos.faturas.guardar(fatura);
+    // Liga o entregável à fatura que o liquida.
+    if (tipo === 'ENTREGAVEL' && dados.entregavelId !== undefined) {
+      const e = await this.ctx.repos.entregaveis.obter(dados.entregavelId);
+      if (e !== null) await this.ctx.repos.entregaveis.guardar({ ...e, faturaId: fatura.id, faturadoEm: agora, atualizadoEm: agora, atualizadoPor: u.utilizadorId });
+    }
     await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Fatura', entidadeId: fatura.id, operacao: 'CRIAR', resultado: 'PERMITIDO', depois: fatura });
     return fatura;
   }
@@ -69,7 +111,7 @@ export class ServicoFaturas {
     const compromisso = fatura.compromissoId !== undefined ? await this.ctx.repos.compromissos.obter(fatura.compromissoId) : null;
     const saldo = compromisso !== null ? await this.saldoCompromisso(compromisso, fatura.id) : 0;
     exigir(RN_601, { temCompromisso: compromisso !== null, saldoCompromisso: saldo, montanteFatura: fatura.montanteSemIva });
-    exigir(RN_602, { tiposDocumentosPresentes: fatura.documentos.map((d) => d.tipo) });
+    exigir(RN_602, { tiposDocumentosPresentes: fatura.documentos.map((d) => d.tipo), tipoFaturacao: fatura.tipo });
 
     const atualizado: Fatura = { ...fatura, estado: 'EM_CONFERENCIA', atualizadoEm: this.ctx.relogio.agora(), atualizadoPor: u.utilizadorId };
     await this.ctx.repos.faturas.guardar(atualizado);
@@ -77,9 +119,26 @@ export class ServicoFaturas {
     return atualizado;
   }
 
-  /** Conferência determinística (RN-603): linhas da fatura vs registos aprovados. */
-  async conferir(faturaId: string): Promise<{ linhas: LinhaConferencia[]; conforme: boolean }> {
+  /**
+   * Conferência determinística. O que se confere depende do que se fatura:
+   * tempo prestado compara-se com os registos aprovados do período (RN-603);
+   * um entregável compara-se com o próprio entregável — entregue e pelo valor
+   * exato (RN-608/RN-609).
+   */
+  async conferir(faturaId: string): Promise<ResultadoConferencia> {
     const fatura = await this.carregar(faturaId);
+
+    if (fatura.tipo === 'ENTREGAVEL') {
+      const e = fatura.entregavelId !== undefined ? await this.ctx.repos.entregaveis.obter(fatura.entregavelId) : null;
+      const r608 = RN_608.avaliar({ tipoFaturacao: 'ENTREGAVEL', entregavelIdentificado: e !== null, entregue: e?.entregue ?? false });
+      const r609 = RN_609.avaliar({ tipoFaturacao: 'ENTREGAVEL', montanteFatura: fatura.montanteSemIva, valorEntregavel: e?.valor ?? 0 });
+      return {
+        linhas: [], conforme: r608.ok && r609.ok,
+        ...(e !== null ? { entregavel: { designacao: e.designacao, valor: e.valor, entregue: e.entregue, entregueEm: e.entregueEm } } : {}),
+        ...(!r608.ok ? { motivo: r608.mensagem } : !r609.ok ? { motivo: r609.mensagem } : {}),
+      };
+    }
+
     const aprovados = await this.ctx.repos.registosTempo.todos(
       (r) => r.contratoId === fatura.contratoId && r.estado === 'APROVADO' && dentroDoIntervalo(r.data, fatura.periodoDe, fatura.periodoAte),
     );
@@ -107,10 +166,14 @@ export class ServicoFaturas {
     const t = maquinaFatura.transicaoPermitida(fatura.estado, decisao, 'GESTOR_CONTRATO');
     if (!t.permitida) throw new ErroConflitoEstado(t.motivo ?? 'Transição inválida.');
 
-    const { linhas, conforme } = await this.conferir(faturaId);
+    const { linhas, conforme, motivo: motivoNaoConforme } = await this.conferir(faturaId);
 
     if (decisao === 'VALIDADA') {
-      // Divergência bloqueia a validação (RN-603).
+      // Divergência bloqueia a validação: face aos registos aprovados (RN-603)
+      // ou face ao entregável que a fatura diz liquidar (RN-608/RN-609).
+      if (!conforme && fatura.tipo === 'ENTREGAVEL') {
+        throw new ViolacaoRegra(RN_609, motivoNaoConforme ?? 'A fatura não corresponde ao entregável que liquida.');
+      }
       if (!conforme) throw new ViolacaoRegra(RN_603, 'Há divergências entre a fatura e os registos aprovados do período.', { divergencias: linhas.filter((l) => l.quantidadeFatura !== l.quantidadeAprovada || l.valorFatura !== l.valorAprovado) });
       const contrato = await this.ctx.repos.contratos.obter(fatura.contratoId);
       const outras = (await this.ctx.repos.faturas.todos((f) => f.contratoId === fatura.contratoId && f.id !== fatura.id));
@@ -122,7 +185,7 @@ export class ServicoFaturas {
     const relatorio: RelatorioEvidencia = {
       id: this.ctx.ids.novo('rev'), faturaId, contratoId: fatura.contratoId, decisao,
       ...(decisao === 'INVALIDADA' && motivo !== undefined ? { motivo } : {}),
-      frase: gerarFraseEvidencia({ decisao, numeroFatura: fatura.numero, periodoDe: fatura.periodoDe, periodoAte: fatura.periodoAte, ...(motivo !== undefined ? { motivo } : {}) }),
+      frase: gerarFraseEvidencia({ decisao, numeroFatura: fatura.numero, periodoDe: fatura.periodoDe, periodoAte: fatura.periodoAte, tipo: fatura.tipo, ...(motivo !== undefined ? { motivo } : {}) }),
       linhas: linhas.map((l) => ({ perfil: l.perfilId, recurso: l.recursoId, quantidadeFatura: l.quantidadeFatura, quantidadeAprovada: l.quantidadeAprovada, valorFatura: l.valorFatura, valorAprovado: l.valorAprovado, confere: l.quantidadeFatura === l.quantidadeAprovada && l.valorFatura === l.valorAprovado })),
       geradoEm: this.ctx.relogio.agora(), geradoPor: u.utilizadorId,
     };
@@ -156,8 +219,27 @@ export class ServicoFaturas {
  * quantitativa; na invalidação, reporta apenas a não conformidade, sem
  * reconhecer a realização dos trabalhos.
  */
-export function gerarFraseEvidencia(dados: { decisao: 'VALIDADA' | 'INVALIDADA'; numeroFatura: string; periodoDe: DataISO; periodoAte: DataISO; motivo?: string }): string {
+export function gerarFraseEvidencia(dados: { decisao: 'VALIDADA' | 'INVALIDADA'; numeroFatura: string; periodoDe: DataISO; periodoAte: DataISO; tipo?: TipoFaturacao; motivo?: string }): string {
   const periodo = `${dados.periodoDe} a ${dados.periodoAte}`;
+
+  // Numa fatura de entregável o facto conferido é a entrega, não o tempo: a
+  // frase tem de o dizer, sob pena de atestar algo que não foi verificado.
+  if (dados.tipo === 'ENTREGAVEL') {
+    if (dados.decisao === 'VALIDADA') {
+      return (
+        `Da conferência entre a fatura ${dados.numeroFatura} e o entregável que titula, resulta que este se encontra assinalado como entregue ` +
+        `e que o montante faturado corresponde integralmente ao valor contratualmente afeto ao entregável. Nessa medida, e exclusivamente para efeitos da presente validação, ` +
+        `atesta-se a conformidade da fatura com o entregável recebido. A presente validação circunscreve-se à conformidade documental e ao valor verificado, ` +
+        `não constituindo pronúncia sobre a qualidade técnica do entregável nem sobre quaisquer outras matérias.`
+      );
+    }
+    const m = (dados.motivo ?? '').trim().length > 0 ? dados.motivo : 'a fatura não corresponde ao entregável que diz liquidar';
+    return (
+      `Da conferência entre a fatura ${dados.numeroFatura} e o entregável que titula, verifica-se não conformidade que obsta à validação, pelo seguinte motivo: ${m}. ` +
+      `A presente informação reporta exclusivamente a não conformidade verificada, não constituindo reconhecimento sobre a receção do entregável nem qualquer outra vinculação.`
+    );
+  }
+
   if (dados.decisao === 'VALIDADA') {
     return (
       `Da conferência determinística entre as linhas da fatura ${dados.numeroFatura} e os registos de tempo aprovados do período de ${periodo}, ` +

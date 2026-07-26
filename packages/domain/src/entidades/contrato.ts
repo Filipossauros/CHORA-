@@ -59,6 +59,12 @@ export const zContrato = zAuditavel.extend({
   precoContratualInicial: zCentNaoNegativo, // IMUTÁVEL após entrada em vigor (RN-104)
   precoContratualAtual: zCentNaoNegativo,
   unidadeMedida: zUnidadeMedida.optional(),
+  /**
+   * Componente de BOLSA DE HORAS de um contrato chave-na-mão, reservada a
+   * trabalhos não previstos. Por ser uma reserva, o único elemento obrigatório
+   * é o seu VALOR — os perfis e as horas registam-se à medida que surgem.
+   */
+  bolsaHorasValor: zCentNaoNegativo.optional(),
 
   // Prestador
   prestador: zPrestador,

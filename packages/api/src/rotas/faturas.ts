@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { zDataISO, zCent, zCentNaoNegativo, zMinutos, zAnoCivil, zTipoDocumentoFatura } from '@chora/domain';
+import { zDataISO, zCent, zCentNaoNegativo, zMinutos, zAnoCivil, zTipoDocumentoFatura, zTipoFaturacao } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import { exigirUtilizador } from '../servidor/seguranca.js';
 import { ErroProibido, ErroValidacao } from '../erros/problema.js';
@@ -10,6 +10,9 @@ import { ServicoFaturas } from '../servicos/faturas.js';
 const zCompromisso = z.object({ numero: z.string().min(1), montante: zCentNaoNegativo, ano: zAnoCivil, emitidoEm: zDataISO });
 const zNovaFatura = z.object({
   compromissoId: z.string().optional(), numero: z.string().min(1),
+  // O que a fatura liquida: um entregável (preço fixo) ou tempo prestado.
+  tipo: zTipoFaturacao.optional(),
+  entregavelId: z.string().optional(),
   referenciaSistemaFaturacao: z.string().optional(),
   dataEmissao: zDataISO, dataRececao: zDataISO, periodoDe: zDataISO, periodoAte: zDataISO,
   montanteSemIva: zCent, montanteIva: zCent, dataLimitePagamento: zDataISO.optional(),

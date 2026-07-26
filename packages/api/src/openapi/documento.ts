@@ -86,6 +86,23 @@ export function gerarOpenApi(): Record<string, unknown> {
     '/api/v1/contratos/{id}/estado': {
       post: { summary: 'Transição de estado do contrato', tags: ['Contratos'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Estado atualizado' }, ...respostaProblema('409', 'Transição inválida') } },
     },
+    '/api/v1/contratos/{id}/entregaveis': {
+      get: { summary: 'Lista os entregáveis do contrato e a repartição do preço', tags: ['Entregáveis'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Entregáveis e repartição' }, ...respostaProblema('404', 'Não encontrado') } },
+      post: { summary: 'Cria entregável (valor em euros e/ou percentagem do contrato)', tags: ['Entregáveis'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '201': { description: 'Entregável criado' }, ...respostaProblema('400', 'Sem valor, ou contrato não é chave-na-mão'), ...respostaProblema('403', 'Papel insuficiente'), ...respostaProblema('422', 'Violação de regra (RN-112)') } },
+    },
+    '/api/v1/entregaveis/{entId}': {
+      patch: { summary: 'Atualiza entregável ainda não faturado', tags: ['Entregáveis'], security: seguranca, parameters: [{ name: 'entId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Entregável atualizado' }, ...respostaProblema('400', 'Já faturado'), ...respostaProblema('422', 'Violação de regra (RN-112)') } },
+      delete: { summary: 'Remove entregável ainda não faturado', tags: ['Entregáveis'], security: seguranca, parameters: [{ name: 'entId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Entregável removido' }, ...respostaProblema('400', 'Já faturado'), ...respostaProblema('404', 'Não encontrado') } },
+    },
+    '/api/v1/entregaveis/{entId}/entrega': {
+      post: { summary: 'Assinala a entrega — facto gerador da faturação (RN-608)', tags: ['Entregáveis'], security: seguranca, parameters: [{ name: 'entId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Entrega registada' }, ...respostaProblema('403', 'Papel insuficiente'), ...respostaProblema('404', 'Não encontrado') } },
+    },
+    '/api/v1/entregaveis/{entId}/anular-entrega': {
+      post: { summary: 'Anula a entrega mediante motivo (bloqueado após faturação)', tags: ['Entregáveis'], security: seguranca, parameters: [{ name: 'entId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Entrega anulada' }, ...respostaProblema('400', 'Já faturado ou motivo em falta') } },
+    },
+    '/api/v1/contratos/{id}/bolsa-horas': {
+      put: { summary: 'Define o valor da bolsa de horas do contrato chave-na-mão', tags: ['Entregáveis'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Valor definido' }, ...respostaProblema('400', 'Contrato não é chave-na-mão'), ...respostaProblema('422', 'Violação de regra (RN-112)') } },
+    },
     '/api/v1/contratos/{id}/excecoes': {
       post: { summary: 'Regista exceção fundamentada a limite legal', tags: ['Contratos'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '201': { description: 'Exceção registada' }, ...respostaProblema('403', 'Papel insuficiente') } },
     },
