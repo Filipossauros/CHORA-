@@ -43,7 +43,7 @@ export function Perguntar({ contratos }: { contratos: Contrato[] }): ReactNode {
   }
 
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div>
       <div style={{ display: 'flex', gap: 9, alignItems: 'center', background: 'var(--superficie)', border: '1px solid var(--linha-forte)', borderRadius: 9, padding: '8px 12px', boxShadow: 'var(--sombra)' }}>
         <span style={{ fontSize: 15, color: 'var(--marca)' }} aria-hidden="true">⌕</span>
         <input
@@ -58,7 +58,7 @@ export function Perguntar({ contratos }: { contratos: Contrato[] }): ReactNode {
       </div>
 
       {resposta === undefined && erro === undefined && (
-        <div style={{ display: 'flex', gap: 7, marginTop: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
           {sugestoes.map((s) => (
             <button key={s} className="btn sm" style={{ fontWeight: 400 }} onClick={() => void perguntar(s)}>{s}</button>
           ))}

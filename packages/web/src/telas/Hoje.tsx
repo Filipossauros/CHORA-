@@ -158,8 +158,18 @@ export function Hoje(): ReactNode {
         O «Perguntar» fecha a página em vez de a abrir: quem chega ao «Hoje» vem
         ver o que tem de decidir, não fazer uma pergunta. Fica colado ao fundo do
         ecrã para continuar ao alcance sem disputar o topo com a fila.
+
+        A faixa é OPACA e tem linha própria: em cima de um fundo transparente o
+        conteúdo passava por trás da caixa e lia-se sobreposto. O espaço abaixo
+        do último cartão é reservado à altura da faixa, para nada ficar escondido.
       */}
-      <div style={{ position: 'sticky', bottom: 0, zIndex: 6, marginTop: 20, paddingTop: 14, background: 'linear-gradient(to top, var(--fundo) 62%, transparent)' }}>
+      <div style={{ height: 30 }} />
+      <div style={{
+        position: 'sticky', bottom: 0, zIndex: 6, marginTop: 'auto',
+        paddingTop: 15, paddingBottom: 24,
+        background: 'var(--fundo)', borderTop: '1px solid var(--linha)',
+        boxShadow: '0 -10px 18px -12px rgba(0,0,0,.28)',
+      }}>
         <Perguntar contratos={contratos} />
       </div>
     </>
