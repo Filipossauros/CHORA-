@@ -1,14 +1,40 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { JobAlertas, ServicoAlertas } from '@chora/api/nucleo';
-import { diasUteisDeMinutos, formatarDiasUteis, saudeContrato, type AcaoOpcao, type Alerta, type Contrato, type OpcaoAlerta, type SeveridadeAlerta } from '@chora/domain';
+import { diasUteisDeMinutos, formatarDiasUteis, type AcaoOpcao, type Alerta, type Contrato, type OpcaoAlerta } from '@chora/domain';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Severidade, eurosParaCent, formatarMoeda, hoje, mensagemErro, notificarMudanca, useAsync } from '../comum.js';
+import { eurosParaCent, formatarMoeda, hoje, mensagemErro, notificarMudanca, useAsync } from '../comum.js';
 import { Perguntar } from '../componentes/Perguntar.js';
 import { gerarMapaProjecaoXlsx } from '../projecoes.js';
 
 const ROT_VIAB: Record<string, string> = { VIAVEL: 'Viável', CONDICIONADA: 'Condicionada', INVIAVEL: 'Inviável' };
+
+/**
+ * URGÊNCIA PELO PRAZO, não pela severidade. Com metade das decisões marcadas
+ * como críticas, a severidade não separava nada: o que separa é quanto tempo
+ * falta. É esta a única codificação de cor da fila.
+ */
+type Urgencia = 'ESGOTADO' | 'PROXIMO' | 'FOLGA' | 'SEM_PRAZO';
+function urgenciaDe(dias: number | undefined): Urgencia {
+  if (dias === undefined) return 'SEM_PRAZO';
+  if (dias < 0) return 'ESGOTADO';
+  return dias <= 30 ? 'PROXIMO' : 'FOLGA';
+}
+const PESO_URGENCIA: Record<Urgencia, number> = { ESGOTADO: 3, PROXIMO: 2, FOLGA: 1, SEM_PRAZO: 0 };
+const COR_URGENCIA: Record<Urgencia, string> = {
+  ESGOTADO: 'var(--vermelho)', PROXIMO: 'var(--ambar)', FOLGA: 'var(--azul)', SEM_PRAZO: 'var(--linha-forte)',
+};
+const PILL_URGENCIA: Record<Urgencia, string> = {
+  ESGOTADO: 'p-verm', PROXIMO: 'p-ambar', FOLGA: 'p-azul', SEM_PRAZO: 'p-ard',
+};
+/** A urgência de um conjunto de decisões é a da mais apertada. */
+function urgenciaMaior(decisoes: ReadonlyArray<Alerta>): Urgencia {
+  return decisoes.reduce<Urgencia>((pior, d) => {
+    const u = urgenciaDe(d.diasParaLimite);
+    return PESO_URGENCIA[u] > PESO_URGENCIA[pior] ? u : pior;
+  }, 'SEM_PRAZO');
+}
 
 /** Grupo temporal em que a decisão cai, pela sua janela. */
 type Grupo = 'Prazo esgotado' | 'Próximos 30 dias' | 'Mais tarde' | 'Sem prazo definido';
@@ -37,8 +63,7 @@ export function Hoje(): ReactNode {
     const pendentes = await servico.pendentes();
     const dispensadas = await servico.dispensadas();
     const contratos = await app.ctx.repos.contratos.todos();
-    const todosAlertas = await app.ctx.repos.alertas.todos();
-    return { pendentes, dispensadas, contratos, todosAlertas };
+    return { pendentes, dispensadas, contratos };
   }, []);
   const [erro, setErro] = useState<string>();
   const [aberta, setAberta] = useState<string>();
@@ -93,7 +118,6 @@ export function Hoje(): ReactNode {
                 key={`${g}-${contratoId}`}
                 contrato={contrato}
                 decisoes={decisoes}
-                todosAlertas={base.dados?.todosAlertas ?? []}
                 podeGerir={podeGerir}
                 aberta={aberta}
                 onAbrir={(id) => setAberta(aberta === id ? undefined : id)}
@@ -106,20 +130,9 @@ export function Hoje(): ReactNode {
       ))}
 
       {tranquilos.length > 0 && (
-        <>
-          <LinhaGrupo rotulo="Sem decisões pendentes" />
-          <div className="cartao">
-            <table><tbody>
-              {tranquilos.map((c) => (
-                <tr key={c.id}>
-                  <td style={{ width: 4, padding: 0 }}><div style={{ width: 4, height: 34, borderRadius: 3, background: 'var(--verde)' }} /></td>
-                  <td><b>{c.numero}</b><div className="sec">{c.objeto}</div></td>
-                  <td className="num"><span className="pill p-verde">Execução dentro do previsto</span></td>
-                </tr>
-              ))}
-            </tbody></table>
-          </div>
-        </>
+        <div className="sec" style={{ marginTop: 16, fontSize: 11.5 }}>
+          {tranquilos.length} contrato(s) sem decisões pendentes: {tranquilos.slice(0, 8).map((c) => c.numero).join(', ')}{tranquilos.length > 8 ? '…' : ''}
+        </div>
       )}
 
       <Dispensadas
@@ -187,26 +200,23 @@ function LinhaGrupo({ rotulo }: { rotulo: string }): ReactNode {
   );
 }
 
-const COR_SAUDE: Record<SeveridadeAlerta, string> = { CRITICO: 'var(--vermelho)', AVISO: 'var(--ambar)', INFO: 'var(--azul)' };
-
-function CartaoContrato({ contrato, decisoes, todosAlertas, podeGerir, aberta, onAbrir, onMudou, onErro }: {
-  contrato: Contrato; decisoes: Alerta[]; todosAlertas: Alerta[]; podeGerir: boolean;
+function CartaoContrato({ contrato, decisoes, podeGerir, aberta, onAbrir, onMudou, onErro }: {
+  contrato: Contrato; decisoes: Alerta[]; podeGerir: boolean;
   aberta: string | undefined; onAbrir: (id: string) => void; onMudou: () => void; onErro: (m?: string) => void;
 }): ReactNode {
   const navegar = useNavigate();
-  const saude = saudeContrato(todosAlertas.filter((a) => a.contratoId === contrato.id)) ?? 'INFO';
-  const criticas = decisoes.filter((d) => d.severidade === 'CRITICO').length;
+  const urgencia = urgenciaMaior(decisoes);
 
   return (
     <div className="cartao" style={{ overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 15px', borderBottom: '1px solid var(--linha)', background: 'var(--superficie-2)' }}>
-        <div style={{ width: 4, alignSelf: 'stretch', minHeight: 30, borderRadius: 3, background: COR_SAUDE[saude] }} />
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }} onClick={() => navegar(`/contratos/${contrato.id}`)}>{contrato.numero}</div>
-          <div className="sec">{contrato.objeto}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid var(--linha)', background: 'var(--superficie-2)' }}>
+        <div style={{ width: 3, alignSelf: 'stretch', minHeight: 26, borderRadius: 3, background: COR_URGENCIA[urgencia] }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, cursor: 'pointer' }} onClick={() => navegar(`/contratos/${contrato.id}`)}>{contrato.numero}</div>
+          <div className="sec" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contrato.objeto}</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className={`pill ${criticas > 0 ? 'p-verm' : 'p-ambar'}`}>{decisoes.length} decisõe(s)</span>
+          <span className={`pill ${PILL_URGENCIA[urgencia]}`}>{decisoes.length} decisõe(s)</span>
           <button className="btn sm" onClick={() => navegar(`/contratos/${contrato.id}`)}>Ver contrato</button>
         </div>
       </div>
@@ -228,7 +238,8 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
   const [motivo, setMotivo] = useState('');
   const [dias, setDias] = useState('30');
   const dLim = alerta.diasParaLimite;
-  const urgente = dLim !== undefined && dLim < 0;
+  const urgencia = urgenciaDe(dLim);
+  const urgente = urgencia === 'ESGOTADO';
 
   async function dispensar(): Promise<void> {
     onErro();
@@ -242,66 +253,79 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
     catch (e) { onErro(mensagemErro(e)); }
   }
 
+  // Havendo escada, nenhuma opção é promovida a botão de topo: destacar um
+  // degrau seria decidir pelo gestor uma escolha que a escada existe para pôr.
+  const temEscada = (alerta.opcoes?.length ?? 0) > 0;
+
   return (
-    <div style={{ display: 'flex', gap: 12, padding: '13px 15px', borderBottom: '1px solid var(--linha)', alignItems: 'flex-start', background: aberta ? 'var(--superficie-2)' : undefined }}>
-      <div style={{ flex: '0 0 96px', textAlign: 'right', paddingTop: 1 }}>
-        {alerta.dataLimiteAcao !== undefined ? (
-          <>
-            <div className="tabnum" style={{ fontSize: 12.5, fontWeight: 700, color: urgente ? 'var(--vermelho)' : undefined }}>{alerta.dataLimiteAcao.slice(8)}/{alerta.dataLimiteAcao.slice(5, 7)}</div>
-            <div className="sec" title={alerta.eventoAncora}>{urgente ? `há ${-dLim!} dias` : `em ${dLim} dias`}</div>
-          </>
-        ) : <div className="sec">sem prazo</div>}
-      </div>
+    <div style={{ borderBottom: '1px solid var(--linha)', background: aberta ? 'var(--superficie-2)' : undefined }}>
+      {/* Linha fechada: prazo · o que é · ação (quando é única) · impacto. */}
+      <div
+        onClick={onAbrir}
+        style={{ display: 'flex', gap: 12, padding: '9px 14px', alignItems: 'center', cursor: 'pointer' }}
+      >
+        <div style={{ flex: '0 0 88px', textAlign: 'right' }}>
+          {alerta.dataLimiteAcao !== undefined ? (
+            <>
+              <div className="tabnum" style={{ fontSize: 12.5, fontWeight: 700, color: COR_URGENCIA[urgencia] }}>{alerta.dataLimiteAcao.slice(8)}/{alerta.dataLimiteAcao.slice(5, 7)}</div>
+              <div className="sec" title={alerta.eventoAncora}>{urgente ? `há ${-dLim!} dias` : `em ${dLim} dias`}</div>
+            </>
+          ) : <div className="sec">sem prazo</div>}
+        </div>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 650, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {alerta.titulo}
-          <Severidade v={alerta.severidade} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{alerta.titulo}</span>
           {alerta.estado === 'EM_CURSO' && <span className="pill p-azul">Em curso</span>}
-          <code style={{ fontSize: 10.5 }}>{alerta.codigo}</code>
-        </div>
-        <div className="sec" style={{ marginTop: 4, fontSize: 12.5, color: 'var(--texto-suave)' }}>{alerta.detalhe}</div>
-
-        <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
-          {podeGerir && <AcaoPrincipal alerta={alerta} contrato={contrato} onFeito={onMudou} onErro={onErro} onEmCurso={marcarEmCurso} />}
-          {(alerta.opcoes?.length ?? 0) > 0 && (
-            <button className="btn sm" onClick={onAbrir}>{aberta ? 'Fechar opções' : `Ver ${alerta.opcoes!.length} opções`}</button>
-          )}
-          {alerta.impactoMinutos !== undefined && alerta.impactoMinutos > 0 && (
-            <button
-              className="btn sm"
-              onClick={() => gerarMapaProjecaoXlsx({
-                contratoNumero: contrato.numero,
-                perfilNome: alerta.titulo.replace(/^Perfil\s+/, '').replace(/\s+esgota-se.*$/, ''),
-                horasDisponiveis: Math.round(alerta.impactoMinutos! / 60),
-                valorDisponivel: alerta.impactoValor ?? 0,
-              })}
-            >⬇ Mapa de projeção (Excel)</button>
-          )}
-          {podeGerir && !aDispensar && <button className="btn sm" style={{ borderColor: 'transparent', color: 'var(--texto-suave)' }} onClick={() => setADispensar(true)}>Dispensar</button>}
         </div>
 
-        {aDispensar && (
-          <div style={{ border: '1px solid var(--linha-forte)', borderRadius: 9, padding: 11, marginTop: 10 }}>
-            <div className="g2">
-              <div className="campo"><label>Motivo da dispensa</label><input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="ex.: tratado fora da aplicação" /></div>
-              <div className="campo"><label>Durante (dias)</label><input type="number" min={1} value={dias} onChange={(e) => setDias(e.target.value)} /></div>
-            </div>
-            <div className="sec" style={{ marginBottom: 8 }}>Reaparece quando o período terminar, ou antes disso se a situação agravar.</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn sm pri" disabled={motivo.trim() === ''} onClick={() => void dispensar()}>Dispensar</button>
-              <button className="btn sm" onClick={() => setADispensar(false)}>Cancelar</button>
-            </div>
-          </div>
+        {podeGerir && !temEscada && (
+          <span onClick={(e) => e.stopPropagation()}>
+            <AcaoPrincipal alerta={alerta} contrato={contrato} onFeito={onMudou} onErro={onErro} onEmCurso={marcarEmCurso} />
+          </span>
         )}
-
-        {aberta && (alerta.opcoes?.length ?? 0) > 0 && (
-          <Escada opcoes={alerta.opcoes!} contratoId={contrato.id} onEmCurso={marcarEmCurso} />
-        )}
-        {podeGerir && alerta.notaJuridica !== undefined && <NotaJuridica texto={alerta.notaJuridica} />}
+        <Impacto alerta={alerta} />
+        <span style={{ flex: '0 0 12px', color: 'var(--texto-fraco)', fontSize: 10, transform: aberta ? 'rotate(90deg)' : undefined, transition: 'transform .12s' }}>▶</span>
       </div>
 
-      <Impacto alerta={alerta} />
+      {aberta && (
+        <div style={{ padding: '0 14px 13px 114px' }}>
+          <div className="sec" style={{ fontSize: 12.5, color: 'var(--texto-suave)', lineHeight: 1.5 }}>
+            {alerta.detalhe} <code style={{ fontSize: 10.5 }}>{alerta.codigo}</code>
+          </div>
+
+          {temEscada && <Escada opcoes={alerta.opcoes!} contratoId={contrato.id} onEmCurso={marcarEmCurso} />}
+          {alerta.notaJuridica !== undefined && <NotaJuridica texto={alerta.notaJuridica} />}
+
+          <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+            {alerta.impactoMinutos !== undefined && alerta.impactoMinutos > 0 && (
+              <button
+                className="btn sm"
+                onClick={() => gerarMapaProjecaoXlsx({
+                  contratoNumero: contrato.numero,
+                  perfilNome: alerta.titulo.replace(/^Perfil\s+/, '').replace(/\s+esgota-se.*$/, ''),
+                  horasDisponiveis: Math.round(alerta.impactoMinutos! / 60),
+                  valorDisponivel: alerta.impactoValor ?? 0,
+                })}
+              >⬇ Mapa de projeção (Excel)</button>
+            )}
+            {podeGerir && !aDispensar && <button className="btn sm" style={{ borderColor: 'transparent', color: 'var(--texto-suave)' }} onClick={() => setADispensar(true)}>Dispensar</button>}
+          </div>
+
+          {aDispensar && (
+            <div style={{ border: '1px solid var(--linha-forte)', borderRadius: 9, padding: 11, marginTop: 10 }}>
+              <div className="g2">
+                <div className="campo"><label>Motivo da dispensa</label><input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="ex.: tratado fora da aplicação" /></div>
+                <div className="campo"><label>Durante (dias)</label><input type="number" min={1} value={dias} onChange={(e) => setDias(e.target.value)} /></div>
+              </div>
+              <div className="sec" style={{ marginBottom: 8 }}>Reaparece quando o período terminar, ou antes disso se a situação agravar.</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn sm pri" disabled={motivo.trim() === ''} onClick={() => void dispensar()}>Dispensar</button>
+                <button className="btn sm" onClick={() => setADispensar(false)}>Cancelar</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -314,31 +338,70 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
 function Impacto({ alerta }: { alerta: Alerta }): ReactNode {
   const dias = alerta.diasUteisRestantes ?? (alerta.impactoMinutos !== undefined ? diasUteisDeMinutos(alerta.impactoMinutos) : undefined);
   const temValor = alerta.impactoValor !== undefined;
-  if (!temValor && dias === undefined) {
-    return <div style={{ flex: '0 0 auto' }} />;
-  }
+  if (!temValor && dias === undefined) return <div style={{ flex: '0 0 108px' }} />;
   return (
-    <div style={{ flex: '0 0 auto', textAlign: 'right', paddingTop: 2, minWidth: 96 }}>
-      <div className="tabnum" style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-.2px' }}>
+    <div
+      style={{ flex: '0 0 108px', textAlign: 'right' }}
+      title={temValor ? 'Impacto financeiro' : 'Dias úteis restantes'}
+    >
+      <div className="tabnum" style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-.2px' }}>
         {temValor ? formatarMoeda(alerta.impactoValor!) : formatarDiasUteis(dias!)}
       </div>
-      <div style={{ fontSize: 10, color: 'var(--texto-fraco)', textTransform: 'uppercase', letterSpacing: '.6px', marginTop: 2 }}>
-        {temValor ? 'impacto' : 'dias úteis restantes'}
-      </div>
+      {!temValor && <div className="sec">dias úteis</div>}
     </div>
   );
 }
 
-/** Reserva jurídica: a aplicação facilita o ato, não dispensa o que ele exige. */
+/**
+ * Reserva jurídica — fechada por omissão. É informação de referência: tem de
+ * estar ao alcance de quem pratica o ato, sem se impor a quem só está a ler a
+ * fila. O texto integral vive no separador «Regras e alertas».
+ */
 function NotaJuridica({ texto }: { texto: string }): ReactNode {
+  const [aberta, setAberta] = useState(false);
+  const { intro, itens, fecho } = partirNota(texto);
   return (
-    <div style={{ display: 'flex', gap: 8, marginTop: 10, padding: '9px 11px', borderLeft: '3px solid var(--linha-forte)', background: 'var(--superficie-2)', borderRadius: '0 7px 7px 0' }}>
-      <span style={{ fontSize: 12, color: 'var(--texto-fraco)', fontWeight: 700, lineHeight: 1.5 }}>§</span>
-      <div style={{ fontSize: 11.5, color: 'var(--texto-suave)', lineHeight: 1.5 }}>
-        <b>Nota jurídica.</b> {texto}
-      </div>
+    <div style={{ marginTop: 10 }}>
+      <button
+        onClick={() => setAberta(!aberta)}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontSize: 11.5, color: 'var(--texto-fraco)', display: 'flex', alignItems: 'center', gap: 6 }}
+      >
+        <span style={{ fontWeight: 700 }}>§</span> O que estas ações não dispensam
+        <span style={{ fontSize: 9 }}>{aberta ? '▼' : '▶'}</span>
+      </button>
+      {aberta && (
+        <div style={{ marginTop: 6, padding: '9px 11px', borderLeft: '3px solid var(--linha-forte)', background: 'var(--superficie-2)', borderRadius: '0 7px 7px 0', fontSize: 11.5, color: 'var(--texto-suave)', lineHeight: 1.55 }}>
+          {intro}
+          {itens.length > 0 && (
+            <ul style={{ margin: '5px 0 0', paddingLeft: 17 }}>
+              {itens.map((i) => <li key={i} style={{ marginBottom: 2 }}>{i}</li>)}
+            </ul>
+          )}
+          {fecho !== undefined && <div style={{ marginTop: 6 }}>{fecho}</div>}
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Parte a nota jurídica em intróito, alíneas e remate. As notas do catálogo são
+ * escritas como «X não dispensa: a; b; c.», por vezes com uma frase final —
+ * lidas em lista, dizem o mesmo em metade do tempo.
+ */
+function partirNota(texto: string): { intro: string; itens: string[]; fecho?: string } {
+  const corte = texto.indexOf(':');
+  if (corte < 0) return { intro: texto, itens: [] };
+  const partes = texto.slice(corte + 1).split(';').map((s) => s.trim()).filter((s) => s !== '');
+  const ultima = partes.pop();
+  let fecho: string | undefined;
+  if (ultima !== undefined) {
+    // A última alínea pode arrastar a frase de remate: separa-a.
+    const fim = ultima.search(/\.\s+[A-ZÀ-Ú]/);
+    if (fim >= 0) { partes.push(ultima.slice(0, fim + 1)); fecho = ultima.slice(fim + 1).trim(); }
+    else partes.push(ultima);
+  }
+  return { intro: texto.slice(0, corte + 1), itens: partes, ...(fecho !== undefined ? { fecho } : {}) };
 }
 
 /** Prazo próprio de uma opção — depois dele, deixa de estar disponível. */
@@ -364,32 +427,59 @@ function Escada({ opcoes, contratoId, onEmCurso }: {
   opcoes: OpcaoAlerta[]; contratoId: string; onEmCurso: () => void;
 }): ReactNode {
   const navegar = useNavigate();
+  const [verPerdidas, setVerPerdidas] = useState(false);
+  // Uma opção cujo prazo passou já não é uma escolha: sai da escada. Fica
+  // acessível porque é o que explica o prazo da decisão e conta para auditoria.
+  const disponiveis = opcoes.filter((o) => (o.diasParaLimite ?? 0) >= 0);
+  const perdidas = opcoes.filter((o) => (o.diasParaLimite ?? 0) < 0);
 
   function seguir(acao: AcaoOpcao): void {
     onEmCurso();
     navegar(rotaDaAcao(acao, contratoId));
   }
 
-  return (
-    <ol style={{ margin: '11px 0 0', padding: 0, listStyle: 'none', border: '1px solid var(--linha)', borderRadius: 8, overflow: 'hidden' }}>
-      {opcoes.map((o) => (
-        <li key={o.ordem} style={{ display: 'flex', gap: 11, padding: '10px 12px', borderBottom: '1px solid var(--linha)', alignItems: 'flex-start', background: 'var(--superficie)' }}>
-          <div style={{ flex: '0 0 20px', height: 20, borderRadius: '50%', background: 'var(--superficie-2)', border: '1px solid var(--linha-forte)', display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 700, color: 'var(--texto-suave)' }}>{o.ordem}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 650, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-              {o.titulo}
-              <span className={`pill ${o.viabilidade === 'VIAVEL' ? 'p-verde' : o.viabilidade === 'CONDICIONADA' ? 'p-ambar' : 'p-verm'}`}>{ROT_VIAB[o.viabilidade] ?? o.viabilidade}</span>
-              <PrazoOpcao o={o} />
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--texto-suave)', marginTop: 3, lineHeight: 1.45 }}>{o.detalhe}</div>
-            {o.fundamento !== undefined && <div style={{ fontSize: 10.5, color: 'var(--texto-fraco)', marginTop: 4, fontFamily: 'ui-monospace,Menlo,monospace' }}>{o.fundamento}</div>}
-            {o.acao !== undefined && (
-              <button className="btn sm" style={{ marginTop: 8 }} onClick={() => seguir(o.acao!)}>{o.acao.rotulo} →</button>
-            )}
+  function linha(o: OpcaoAlerta, perdida: boolean): ReactNode {
+    return (
+      <li key={o.ordem} style={{ display: 'flex', gap: 10, padding: '9px 12px', borderTop: '1px solid var(--linha)', alignItems: 'flex-start', opacity: perdida ? 0.6 : 1 }}>
+        <div style={{ flex: '0 0 19px', height: 19, borderRadius: '50%', background: 'var(--superficie-2)', border: '1px solid var(--linha-forte)', display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700, color: 'var(--texto-suave)' }}>{o.ordem}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 650, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+            {o.titulo}
+            {o.viabilidade !== 'VIAVEL' && <span className={`pill ${o.viabilidade === 'CONDICIONADA' ? 'p-ambar' : 'p-verm'}`}>{ROT_VIAB[o.viabilidade] ?? o.viabilidade}</span>}
+            <PrazoOpcao o={o} />
           </div>
-        </li>
-      ))}
-    </ol>
+          <div style={{ fontSize: 11.5, color: 'var(--texto-suave)', marginTop: 3, lineHeight: 1.45 }}>{o.detalhe}</div>
+          {o.fundamento !== undefined && <div style={{ fontSize: 10.5, color: 'var(--texto-fraco)', marginTop: 4, fontFamily: 'ui-monospace,Menlo,monospace' }}>{o.fundamento}</div>}
+          {!perdida && o.acao !== undefined && (
+            <button className="btn sm" style={{ marginTop: 8 }} onClick={() => seguir(o.acao!)}>{o.acao.rotulo} →</button>
+          )}
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 10, border: '1px solid var(--linha)', borderRadius: 8, overflow: 'hidden' }}>
+      <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+        {disponiveis.map((o) => linha(o, false))}
+        {disponiveis.length === 0 && (
+          <li style={{ padding: '10px 12px', fontSize: 12, color: 'var(--texto-suave)' }}>
+            Já não há opções dentro do prazo. Resta decidir com o atraso assumido e fundamentado.
+          </li>
+        )}
+      </ol>
+      {perdidas.length > 0 && (
+        <>
+          <button
+            onClick={() => setVerPerdidas(!verPerdidas)}
+            style={{ width: '100%', textAlign: 'left', background: 'var(--superficie-2)', border: 'none', borderTop: '1px solid var(--linha)', padding: '7px 12px', cursor: 'pointer', font: 'inherit', fontSize: 11.5, color: 'var(--texto-fraco)' }}
+          >
+            {verPerdidas ? '▼' : '▶'} {perdidas.length} opção(ões) já indisponível(eis)
+          </button>
+          {verPerdidas && <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>{perdidas.map((o) => linha(o, true))}</ol>}
+        </>
+      )}
+    </div>
   );
 }
 
