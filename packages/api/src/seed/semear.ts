@@ -210,9 +210,24 @@ export async function semear(ctx: Contexto): Promise<void> {
   ];
   for (const r of recursos) await repos.recursos.guardar(r);
 
+  // Projetos da unidade — o eixo por que se organiza a orçamentação. Sem nome,
+  // um orçamento apresentaria «proj-P1» a quem o tem de aprovar.
+  const P1 = 'proj-P1', P2 = 'proj-P2', P3 = 'proj-P3';
+  for (const [id, nome] of [
+    [P1, 'Modernização documental'],
+    [P2, 'Assinatura digital e identidade'],
+    [P3, 'Sustentação aplicacional'],
+  ] as const) {
+    await repos.projetos.guardar({ id, nome, ativo: true });
+  }
+
   // N:N contrato↔projeto: contrato A em 2 projetos; projeto P1 em 2 contratos.
-  const P1 = 'proj-P1', P2 = 'proj-P2';
-  for (const [contratoId, projetoId] of [[contratoA.id, P1], [contratoA.id, P2], [contratoC.id, P1]] as const) {
+  // Os restantes contratos entram no P3, para que o orçamento os apanhe todos.
+  const associacoes: Array<[string, string]> = [
+    [contratoA.id, P1], [contratoA.id, P2], [contratoC.id, P1],
+    [contratoBH.id, P3], [contratoCM.id, P2], [contratoBH3.id, P3],
+  ];
+  for (const [contratoId, projetoId] of associacoes) {
     await repos.contratoProjetos.guardar({ id: ids.novo('cp'), contratoId, projetoId });
   }
 
@@ -259,6 +274,7 @@ export async function semear(ctx: Contexto): Promise<void> {
   function fatura(over: Partial<Fatura> & Pick<Fatura, 'id' | 'numero'>): Fatura {
     return {
       contratoId: contratoA.id, compromissoId: compromisso.id, documentos: [],
+      numeroContratoIndicado: contratoA.numero, nifPrestadorIndicado: contratoA.prestador.nipc,
       dataEmissao: '2026-03-01', dataRececao: '2026-03-02', periodoDe: '2026-02-01', periodoAte: '2026-02-28',
       montanteSemIva: 40000, montanteIva: 9200, linhas: [], estado: 'RECEBIDA',
       tipo: 'BOLSA_HORAS', ...audit, ...over,
@@ -305,6 +321,7 @@ export async function semear(ctx: Contexto): Promise<void> {
     const fatE1 = ids.novo('fat');
     await repos.faturas.guardar({
       id: fatE1, contratoId: contratoCM.id, compromissoId: cmpCM.id, numero: 'FT-CM-001',
+      numeroContratoIndicado: contratoCM.numero, nifPrestadorIndicado: contratoCM.prestador.nipc,
       tipo: 'ENTREGAVEL', entregavelId: idE1,
       documentos: [docFatura, docAuto], linhas: [],
       dataEmissao: isoMeses(-6), dataRececao: isoMeses(-6), periodoDe: isoMeses(-8), periodoAte: isoMeses(-6),
@@ -531,6 +548,7 @@ async function semearCenariosDeAlerta(ctx: Contexto, c: ContextoCenarios): Promi
   // Já faturada pela totalidade: é assim que um licenciamento se fatura (RN-611).
   await repos.faturas.guardar({
     id: ids.novo('fat'), contratoId: qLicenca.id, compromissoId: cmpQ.id, numero: 'FT-2026/0910',
+    numeroContratoIndicado: qLicenca.numero, nifPrestadorIndicado: qLicenca.prestador.nipc,
     documentos: [{ tipo: 'FATURA' as const, ficheiroRef: 'arq://lic1', nomeOriginal: 'fatura-licenca.pdf', hashSha256: 'd'.repeat(64), tamanhoBytes: 1024, recebidoEm: agora, carregadoPor: 'oid-gestor-contrato' }],
     linhas: [], dataEmissao: isoMeses(-9), dataRececao: isoMeses(-9),
     periodoDe: isoMeses(-9), periodoAte: isoMeses(3),

@@ -293,6 +293,49 @@ export const RN_612: Regra<{
   },
 };
 
+/**
+ * RN-613 — a fatura identifica o contrato e o prestador, e ambos conferem.
+ *
+ * É a fatura que diz a que contrato pertence, não o contrário: obrigar a
+ * escolher o contrato antes de olhar para o documento inverte a ordem e deixa
+ * passar a fatura trocada — a de outro contrato do mesmo fornecedor, ou a do
+ * mesmo objeto noutra entidade. Comparar o que vem no documento com o que a
+ * base sabe é o que apanha esse erro na receção e não na auditoria.
+ */
+export const RN_613: Regra<{
+  numeroContratoIndicado: string;
+  nifPrestadorIndicado: string;
+  numeroContratoReal: string;
+  nifPrestadorReal: string;
+}> = {
+  codigo: 'RN-613',
+  descricao:
+    'A fatura tem de identificar o número do contrato e o NIF do prestador, e ambos têm de corresponder ao contrato que liquida.',
+  requisito: 'novo',
+  base: 'A fatura é o título da despesa: sem identificar o contrato e o prestador não é imputável.',
+  excecaoFundamentavel: false,
+  avaliar({ numeroContratoIndicado, nifPrestadorIndicado, numeroContratoReal, nifPrestadorReal }) {
+    const norm = (s: string): string => s.trim().toUpperCase().replace(/\s+/g, '');
+    if (norm(numeroContratoIndicado) === '') {
+      return violada('A fatura tem de indicar o número do contrato.');
+    }
+    if (norm(nifPrestadorIndicado) === '') {
+      return violada('A fatura tem de indicar o NIF do prestador.');
+    }
+    if (norm(numeroContratoIndicado) !== norm(numeroContratoReal)) {
+      return violada('O número de contrato indicado na fatura não corresponde ao contrato que ela liquida.', {
+        numeroContratoIndicado, numeroContratoReal,
+      });
+    }
+    if (norm(nifPrestadorIndicado) !== norm(nifPrestadorReal)) {
+      return violada('O NIF do prestador indicado na fatura não corresponde ao adjudicatário do contrato.', {
+        nifPrestadorIndicado, nifPrestadorReal,
+      });
+    }
+    return conforme;
+  },
+};
+
 export const REGRAS_FATURACAO = [
   RN_601,
   RN_602,
@@ -305,4 +348,5 @@ export const REGRAS_FATURACAO = [
   RN_610,
   RN_611,
   RN_612,
+  RN_613,
 ] as const;

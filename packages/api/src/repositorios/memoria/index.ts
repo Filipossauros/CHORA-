@@ -21,6 +21,17 @@ import type { Repository } from '../tipos.js';
 export type ContratoProjeto = { id: string; contratoId: string; projetoId: string };
 
 /**
+ * Projeto da unidade. Até aqui os projetos eram só identificadores soltos nas
+ * afetações; a orçamentação organiza-se por projeto, e um orçamento com
+ * «proj-P1» em vez de um nome não se apresenta a ninguém.
+ */
+export interface Projeto {
+  id: string;
+  nome: string;
+  ativo: boolean;
+}
+
+/**
  * Conjunto de repositórios da aplicação. Depende da interface `Repository<T>`
  * (ADR-03) — a implementação pode ser em memória (servidor), localStorage
  * (browser) ou MongoDB (produção) sem tocar em serviços nem rotas.
@@ -47,6 +58,23 @@ export interface Repositorios {
   acessos: Repository<Acesso>;
   /** Relatórios de evidência de decisão de fatura (RN-604), imutáveis. */
   relatoriosEvidencia: Repository<RelatorioEvidencia>;
+  /** Projetos da unidade — o eixo por que se organiza a orçamentação. */
+  projetos: Repository<Projeto>;
+  /** Orçamentos anuais em preparação ou fechados. */
+  orcamentos: Repository<OrcamentoGuardado>;
+}
+
+/** Orçamento anual da unidade, tal como fica guardado. */
+export interface OrcamentoGuardado {
+  id: string;
+  ano: number;
+  estado: 'EM_PREPARACAO' | 'FECHADO';
+  linhas: import('@chora/domain').LinhaOrcamento[];
+  criadoEm: string;
+  criadoPor: string;
+  atualizadoEm: string;
+  atualizadoPor: string;
+  fechadoEm?: string;
 }
 
 /** Relatório de evidência gerado na decisão de uma fatura (RN-604, imutável). */
@@ -92,6 +120,8 @@ export function criarRepositoriosMemoria(): Repositorios {
     contratoProjetos: new RepositorioMemoria('contratoProjetos'),
     acessos: new RepositorioMemoria('acessos'),
     relatoriosEvidencia: new RepositorioMemoria('relatoriosEvidencia'),
+    projetos: new RepositorioMemoria('projetos'),
+    orcamentos: new RepositorioMemoria('orcamentos'),
   };
 }
 

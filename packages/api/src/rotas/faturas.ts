@@ -10,6 +10,8 @@ import { ServicoFaturas } from '../servicos/faturas.js';
 const zCompromisso = z.object({ numero: z.string().min(1), montante: zCentNaoNegativo, ano: zAnoCivil, emitidoEm: zDataISO });
 const zNovaFatura = z.object({
   compromissoId: z.string().optional(), numero: z.string().min(1),
+  // Identificação que vem no documento — é o que a RN-613 confronta com o contrato.
+  numeroContratoIndicado: z.string().min(1), nifPrestadorIndicado: z.string().min(1),
   // O que a fatura liquida: um entregável (preço fixo) ou tempo prestado.
   tipo: zTipoFaturacao.optional(),
   entregavelId: z.string().optional(),
@@ -49,6 +51,17 @@ export function rotasFaturas(app: FastifyInstance, ctx: Contexto): void {
     const { id } = req.params as { id: string };
     const d = parse(zCompromisso, req.body);
     await reply.status(201).send(await servico.criarCompromisso(id, d.numero, d.montante, d.ano, d.emitidoEm, u));
+  });
+
+  /** Resolve o contrato pelo número que vem na fatura (RN-613). */
+  app.get('/api/v1/faturas:contrato-por-numero', async (req) => {
+    exigirUtilizador(req);
+    const q = req.query as Record<string, string | undefined>;
+    const numero = q['numero'];
+    if (numero === undefined) throw new ErroValidacao('numero obrigatório.');
+    const c = await servico.contratoPorNumero(numero);
+    if (c === null) throw new ErroValidacao(`Não há contrato com o número ${numero}.`);
+    return c;
   });
 
   app.get('/api/v1/contratos/:id/faturas', async (req) => {

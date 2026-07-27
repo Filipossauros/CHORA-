@@ -53,6 +53,14 @@ export const zFatura = zAuditavel.extend({
   tipo: zTipoFaturacao.default('BOLSA_HORAS'),
   /** Entregável liquidado, obrigatório quando `tipo` é ENTREGAVEL (RN-608). */
   entregavelId: z.string().optional(),
+  /**
+   * O contrato e o prestador TAL COMO VÊM NO DOCUMENTO — por OCR ou digitados.
+   * Não são o contrato e o prestador que a base conhece: é a comparação entre
+   * uns e outros que deteta a fatura trocada, que é dos erros mais caros de
+   * apanhar tarde (RN-613).
+   */
+  numeroContratoIndicado: z.string().min(1),
+  nifPrestadorIndicado: z.string().min(1),
   documentos: z.array(zDocumentoFatura),
   referenciaSistemaFaturacao: z.string().optional(),
   dataEmissao: zDataISO,

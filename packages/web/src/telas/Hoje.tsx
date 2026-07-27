@@ -362,7 +362,7 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
           </div>
         )}
 
-        {aberta && temEscada && <Escada opcoes={alerta.opcoes!} contratoId={contrato.id} onEmCurso={marcarEmCurso} />}
+        {aberta && temEscada && <Escada opcoes={alerta.opcoes!} contratoId={contrato.id} numeroContrato={contrato.numero} onEmCurso={marcarEmCurso} />}
       </div>
 
       <Impacto alerta={alerta} />
@@ -508,8 +508,8 @@ function PrazoOpcao({ o }: { o: OpcaoAlerta }): ReactNode {
  * o tipo pré-selecionado: a opção deixa de ser um conselho e passa a ser um
  * caminho.
  */
-function Escada({ opcoes, contratoId, onEmCurso }: {
-  opcoes: OpcaoAlerta[]; contratoId: string; onEmCurso: () => void;
+function Escada({ opcoes, contratoId, numeroContrato, onEmCurso }: {
+  opcoes: OpcaoAlerta[]; contratoId: string; numeroContrato: string; onEmCurso: () => void;
 }): ReactNode {
   const navegar = useNavigate();
   const [verPerdidas, setVerPerdidas] = useState(false);
@@ -520,7 +520,7 @@ function Escada({ opcoes, contratoId, onEmCurso }: {
 
   function seguir(acao: AcaoOpcao): void {
     onEmCurso();
-    navegar(rotaDaAcao(acao, contratoId));
+    navegar(rotaDaAcao(acao, contratoId, numeroContrato));
   }
 
   function linha(o: OpcaoAlerta, perdida: boolean): ReactNode {
@@ -573,7 +573,7 @@ function Escada({ opcoes, contratoId, onEmCurso }: {
  * contrato; as modificações no separador Modificações, que aceita o tipo a
  * pré-selecionar.
  */
-function rotaDaAcao(acao: AcaoOpcao, contratoIdOmissao: string): string {
+function rotaDaAcao(acao: AcaoOpcao, contratoIdOmissao: string, numeroContrato?: string): string {
   const id = acao.contratoId ?? contratoIdOmissao;
   if (acao.destino === 'MODIFICACOES') {
     const tipo = acao.tipoModificacao !== undefined ? `&modificacao=${encodeURIComponent(acao.tipoModificacao)}` : '';
@@ -581,7 +581,9 @@ function rotaDaAcao(acao: AcaoOpcao, contratoIdOmissao: string): string {
   }
   if (acao.destino === 'FICHA') return `/contratos/${id}?tab=Ficha`;
   if (acao.destino === 'REGISTOS') return `/registos?contrato=${id}`;
-  if (acao.destino === 'FATURACAO') return `/faturacao?contrato=${id}`;
+  // A faturação identifica-se pelo NÚMERO do contrato, que é o que vem na
+  // fatura — não pelo identificador interno.
+  if (acao.destino === 'FATURACAO') return `/faturacao?contrato=${encodeURIComponent(numeroContrato ?? '')}`;
   return `/contratos/${id}?tab=${encodeURIComponent('Afetações')}`;
 }
 
@@ -642,7 +644,7 @@ function AcaoPrincipal({ alerta, contrato, onFeito, onErro, onEmCurso }: {
   return (
     <button
       className="btn sm pri"
-      onClick={() => { onEmCurso(); navegar(rotaDaAcao({ destino: d.destino, rotulo: d.rot, ...(d.tipoModificacao !== undefined ? { tipoModificacao: d.tipoModificacao } : {}) }, contrato.id)); }}
+      onClick={() => { onEmCurso(); navegar(rotaDaAcao({ destino: d.destino, rotulo: d.rot, ...(d.tipoModificacao !== undefined ? { tipoModificacao: d.tipoModificacao } : {}) }, contrato.id, contrato.numero)); }}
     >{d.rot}</button>
   );
 }

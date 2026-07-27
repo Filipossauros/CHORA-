@@ -1,4 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react';
+import * as XLSX from 'xlsx';
 import type { Contrato, Fatura, TipoFaturacao } from '@chora/domain';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
@@ -38,7 +39,9 @@ export function Relatorios(): ReactNode {
         <select value={cid} onChange={(e) => setContratoId(e.target.value)}>{contratos.map((c) => <option key={c.id} value={c.id}>{c.numero}</option>)}</select>
       } />
 
-      <div className="cartao" style={{ marginBottom: 16 }}><h3>Horas consumidas por perfil<span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{contratos.find((c) => c.id === cid)?.numero}</span></h3><table>
+      <div className="cartao" style={{ marginBottom: 16 }}><h3>Horas consumidas por perfil<span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{contratos.find((c) => c.id === cid)?.numero}</span>
+        <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => exportarPerfis(contratos.find((c) => c.id === cid)?.numero ?? cid, resumo.saldosPerfis)}>⬇ Excel</button>
+      </h3><table>
         <thead><tr><th>Perfil</th><th className="num">Consumidas / previstas</th><th style={{ width: 160 }}>Consumo</th><th className="num">Valor consumido</th></tr></thead>
         <tbody>{resumo.saldosPerfis.map((s) => { const frac = s.minutosPrevistos > 0 ? s.minutosConsumidos / s.minutosPrevistos : 0; return (
           <tr key={s.perfilId}><td className="prim">{s.nome}</td><td className="num">{formatarDuracao(s.minutosConsumidos)} / {formatarDuracao(s.minutosPrevistos)}</td><td><Barra fracao={frac} /></td><td className="num">{formatarMoeda(s.valorConsumido)}</td></tr>
@@ -107,6 +110,27 @@ function FaturasValidadas({ contratos, faturas, ano }: {
       </div>
     </div>
   );
+}
+
+/**
+ * Exportação do consumo por perfil. Veio do menu «Previsões», que desapareceu:
+ * projetar ritmos por contrato já se lê nas decisões do «Hoje», mas levar os
+ * números para uma folha de cálculo continua a ser preciso — é o formato em que
+ * se discutem com quem não abre a aplicação.
+ */
+function exportarPerfis(numero: string, saldos: Array<{ nome: string; minutosPrevistos: number; minutosConsumidos: number; valorConsumido: number; valorPrevisto: number }>): void {
+  const ws = XLSX.utils.json_to_sheet(saldos.map((s) => ({
+    'Perfil': s.nome,
+    'Horas consumidas': +(s.minutosConsumidos / 60).toFixed(1),
+    'Horas previstas': +(s.minutosPrevistos / 60).toFixed(1),
+    'Horas restantes': +(Math.max(0, s.minutosPrevistos - s.minutosConsumidos) / 60).toFixed(1),
+    'Consumo (%)': s.minutosPrevistos > 0 ? Math.round((s.minutosConsumidos / s.minutosPrevistos) * 100) : 0,
+    'Valor consumido': s.valorConsumido / 100,
+    'Valor previsto': s.valorPrevisto / 100,
+  })));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Consumo por perfil');
+  XLSX.writeFile(wb, `consumo-perfis-${numero}.xlsx`);
 }
 
 /**

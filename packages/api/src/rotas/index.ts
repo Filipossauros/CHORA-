@@ -8,6 +8,7 @@ import { rotasEstrutura } from './estrutura.js';
 import { rotasFaturas } from './faturas.js';
 import { rotasRecursos, rotasAcessos } from './recursos-acessos.js';
 import { rotasRelatorios, rotasAlertas, rotasAuditoria } from './relatorios.js';
+import { rotasOrcamentos } from './orcamentos.js';
 
 export function registarRotas(app: FastifyInstance, ctx: Contexto): void {
   rotasProcedimentos(app, ctx);
@@ -21,4 +22,5 @@ export function registarRotas(app: FastifyInstance, ctx: Contexto): void {
   rotasAlertas(app, ctx);
   rotasAuditoria(app, ctx);
   rotasAcessos(app, ctx);
+  rotasOrcamentos(app, ctx);
 }

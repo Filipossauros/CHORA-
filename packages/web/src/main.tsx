@@ -12,7 +12,7 @@ import { Recursos } from './telas/Recursos.js';
 import { Operacao } from './telas/Operacao.js';
 import { Faturacao } from './telas/Faturacao.js';
 import { Relatorios } from './telas/Relatorios.js';
-import { Previsoes } from './telas/Previsoes.js';
+import { Orcamentacao } from './telas/Orcamentacao.js';
 import { Regras } from './telas/Regras.js';
 import { Auditoria } from './telas/Auditoria.js';
 import { Acessos } from './telas/Acessos.js';
@@ -29,7 +29,7 @@ const rotas = [
   { path: '/faturacao', element: <Faturacao /> },
   { path: '/faturacao/:id', element: <Faturacao /> },
   { path: '/relatorios', element: <Relatorios /> },
-  { path: '/previsoes', element: <Previsoes /> },
+  { path: '/orcamentacao', element: <Orcamentacao /> },
   { path: '/regras', element: <Regras /> },
   { path: '/auditoria', element: <Auditoria /> },
   { path: '/acessos', element: <Acessos /> },

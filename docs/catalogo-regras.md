@@ -2,7 +2,7 @@
 
 > Documento **gerado** a partir de `packages/domain/src/rules/` por `pnpm docs`. Não editar à mão.
 
-Total de regras: **59**.
+Total de regras: **61**.
 
 ## Contratos e procedimentos
 
@@ -20,6 +20,7 @@ Total de regras: **59**.
 | RN-112 | bloqueio | novo | não | A soma do valor dos entregáveis com o valor da bolsa de horas não pode exceder o preço contratual atual. | O preço contratual é o teto da despesa: as componentes em que se reparte não o podem ultrapassar. |
 | RN-113 | bloqueio | novo | não | Um contrato de licenciamento tem de indicar o período de vigência das licenças. | O licenciamento é um direito de uso por um período determinado. |
 | RN-114 | bloqueio | novo | não | O período de vigência das licenças tem de estar contido na vigência do contrato e ter fim posterior ao início. | Não se licencia para lá do prazo em que o contrato que titula a aquisição existe. |
+| RN-115 | bloqueio | novo | não | O encargo de cada ano futuro coberto por portaria de extensão de encargos não pode exceder 500 000 € para ser aprovado pelo Conselho de Administração; acima disso exige portaria conjunta dos membros do Governo. | Competência delegada do Conselho de Administração para assunção de encargos plurianuais. |
 
 ## Prazos e vigência
 
@@ -88,6 +89,7 @@ Total de regras: **59**.
 | RN-610 | bloqueio | novo | não | Um contrato de licenciamento admite uma única fatura de valor positivo, correspondente à totalidade do contrato. Notas de crédito não são abrangidas. | No licenciamento contrata-se um direito de uso por um período, faturado de uma só vez. |
 | RN-611 | bloqueio | novo | não | O montante da fatura de um contrato de licenciamento tem de corresponder à totalidade do preço contratual atual. | Faturação única: não há faturação parcial de um licenciamento. |
 | RN-612 | bloqueio | novo | não | A validação de uma fatura corrigida por nota de crédito exige que a nota de crédito esteja documentada em PDF e que o líquido (fatura menos nota de crédito) corresponda ao montante conferido. | A nota de crédito integra a evidência da decisão: valida-se o líquido, não o valor emitido a mais. |
+| RN-613 | bloqueio | novo | não | A fatura tem de identificar o número do contrato e o NIF do prestador, e ambos têm de corresponder ao contrato que liquida. | A fatura é o título da despesa: sem identificar o contrato e o prestador não é imputável. |
 
 ## Recursos e habilitações
 

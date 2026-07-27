@@ -117,6 +117,7 @@ describe('faturação de entregáveis (RN-608 e RN-609)', () => {
   }
   const fat = (compromissoId: string, over: Record<string, unknown>) => ({
     compromissoId, numero: 'FT-CM-002', tipo: 'ENTREGAVEL',
+    numeroContratoIndicado: 'C-2026-CM1', nifPrestadorIndicado: '500000001',
     dataEmissao: '2026-07-01', dataRececao: '2026-07-01', periodoDe: '2026-06-01', periodoAte: '2026-06-30',
     montanteSemIva: 60_000_00, montanteIva: 13_800_00, ...over,
   });
@@ -198,20 +199,21 @@ describe('faturação de entregáveis (RN-608 e RN-609)', () => {
 });
 
 describe('licenciamento — uma fatura, pela totalidade', () => {
-  async function licenciamento(ctx: Contexto, numero: string): Promise<{ id: string; preco: number }> {
+  async function licenciamento(ctx: Contexto, numero: string): Promise<{ id: string; preco: number; numeroC: string }> {
     const c = (await ctx.repos.contratos.todos((x) => x.numero === numero))[0]!;
-    return { id: c.id, preco: c.precoContratualAtual };
+    return { id: c.id, preco: c.precoContratualAtual, numeroC: c.numero };
   }
-  const fat = (over: Record<string, unknown>) => ({
-    numero: 'FT-LIC-NOVA', dataEmissao: '2026-07-01', dataRececao: '2026-07-01',
+  const fat = (over: Record<string, unknown> & { numeroContratoIndicado: string }) => ({
+    numero: 'FT-LIC-NOVA', nifPrestadorIndicado: '500000001',
+    dataEmissao: '2026-07-01', dataRececao: '2026-07-01',
     periodoDe: '2026-07-01', periodoAte: '2027-06-30', montanteIva: 0, ...over,
   });
 
   it('fatura o contrato de licenciamento pela totalidade', async () => {
     const { app, ctx } = await montarApp();
     fechar = () => app.close();
-    const { id, preco } = await licenciamento(ctx, 'C-2026-LIC2');
-    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ montanteSemIva: preco }) });
+    const { id, preco, numeroC } = await licenciamento(ctx, 'C-2026-LIC2');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ numeroContratoIndicado: numeroC, montanteSemIva: preco }) });
     expect(r.statusCode).toBe(201);
     // O tipo é derivado do contrato, sem ter de ser indicado.
     expect((r.json() as { tipo: string }).tipo).toBe('LICENCIAMENTO');
@@ -220,8 +222,8 @@ describe('licenciamento — uma fatura, pela totalidade', () => {
   it('recusa faturação parcial de um licenciamento (RN-611)', async () => {
     const { app, ctx } = await montarApp();
     fechar = () => app.close();
-    const { id, preco } = await licenciamento(ctx, 'C-2026-LIC2');
-    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ montanteSemIva: Math.floor(preco / 2) }) });
+    const { id, preco, numeroC } = await licenciamento(ctx, 'C-2026-LIC2');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ numeroContratoIndicado: numeroC, montanteSemIva: Math.floor(preco / 2) }) });
     expect(r.statusCode).toBe(422);
     expect((r.json() as { regra?: string }).regra).toBe('RN-611');
   });
@@ -230,8 +232,8 @@ describe('licenciamento — uma fatura, pela totalidade', () => {
     const { app, ctx } = await montarApp();
     fechar = () => app.close();
     // O C-2026-LIC1 já vem faturado no seed.
-    const { id, preco } = await licenciamento(ctx, 'C-2026-LIC1');
-    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ montanteSemIva: preco }) });
+    const { id, preco, numeroC } = await licenciamento(ctx, 'C-2026-LIC1');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ numeroContratoIndicado: numeroC, montanteSemIva: preco }) });
     expect(r.statusCode).toBe(422);
     expect((r.json() as { regra?: string }).regra).toBe('RN-610');
   });
@@ -239,8 +241,8 @@ describe('licenciamento — uma fatura, pela totalidade', () => {
   it('a nota de crédito passa, porque corrige em vez de acrescentar', async () => {
     const { app, ctx } = await montarApp();
     fechar = () => app.close();
-    const { id } = await licenciamento(ctx, 'C-2026-LIC1');
-    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ numero: 'NC-2026/1', montanteSemIva: -5_000_00 }) });
+    const { id, numeroC } = await licenciamento(ctx, 'C-2026-LIC1');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ numeroContratoIndicado: numeroC, numero: 'NC-2026/1', montanteSemIva: -5_000_00 }) });
     expect(r.statusCode).toBe(201);
   });
 
@@ -285,6 +287,7 @@ describe('receber e conferir numa transição', () => {
 
     const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${contrato.id}/faturas:receber-e-conferir`, headers: comoGestor(), payload: {
       compromissoId: (compromisso.json() as { id: string }).id, numero: 'FT-RC-001',
+      numeroContratoIndicado: contrato.numero, nifPrestadorIndicado: contrato.prestador.nipc,
       dataEmissao: '2026-07-01', dataRececao: '2026-07-01',
       periodoDe: aprovados[0]!.data, periodoAte: aprovados[0]!.data,
       montanteSemIva: total, montanteIva: 0,
@@ -309,6 +312,7 @@ describe('receber e conferir numa transição', () => {
 
     const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${contrato.id}/faturas:receber-e-conferir`, headers: comoGestor(), payload: {
       compromissoId: (compromisso.json() as { id: string }).id, numero: 'FT-RC-002',
+      numeroContratoIndicado: contrato.numero, nifPrestadorIndicado: contrato.prestador.nipc,
       dataEmissao: '2026-07-01', dataRececao: '2026-07-01', periodoDe: aprovado.data, periodoAte: aprovado.data,
       montanteSemIva: 99_00, montanteIva: 0,
       documentos: [{ tipo: 'FATURA_COM_RELATORIO', ficheiroRef: 'a', nomeOriginal: 'f.pdf', hashSha256: h('a'), tamanhoBytes: 1 }],

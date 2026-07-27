@@ -1,7 +1,7 @@
 import {
-  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, RN_610, RN_611, RN_612, exigir, ViolacaoRegra,
+  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, RN_610, RN_611, RN_612, RN_613, exigir, ViolacaoRegra,
   totalFaturado, dentroDoIntervalo, maquinaFatura,
-  type Fatura, type Compromisso, type DataISO, type Cent, type AnoCivil,
+  type Fatura, type Compromisso, type Contrato, type DataISO, type Cent, type AnoCivil,
   type LinhaConferencia, type TipoFaturacao,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
@@ -48,6 +48,18 @@ export class ServicoFaturas {
     return f;
   }
 
+  /**
+   * Resolve o contrato a partir do número que vem na fatura. É a fatura que diz
+   * a que contrato pertence — obrigar a escolhê-lo antes de olhar para o
+   * documento inverte a ordem do trabalho e esconde a fatura trocada.
+   */
+  async contratoPorNumero(numero: string): Promise<Contrato | null> {
+    const norm = (s: string): string => s.trim().toUpperCase().replace(/\s+/g, '');
+    const alvo = norm(numero);
+    if (alvo === '') return null;
+    return (await this.ctx.repos.contratos.todos((c) => norm(c.numero) === alvo))[0] ?? null;
+  }
+
   async criarCompromisso(contratoId: string, numero: string, montante: Cent, ano: AnoCivil, emitidoEm: DataISO, u: ContextoUtilizador): Promise<Compromisso> {
     const agora = this.ctx.relogio.agora();
     const c: Compromisso = { id: this.ctx.ids.novo('cmp'), contratoId, numero, montante, ano, emitidoEm, criadoEm: agora, criadoPor: u.utilizadorId, atualizadoEm: agora, atualizadoPor: u.utilizadorId };
@@ -64,6 +76,17 @@ export class ServicoFaturas {
     const agora = this.ctx.relogio.agora();
     const contrato = await this.ctx.repos.contratos.obter(contratoId);
     if (contrato === null) throw new ErroNaoEncontrado(`Contrato ${contratoId} inexistente.`);
+
+    // RN-613 — o contrato e o prestador que vêm no documento têm de bater certo
+    // com o contrato que a fatura liquida. É esta comparação que apanha a fatura
+    // trocada, e só existe porque o documento os traz.
+    exigir(RN_613, {
+      numeroContratoIndicado: dados.numeroContratoIndicado,
+      nifPrestadorIndicado: dados.nifPrestadorIndicado,
+      numeroContratoReal: contrato.numero,
+      nifPrestadorReal: contrato.prestador.nipc,
+    });
+
     // O tipo vem do contrato quando não é indicado: é o contrato que determina o
     // que se pode faturar, e obrigar a escolhê-lo à mão só convida ao engano.
     const tipo: TipoFaturacao = dados.tipo ?? (contrato.tipologia === 'LICENCIAMENTO' ? 'LICENCIAMENTO' : 'BOLSA_HORAS');

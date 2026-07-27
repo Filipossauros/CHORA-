@@ -4,7 +4,7 @@
  * (GitHub Pages). NÃO importar `server.ts` a partir daqui.
  */
 export { criarContexto, CONFIG_OMISSAO, type Contexto, type Config } from './contexto.js';
-export { criarRepositoriosMemoria, type Repositorios, type ContratoProjeto } from './repositorios/memoria/index.js';
+export { criarRepositoriosMemoria, type Repositorios, type ContratoProjeto, type Projeto, type OrcamentoGuardado } from './repositorios/memoria/index.js';
 export { RepositorioMemoria } from './repositorios/memoria/repositorio-memoria.js';
 export { normalizarPaginacao } from './repositorios/tipos.js';
 export type { Repository, Filtro, Ordenacao, Pagina, Paginacao } from './repositorios/tipos.js';
@@ -21,6 +21,7 @@ export { ServicoFaturas, gerarFraseEvidencia } from './servicos/faturas.js';
 export { ServicoRecursos, ServicoAcessos } from './servicos/recursos-acessos.js';
 export { ServicoAlertas, ATO_RESOLVE } from './servicos/alertas.js';
 export { ServicoEntregaveis } from './servicos/entregaveis.js';
+export { ServicoOrcamentos, type OrcamentoComResumo } from './servicos/orcamentos.js';
 export type { Acesso, RelatorioEvidencia } from './repositorios/memoria/index.js';
 export { JobAlertas, NotifierConsola } from './alertas/job-alertas.js';
 export { paraProblema, ErroProibido, ErroNaoEncontrado, type Problema } from './erros/problema.js';

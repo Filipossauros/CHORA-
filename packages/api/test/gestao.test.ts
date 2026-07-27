@@ -235,7 +235,7 @@ describe('faturação — conferência determinística e decisão (R4)', () => {
     // Mês sem registos aprovados no seed (maio), para a conferência bater certo.
     await ctx.repos.registosTempo.guardar({ id: 'rt-fat', afetacaoId: af.id, contratoId: id, perfilId: af.perfilId, recursoId: af.recursoId, projetoId: 'proj-P1', workItemId: 1, data: '2026-05-11', duracao: 480, descricaoAtividade: 'x', tipoDotacaoConsumida: 'HORAS_BASE', valorHoraAplicado: 5000, valorImputado: 40000, estado: 'APROVADO', criadoEm: '2026-05-11T09:00:00.000Z', criadoPor: af.recursoId, atualizadoEm: '2026-05-11T09:00:00.000Z', atualizadoPor: af.recursoId });
     // Fatura + documentos + linhas conformes.
-    const fatura = (await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: { compromissoId: cmp.id, numero: 'FT-T-1', dataEmissao: '2026-05-31', dataRececao: '2026-06-01', periodoDe: '2026-05-01', periodoAte: '2026-05-31', montanteSemIva: 40000, montanteIva: 9200 } })).json() as { id: string };
+    const fatura = (await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: { compromissoId: cmp.id, numero: 'FT-T-1', numeroContratoIndicado: 'C-2026-001', nifPrestadorIndicado: '500000001', dataEmissao: '2026-05-31', dataRececao: '2026-06-01', periodoDe: '2026-05-01', periodoAte: '2026-05-31', montanteSemIva: 40000, montanteIva: 9200 } })).json() as { id: string };
     const h = (c: string) => c.repeat(64);
     await app.inject({ method: 'POST', url: `/api/v1/faturas/${fatura.id}/documentos`, headers: comoGestor(), payload: { tipo: 'FATURA', ficheiroRef: 'a', nomeOriginal: 'f.pdf', hashSha256: h('a'), tamanhoBytes: 1 } });
     await app.inject({ method: 'POST', url: `/api/v1/faturas/${fatura.id}/documentos`, headers: comoGestor(), payload: { tipo: 'RELATORIO_HORAS_FORNECEDOR', ficheiroRef: 'b', nomeOriginal: 'r.pdf', hashSha256: h('b'), tamanhoBytes: 1 } });
@@ -255,7 +255,7 @@ describe('faturação — conferência determinística e decisão (R4)', () => {
     const { app, ctx } = await montarApp();
     fechar = () => app.close();
     const id = await contrato(ctx);
-    const fatura = (await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: { numero: 'FT-T-2', dataEmissao: '2026-02-28', dataRececao: '2026-03-01', periodoDe: '2026-02-01', periodoAte: '2026-02-28', montanteSemIva: 5000, montanteIva: 1150 } })).json() as { id: string };
+    const fatura = (await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: { numero: 'FT-T-2', numeroContratoIndicado: 'C-2026-001', nifPrestadorIndicado: '500000001', dataEmissao: '2026-02-28', dataRececao: '2026-03-01', periodoDe: '2026-02-01', periodoAte: '2026-02-28', montanteSemIva: 5000, montanteIva: 1150 } })).json() as { id: string };
     // Sem documentos: iniciar conferência falha RN-602 (mas sem compromisso falha RN-601 primeiro).
     const semDocs = await app.inject({ method: 'POST', url: `/api/v1/faturas/${fatura.id}/iniciar-conferencia`, headers: comoGestor() });
     expect(semDocs.statusCode).toBe(422);

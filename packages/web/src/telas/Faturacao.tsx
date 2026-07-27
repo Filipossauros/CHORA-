@@ -85,40 +85,45 @@ function Dropzone({ id, rot, ficheiro, onFicheiro, ativo }: {
 export function Faturacao(): ReactNode {
   const podeGerir = app.papeisAtuais().includes('GESTOR_CONTRATO');
   const [params] = useSearchParams();
-  const [contratoId, setContratoId] = useState(params.get('contrato') ?? '');
   const [faturaId, setFaturaId] = useState('');
   const [conf, setConf] = useState<Conferencia>();
   const [relatorio, setRelatorio] = useState<Relatorio>();
   const [motivo, setMotivo] = useState('');
   const [erro, setErro] = useState<string>();
-  const [nova, setNova] = useState({ numero: '', periodoDe: '', periodoAte: '', montanteSemIva: '', montanteIva: '', tipo: undefined as TipoFaturacao | undefined, entregavelId: '', ficheiroUnico: true });
+  const [nova, setNova] = useState({
+    numero: '', numeroContrato: params.get('contrato') ?? '', nifPrestador: '',
+    periodoDe: '', periodoAte: '', montanteSemIva: '', montanteIva: '',
+    tipo: undefined as TipoFaturacao | undefined, entregavelId: '', ficheiroUnico: true,
+  });
   const [pend, setPend] = useState<Partial<Record<TipoDoc, File>>>({});
 
   const base = useAsync(async () => {
     const contratos = await app.ctx.repos.contratos.todos();
-    const cid = contratoId || contratos[0]?.id || '';
-    const contrato = cid !== '' ? await app.ctx.repos.contratos.obter(cid) : null;
-    const faturas = await app.ctx.repos.faturas.todos((f) => f.contratoId === cid);
+    // O contrato vem do DOCUMENTO, não de um seletor: é a fatura que diz a que
+    // contrato pertence. Enquanto o número não resolver, não há contrato.
+    const contrato = await app.faturas.contratoPorNumero(nova.numeroContrato);
+    const cid = contrato?.id ?? '';
+    const faturas = await app.ctx.repos.faturas.todos();
     const fatura = faturaId !== '' ? await app.ctx.repos.faturas.obter(faturaId) : null;
     const entregaveis = contrato?.tipologia === 'CHAVE_NA_MAO' ? await app.entregaveis.listar(cid) : [];
     return { contratos, cid, contrato, faturas, fatura, entregaveis };
-  }, [contratoId, faturaId, relatorio, conf]);
+  }, [nova.numeroContrato, faturaId, relatorio, conf]);
 
   if (base.dados === undefined) return <p className="vazio">A carregar…</p>;
   const { contratos, cid, contrato, faturas, fatura, entregaveis } = base.dados;
+  const numeroContrato = (id: string): string => contratos.find((c) => c.id === id)?.numero ?? id;
+  const nifConfere = contrato !== null && nova.nifPrestador.trim() === contrato.prestador.nipc;
   const faturaveis = entregaveis.filter((e: Entregavel) => estadoEntregavel(e) === 'ENTREGUE');
   const tipo = nova.tipo ?? tipoSugerido(contrato, faturaveis);
   const entregavelSel = faturaveis.find((e: Entregavel) => e.id === nova.entregavelId);
   const docs = documentosExigidos(tipo, nova.ficheiroUnico);
   const aguardam = faturas.filter((f) => f.estado === 'AGUARDA_NOTA_CREDITO');
 
-  function limpar(novoContrato?: string): void {
-    const alvo = contratos.find((c) => c.id === (novoContrato ?? cid));
+  function limpar(): void {
     setFaturaId(''); setPend({}); setConf(undefined); setRelatorio(undefined); setMotivo(''); setErro(undefined);
     setNova({
-      numero: '', periodoDe: '', periodoAte: '',
-      montanteSemIva: alvo?.tipologia === 'LICENCIAMENTO' ? String(alvo.precoContratualAtual / 100) : '',
-      montanteIva: '', tipo: undefined, entregavelId: '', ficheiroUnico: true,
+      numero: '', numeroContrato: '', nifPrestador: '', periodoDe: '', periodoAte: '',
+      montanteSemIva: '', montanteIva: '', tipo: undefined, entregavelId: '', ficheiroUnico: true,
     });
   }
 
@@ -126,6 +131,12 @@ export function Faturacao(): ReactNode {
   async function registarEConferir(): Promise<void> {
     setErro(undefined);
     const semIva = eurosParaCent(nova.montanteSemIva); const iva = eurosParaCent(nova.montanteIva);
+    if (contrato === null) {
+      setErro('Indique um nº de contrato que exista: é o contrato que a fatura liquida (RN-613).'); return;
+    }
+    if (!nifConfere) {
+      setErro(`O NIF indicado não é o do adjudicatário deste contrato (${contrato.prestador.nipc}) — verifique se a fatura é mesmo deste contrato (RN-613).`); return;
+    }
     if (nova.numero.trim() === '' || nova.periodoDe === '' || nova.periodoAte === '' || semIva === 0) {
       setErro('Indique o nº da fatura, o período e o montante s/ IVA.'); return;
     }
@@ -151,6 +162,7 @@ export function Faturacao(): ReactNode {
       }
       const r = await app.faturas.receberEConferir(cid, {
         compromissoId: comp.id, numero: nova.numero.trim(),
+        numeroContratoIndicado: nova.numeroContrato.trim(), nifPrestadorIndicado: nova.nifPrestador.trim(),
         dataEmissao: hoje(), dataRececao: hoje(), periodoDe: nova.periodoDe, periodoAte: nova.periodoAte,
         montanteSemIva: semIva, montanteIva: Number.isFinite(iva) ? iva : 0,
         tipo, ...(tipo === 'ENTREGAVEL' ? { entregavelId: nova.entregavelId } : {}),
@@ -196,7 +208,7 @@ export function Faturacao(): ReactNode {
     doc.setFontSize(15); doc.text('CHORA+ · Relatório de evidência de conferência', 15, 20);
     doc.setFontSize(11);
     doc.text(`Fatura: ${fatura.numero}`, 15, 32);
-    doc.text(`Contrato: ${contratos.find((c) => c.id === cid)?.numero ?? cid}`, 15, 39);
+    doc.text(`Contrato: ${numeroContrato(fatura.contratoId)}`, 15, 39);
     doc.text(`Tipo de faturação: ${ROT_TIPO[fatura.tipo]}`, 15, 46);
     doc.text(`Período: ${fatura.periodoDe} a ${fatura.periodoAte}`, 15, 53);
     doc.text(`Decisão: ${relatorio.decisao}`, 15, 60);
@@ -216,12 +228,7 @@ export function Faturacao(): ReactNode {
   return (
     <>
       <Cabecalho titulo="Conferência de faturas" sub="Registar · conferir · decidir" acoes={
-        <>
-          {fatura !== null && <button className="btn" onClick={() => limpar()}>+ Nova fatura</button>}
-          <select value={cid} onChange={(e) => { setContratoId(e.target.value); limpar(e.target.value); }}>
-            {contratos.map((c) => <option key={c.id} value={c.id}>{c.numero}</option>)}
-          </select>
-        </>
+        fatura !== null ? <button className="btn" onClick={limpar}>+ Nova fatura</button> : undefined
       } />
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
 
@@ -233,6 +240,7 @@ export function Faturacao(): ReactNode {
             {aguardam.map((f) => (
               <tr key={f.id}>
                 <td className="prim">{f.numero}<div className="sec">{f.notaCredito?.motivo ?? 'em espera'}</div></td>
+                <td>{numeroContrato(f.contratoId)}</td>
                 <td className="num tabnum">faturado {formatarMoeda(f.montanteSemIva)}</td>
                 <td className="num tabnum">nota esperada {formatarMoeda(f.notaCredito?.montante ?? 0)}</td>
                 <td className="sec">em espera desde {f.notaCredito?.registadaEm ?? f.dataRececao}</td>
@@ -246,17 +254,27 @@ export function Faturacao(): ReactNode {
       {/* ── REGISTO MANUAL ─────────────────────────────────────────────────── */}
       {fatura === null && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
-          <div className="cartao"><h3>Registar fatura<span className="pill p-azul" style={{ marginLeft: 8 }}>{ROT_TIPO[tipo]}</span></h3><div className="corpo">
+          <div className="cartao"><h3>Registar fatura{contrato !== null && <span className="pill p-azul" style={{ marginLeft: 8 }}>{ROT_TIPO[tipo]}</span>}</h3><div className="corpo">
             {!podeGerir && <div className="aviso">Só o gestor de contrato confere faturas.</div>}
 
+            {/* IDENTIFICAÇÃO — o que vem no documento. É daqui que sai o contrato. */}
+            <div className="g3">
+              <div className="campo"><label>Nº da fatura *</label><input value={nova.numero} onChange={(e) => setNova({ ...nova, numero: e.target.value })} placeholder="FT-2026-010" /></div>
+              <div className="campo"><label>Nº do contrato *</label><input value={nova.numeroContrato} onChange={(e) => setNova({ ...nova, numeroContrato: e.target.value, tipo: undefined, entregavelId: '' })} placeholder="C-2026-001" /></div>
+              <div className="campo"><label>NIF do prestador *</label><input value={nova.nifPrestador} onChange={(e) => setNova({ ...nova, nifPrestador: e.target.value })} placeholder="500000001" /></div>
+            </div>
+            <Identificacao contrato={contrato} numeroIndicado={nova.numeroContrato} nifConfere={nifConfere} nifIndicado={nova.nifPrestador} tipo={tipo} />
+
+            {contrato !== null && (
             <div className="aviso" style={{ marginBottom: 12 }}>
-              O tipo é determinado pelo contrato ({contrato?.tipologia === 'CHAVE_NA_MAO' ? 'chave-na-mão' : contrato?.tipologia === 'LICENCIAMENTO' ? 'licenciamento' : 'bolsa de horas'}
+              O tipo é determinado pelo contrato ({contrato.tipologia === 'CHAVE_NA_MAO' ? 'chave-na-mão' : contrato.tipologia === 'LICENCIAMENTO' ? 'licenciamento' : 'bolsa de horas'}
               {tipo === 'ENTREGAVEL' ? ', com entregáveis por faturar' : ''}). Retifique-o se este caso for exceção.
               {' '}
               <select value={tipo} onChange={(e) => setNova({ ...nova, tipo: e.target.value as TipoFaturacao, entregavelId: '' })} style={{ marginTop: 6 }}>
                 {(['BOLSA_HORAS', 'ENTREGAVEL', 'LICENCIAMENTO'] as TipoFaturacao[]).map((t) => <option key={t} value={t}>{ROT_TIPO[t]}</option>)}
               </select>
             </div>
+            )}
 
             {tipo === 'ENTREGAVEL' && (
               faturaveis.length === 0
@@ -274,11 +292,11 @@ export function Faturacao(): ReactNode {
             {tipo === 'LICENCIAMENTO' && (
               <div className="aviso" style={{ marginBottom: 10 }}>
                 O licenciamento tem uma só fatura, pela totalidade do contrato: <b>{formatarMoeda(contrato?.precoContratualAtual ?? 0)}</b> <code>RN-610</code> <code>RN-611</code>.
+                {' '}<button className="ligacao" onClick={() => setNova({ ...nova, montanteSemIva: String((contrato?.precoContratualAtual ?? 0) / 100) })}>usar este valor</button>
               </div>
             )}
 
-            <div className="g3">
-              <div className="campo"><label>Nº da fatura *</label><input value={nova.numero} onChange={(e) => setNova({ ...nova, numero: e.target.value })} placeholder="FT-2026-010" /></div>
+            <div className="g2">
               <div className="campo"><label>Período de *</label><input type="date" value={nova.periodoDe} onChange={(e) => setNova({ ...nova, periodoDe: e.target.value })} /></div>
               <div className="campo"><label>Período até *</label><input type="date" value={nova.periodoAte} onChange={(e) => setNova({ ...nova, periodoAte: e.target.value })} /></div>
             </div>
@@ -301,10 +319,10 @@ export function Faturacao(): ReactNode {
             </div>
 
             <div className="aviso" style={{ margin: '10px 0 12px' }}>Os PDF são selados pelo hash SHA-256 <code>RN-602-A</code>. Ao registar, a aplicação confere de imediato contra os elementos de execução aprovados e apresenta o veredito.</div>
-            <button className="btn pri" disabled={!podeGerir} onClick={() => void registarEConferir()}>Registar e conferir →</button>
+            <button className="btn pri" disabled={!podeGerir || contrato === null} onClick={() => void registarEConferir()}>Registar e conferir →</button>
           </div></div>
 
-          <HistoricoFaturas faturas={faturas} onAbrir={(id) => void abrir(id)} />
+          <HistoricoFaturas faturas={faturas} numeroContrato={numeroContrato} onAbrir={(id) => void abrir(id)} />
         </div>
       )}
 
@@ -315,7 +333,7 @@ export function Faturacao(): ReactNode {
             <h3>
               {fatura.numero}
               <span className="pill p-azul" style={{ marginLeft: 8 }}>{ROT_TIPO[fatura.tipo]}</span>
-              <span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{fatura.periodoDe} a {fatura.periodoAte}</span>
+              <span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{numeroContrato(fatura.contratoId)} · {fatura.periodoDe} a {fatura.periodoAte}</span>
               <span style={{ marginLeft: 'auto' }}><Estado v={fatura.estado} /></span>
             </h3>
             <div className="corpo"><Documentos fatura={fatura} /></div>
@@ -398,6 +416,48 @@ export function Faturacao(): ReactNode {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * CONFIRMAÇÃO DA IDENTIFICAÇÃO.
+ *
+ * Resolvido o número, mostra-se o que a base sabe daquele contrato: objeto,
+ * prestador, valor por faturar. Não é decoração — é a confirmação de que quem
+ * regista está no contrato certo, feita antes de escrever montantes. E o NIF
+ * confronta-se aqui, porque uma fatura do fornecedor certo no contrato errado
+ * passa despercebida quando só se olha para o número.
+ */
+function Identificacao({ contrato, numeroIndicado, nifIndicado, nifConfere, tipo }: {
+  contrato: Contrato | null; numeroIndicado: string; nifIndicado: string; nifConfere: boolean; tipo: TipoFaturacao;
+}): ReactNode {
+  if (numeroIndicado.trim() === '') {
+    return (
+      <div className="aviso" style={{ marginBottom: 12 }}>
+        Comece pelo número do contrato que vem na fatura: é ele que determina o contrato, o tipo de faturação e os
+        documentos exigidos <code>RN-613</code>.
+      </div>
+    );
+  }
+  if (contrato === null) {
+    return <div className="erro-cx" style={{ marginBottom: 12 }}>Não há nenhum contrato com o número <b>{numeroIndicado}</b>. Verifique o documento.</div>;
+  }
+  const cor = nifConfere ? 'var(--verde)' : nifIndicado.trim() === '' ? 'var(--linha-forte)' : 'var(--vermelho)';
+  return (
+    <div style={{ border: `1px solid ${cor}`, borderLeft: `3px solid ${cor}`, borderRadius: 9, padding: '10px 13px', marginBottom: 12, background: 'var(--superficie)', fontSize: 12.5 }}>
+      <div className="prim" style={{ fontSize: 13 }}>{contrato.numero} · {contrato.objeto}</div>
+      <div className="sec" style={{ marginTop: 3 }}>
+        {contrato.prestador.nome} · NIF {contrato.prestador.nipc}
+        {nifIndicado.trim() === ''
+          ? ''
+          : nifConfere
+            ? ' — ✓ confere com a fatura'
+            : ` — ⚠ a fatura indica ${nifIndicado}: não é o adjudicatário deste contrato`}
+      </div>
+      <div className="sec" style={{ marginTop: 3 }}>
+        {ROT_TIPO[tipo]} · valor contratual {formatarMoeda(contrato.precoContratualAtual)} · vigência até {contrato.dataTerminoContratual}
+      </div>
+    </div>
   );
 }
 
@@ -554,19 +614,19 @@ function Documentos({ fatura }: { fatura: Fatura }): ReactNode {
   );
 }
 
-/** Faturas já registadas no contrato — histórico, não fila de trabalho. */
-function HistoricoFaturas({ faturas, onAbrir }: { faturas: Fatura[]; onAbrir: (id: string) => void }): ReactNode {
+/** Faturas já registadas — histórico transversal, não fila de trabalho. */
+function HistoricoFaturas({ faturas, numeroContrato, onAbrir }: { faturas: Fatura[]; numeroContrato: (id: string) => string; onAbrir: (id: string) => void }): ReactNode {
   const ordenadas = [...faturas].sort((a, b) => ((a.dataAprovacao ?? a.dataRececao) < (b.dataAprovacao ?? b.dataRececao) ? 1 : -1));
   return (
-    <div className="cartao"><h3>Faturas do contrato</h3><table>
+    <div className="cartao"><h3>Faturas registadas<span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{faturas.length}</span></h3><table>
       <tbody>
         {ordenadas.map((f) => (
           <tr key={f.id} className="click" onClick={() => onAbrir(f.id)}>
-            <td className="prim">{f.numero}<div className="sec">{ROT_TIPO[f.tipo]} · {formatarMoeda(f.montanteAprovado ?? f.montanteSemIva)}</div></td>
+            <td className="prim">{f.numero}<div className="sec">{numeroContrato(f.contratoId)} · {formatarMoeda(f.montanteAprovado ?? f.montanteSemIva)}</div></td>
             <td><Estado v={f.estado} /></td>
           </tr>
         ))}
-        {faturas.length === 0 && <tr><td colSpan={2} className="vazio">Sem faturas neste contrato.</td></tr>}
+        {faturas.length === 0 && <tr><td colSpan={2} className="vazio">Ainda não há faturas registadas.</td></tr>}
       </tbody>
     </table></div>
   );

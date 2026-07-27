@@ -274,6 +274,48 @@ export const RN_114: Regra<{
   },
 };
 
+/**
+ * Encargo anual máximo que o Conselho de Administração pode assumir por portaria
+ * de extensão de encargos sem portaria conjunta dos membros do Governo.
+ */
+export const LIMITE_ANUAL_PORTARIA_CA: Cent = 500_000_00;
+
+/**
+ * RN-115 — competência do Conselho de Administração para extensão de encargos.
+ *
+ * O limite afere-se ANO A ANO e apenas sobre os ANOS FUTUROS: o encargo do ano
+ * em curso tem cabimento próprio e não é o que a portaria estende. Basta um ano
+ * futuro acima do limite para a portaria carecer de despacho conjunto — o que
+ * muda o prazo de instrução em meses, não em dias. Daí ser regra de
+ * planeamento: apanhá-la no orçamento evita descobri-la já com o procedimento
+ * lançado.
+ */
+export const RN_115: Regra<{
+  anoBase: number;
+  reparticaoAnual: ReadonlyArray<{ ano: number; montante: Cent }>;
+}> = {
+  codigo: 'RN-115',
+  descricao:
+    'O encargo de cada ano futuro coberto por portaria de extensão de encargos não pode exceder 500 000 € para ser aprovado pelo Conselho de Administração; acima disso exige portaria conjunta dos membros do Governo.',
+  requisito: 'novo',
+  base: 'Competência delegada do Conselho de Administração para assunção de encargos plurianuais.',
+  excecaoFundamentavel: false,
+  avaliar({ anoBase, reparticaoAnual }) {
+    const futuros = reparticaoAnual.filter((r) => r.ano > anoBase);
+    const acima = futuros.filter((r) => r.montante > LIMITE_ANUAL_PORTARIA_CA);
+    if (acima.length > 0) {
+      return violada(
+        'O encargo de um ou mais anos futuros excede a competência do Conselho de Administração: a portaria carece de despacho conjunto dos membros do Governo.',
+        {
+          limiteAnual: LIMITE_ANUAL_PORTARIA_CA,
+          anosAcimaDoLimite: acima.map((r) => ({ ano: r.ano, montante: r.montante, excesso: r.montante - LIMITE_ANUAL_PORTARIA_CA })),
+        },
+      );
+    }
+    return conforme;
+  },
+};
+
 export const REGRAS_CONTRATOS = [
   RN_101,
   RN_102,
@@ -287,4 +329,5 @@ export const REGRAS_CONTRATOS = [
   RN_112,
   RN_113,
   RN_114,
+  RN_115,
 ] as const;

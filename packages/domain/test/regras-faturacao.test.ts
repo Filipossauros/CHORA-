@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, RN_610, RN_611, RN_612,
+  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, RN_610, RN_611, RN_612, RN_613,
   type LinhaConferencia,
 } from '../src/rules/faturacao.js';
 
@@ -115,4 +115,18 @@ describe('RN-612 validação com nota de crédito', () => {
     temNotaCredito: true, documentoNotaCreditoPresente: true,
     montanteFatura: 50_000_00, montanteNotaCredito: 15_000_00, montanteConferido: 40_000_00,
   }).ok).toBe(false));
+});
+
+describe('RN-613 a fatura identifica o contrato e o prestador', () => {
+  const ok = { numeroContratoIndicado: 'C-2026-001', nifPrestadorIndicado: '500000001', numeroContratoReal: 'C-2026-001', nifPrestadorReal: '500000001' };
+  it('positivo — ambos conferem', () => expect(RN_613.avaliar(ok).ok).toBe(true));
+  it('tolera espaços e maiúsculas', () => expect(RN_613.avaliar({ ...ok, numeroContratoIndicado: ' c-2026-001 ' }).ok).toBe(true));
+  it('negativo — sem número de contrato', () => expect(RN_613.avaliar({ ...ok, numeroContratoIndicado: '  ' }).ok).toBe(false));
+  it('negativo — sem NIF do prestador', () => expect(RN_613.avaliar({ ...ok, nifPrestadorIndicado: '' }).ok).toBe(false));
+  it('negativo — fatura de outro contrato', () => {
+    const r = RN_613.avaliar({ ...ok, numeroContratoIndicado: 'C-2026-009' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.dados?.numeroContratoReal).toBe('C-2026-001');
+  });
+  it('negativo — prestador diferente do adjudicatário', () => expect(RN_613.avaliar({ ...ok, nifPrestadorIndicado: '500000777' }).ok).toBe(false));
 });

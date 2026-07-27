@@ -7,12 +7,17 @@ import { useMudancas } from '../comum.js';
 /**
  * Navegação orientada ao TRABALHO, não à arquitetura.
  *
- * Passou de 13 destinos para 5: «Hoje» colapsa Alertas, Previsões e
+ * Passou de 13 destinos para 6: «Hoje» colapsa Alertas, Previsões e
  * recomendações — eram a mesma pergunta separada por quem a produzia: as opções
  * de atuação vivem hoje dentro da própria decisão, com prazo e destino. O que é
  * documentação (Regras e alertas), administração (Auditoria, Acessos) ou
- * consulta (Recursos, Previsões) vive numa gaveta, acessível mas
- * fora do caminho do trabalho diário.
+ * consulta (Recursos) vive numa gaveta, acessível mas fora do caminho do
+ * trabalho diário.
+ *
+ * A «Orçamentação» substituiu as «Previsões»: projetar o ritmo de execução por
+ * contrato já se lê nas decisões do «Hoje» e no consumo da lista de contratos.
+ * O que faltava era a pergunta anual — que contratos vão ser precisos e quanto
+ * custam — e essa merece destino próprio.
  */
 const NAV = [
   { grupo: 'Trabalho', itens: [
@@ -21,13 +26,15 @@ const NAV = [
     { to: '/registos', rot: 'Registos e aprovações' },
     { to: '/faturacao', rot: 'Faturação' },
   ] },
-  { grupo: 'Análise', itens: [{ to: '/relatorios', rot: 'Relatórios' }] },
+  { grupo: 'Análise', itens: [
+    { to: '/relatorios', rot: 'Relatórios' },
+    { to: '/orcamentacao', rot: 'Orçamentação' },
+  ] },
 ];
 
 /** Gaveta: transparência, administração e consulta. */
 const GAVETA = [
   { to: '/regras', rot: 'Regras e alertas' },
-  { to: '/previsoes', rot: 'Previsões' },
   { to: '/recursos', rot: 'Recursos' },
   { to: '/auditoria', rot: 'Auditoria' },
   { to: '/acessos', rot: 'Acessos' },
