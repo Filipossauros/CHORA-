@@ -1,7 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { JobAlertas, ServicoAlertas } from '@chora/api/nucleo';
-import { diasUteisDeMinutos, formatarDiasUteis, type AcaoOpcao, type Alerta, type Contrato, type OpcaoAlerta } from '@chora/domain';
+import { CATALOGO_ALERTAS, FAMILIAS_ALERTAS, diasUteisDeMinutos, formatarDiasUteis, type AcaoOpcao, type Alerta, type Contrato, type OpcaoAlerta } from '@chora/domain';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { eurosParaCent, formatarMoeda, hoje, mensagemErro, notificarMudanca, useAsync } from '../comum.js';
@@ -142,6 +142,8 @@ export function Hoje(): ReactNode {
         onMudou={() => { base.recarregar(); notificarMudanca(); }}
         onErro={setErro}
       />
+
+      <AdvertenciaJuridica />
     </>
   );
 }
@@ -257,75 +259,66 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
   // degrau seria decidir pelo gestor uma escolha que a escada existe para pôr.
   const temEscada = (alerta.opcoes?.length ?? 0) > 0;
 
+  // Só as opções dentro do prazo contam para o rótulo: as perdidas já não são
+  // escolhas, e ficam recolhidas dentro da escada.
+  const disponiveis = (alerta.opcoes ?? []).filter((o) => (o.diasParaLimite ?? 0) >= 0).length;
+
   return (
-    <div style={{ borderBottom: '1px solid var(--linha)', background: aberta ? 'var(--superficie-2)' : undefined }}>
-      {/* Linha fechada: prazo · o que é · ação (quando é única) · impacto. */}
-      <div
-        onClick={onAbrir}
-        style={{ display: 'flex', gap: 12, padding: '9px 14px', alignItems: 'center', cursor: 'pointer' }}
-      >
-        <div style={{ flex: '0 0 88px', textAlign: 'right' }}>
-          {alerta.dataLimiteAcao !== undefined ? (
-            <>
-              <div className="tabnum" style={{ fontSize: 12.5, fontWeight: 700, color: COR_URGENCIA[urgencia] }}>{alerta.dataLimiteAcao.slice(8)}/{alerta.dataLimiteAcao.slice(5, 7)}</div>
-              <div className="sec" title={alerta.eventoAncora}>{urgente ? `há ${-dLim!} dias` : `em ${dLim} dias`}</div>
-            </>
-          ) : <div className="sec">sem prazo</div>}
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{alerta.titulo}</span>
-          {alerta.estado === 'EM_CURSO' && <span className="pill p-azul">Em curso</span>}
-        </div>
-
-        {podeGerir && !temEscada && (
-          <span onClick={(e) => e.stopPropagation()}>
-            <AcaoPrincipal alerta={alerta} contrato={contrato} onFeito={onMudou} onErro={onErro} onEmCurso={marcarEmCurso} />
-          </span>
-        )}
-        <Impacto alerta={alerta} />
-        <span style={{ flex: '0 0 12px', color: 'var(--texto-fraco)', fontSize: 10, transform: aberta ? 'rotate(90deg)' : undefined, transition: 'transform .12s' }}>▶</span>
+    <div style={{ display: 'flex', gap: 12, padding: '12px 14px', borderBottom: '1px solid var(--linha)', alignItems: 'flex-start', background: aberta ? 'var(--superficie-2)' : undefined }}>
+      <div style={{ flex: '0 0 88px', textAlign: 'right', paddingTop: 1 }}>
+        {alerta.dataLimiteAcao !== undefined ? (
+          <>
+            <div className="tabnum" style={{ fontSize: 12.5, fontWeight: 700, color: COR_URGENCIA[urgencia] }}>{alerta.dataLimiteAcao.slice(8)}/{alerta.dataLimiteAcao.slice(5, 7)}</div>
+            <div className="sec" title={alerta.eventoAncora}>{urgente ? `há ${-dLim!} dias` : `em ${dLim} dias`}</div>
+          </>
+        ) : <div className="sec">sem prazo</div>}
       </div>
 
-      {aberta && (
-        <div style={{ padding: '0 14px 13px 114px' }}>
-          <div className="sec" style={{ fontSize: 12.5, color: 'var(--texto-suave)', lineHeight: 1.5 }}>
-            {alerta.detalhe} <code style={{ fontSize: 10.5 }}>{alerta.codigo}</code>
-          </div>
-
-          {temEscada && <Escada opcoes={alerta.opcoes!} contratoId={contrato.id} onEmCurso={marcarEmCurso} />}
-          {alerta.notaJuridica !== undefined && <NotaJuridica texto={alerta.notaJuridica} />}
-
-          <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
-            {alerta.impactoMinutos !== undefined && alerta.impactoMinutos > 0 && (
-              <button
-                className="btn sm"
-                onClick={() => gerarMapaProjecaoXlsx({
-                  contratoNumero: contrato.numero,
-                  perfilNome: alerta.titulo.replace(/^Perfil\s+/, '').replace(/\s+esgota-se.*$/, ''),
-                  horasDisponiveis: Math.round(alerta.impactoMinutos! / 60),
-                  valorDisponivel: alerta.impactoValor ?? 0,
-                })}
-              >⬇ Mapa de projeção (Excel)</button>
-            )}
-            {podeGerir && !aDispensar && <button className="btn sm" style={{ borderColor: 'transparent', color: 'var(--texto-suave)' }} onClick={() => setADispensar(true)}>Dispensar</button>}
-          </div>
-
-          {aDispensar && (
-            <div style={{ border: '1px solid var(--linha-forte)', borderRadius: 9, padding: 11, marginTop: 10 }}>
-              <div className="g2">
-                <div className="campo"><label>Motivo da dispensa</label><input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="ex.: tratado fora da aplicação" /></div>
-                <div className="campo"><label>Durante (dias)</label><input type="number" min={1} value={dias} onChange={(e) => setDias(e.target.value)} /></div>
-              </div>
-              <div className="sec" style={{ marginBottom: 8 }}>Reaparece quando o período terminar, ou antes disso se a situação agravar.</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn sm pri" disabled={motivo.trim() === ''} onClick={() => void dispensar()}>Dispensar</button>
-                <button className="btn sm" onClick={() => setADispensar(false)}>Cancelar</button>
-              </div>
-            </div>
-          )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 650, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {alerta.titulo}
+          {alerta.estado === 'EM_CURSO' && <span className="pill p-azul">Em curso</span>}
+          <code style={{ fontSize: 10.5 }}>{alerta.codigo}</code>
         </div>
-      )}
+        <div className="sec" style={{ marginTop: 4, fontSize: 12.5, color: 'var(--texto-suave)', lineHeight: 1.5 }}>{alerta.detalhe}</div>
+
+        <div style={{ display: 'flex', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
+          {podeGerir && !temEscada && <AcaoPrincipal alerta={alerta} contrato={contrato} onFeito={onMudou} onErro={onErro} onEmCurso={marcarEmCurso} />}
+          {temEscada && (
+            <button className="btn sm" onClick={onAbrir}>{aberta ? 'Fechar ações' : disponiveis === 0 ? 'Ver ações' : `Ver ${disponiveis} ${disponiveis === 1 ? 'ação' : 'ações'}`}</button>
+          )}
+          {alerta.impactoMinutos !== undefined && alerta.impactoMinutos > 0 && (
+            <button
+              className="btn sm"
+              onClick={() => gerarMapaProjecaoXlsx({
+                contratoNumero: contrato.numero,
+                perfilNome: alerta.titulo.replace(/^Perfil\s+/, '').replace(/\s+esgota-se.*$/, ''),
+                horasDisponiveis: Math.round(alerta.impactoMinutos! / 60),
+                valorDisponivel: alerta.impactoValor ?? 0,
+              })}
+            >⬇ Mapa de projeção (Excel)</button>
+          )}
+          {podeGerir && !aDispensar && <button className="btn sm" style={{ borderColor: 'transparent', color: 'var(--texto-suave)' }} onClick={() => setADispensar(true)}>Dispensar</button>}
+        </div>
+
+        {aDispensar && (
+          <div style={{ border: '1px solid var(--linha-forte)', borderRadius: 9, padding: 11, marginTop: 10 }}>
+            <div className="g2">
+              <div className="campo"><label>Motivo da dispensa</label><input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="ex.: tratado fora da aplicação" /></div>
+              <div className="campo"><label>Durante (dias)</label><input type="number" min={1} value={dias} onChange={(e) => setDias(e.target.value)} /></div>
+            </div>
+            <div className="sec" style={{ marginBottom: 8 }}>Reaparece quando o período terminar, ou antes disso se a situação agravar.</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn sm pri" disabled={motivo.trim() === ''} onClick={() => void dispensar()}>Dispensar</button>
+              <button className="btn sm" onClick={() => setADispensar(false)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {aberta && temEscada && <Escada opcoes={alerta.opcoes!} contratoId={contrato.id} onEmCurso={marcarEmCurso} />}
+      </div>
+
+      <Impacto alerta={alerta} />
     </div>
   );
 }
@@ -353,31 +346,76 @@ function Impacto({ alerta }: { alerta: Alerta }): ReactNode {
 }
 
 /**
- * Reserva jurídica — fechada por omissão. É informação de referência: tem de
- * estar ao alcance de quem pratica o ato, sem se impor a quem só está a ler a
- * fila. O texto integral vive no separador «Regras e alertas».
+ * ADVERTÊNCIA JURÍDICA — rodapé da fila, fechado por omissão.
+ *
+ * Está aqui por uma razão de fundo: a aplicação torna fácil praticar o ato, e a
+ * facilidade não pode ser lida como dispensa das formalidades nem como
+ * transferência da responsabilidade do gestor do contrato para a ferramenta. Por
+ * isso é abrangente — cobre TODOS os cenários do catálogo, e não só os que
+ * estiverem hoje na fila — e fica sempre acessível no mesmo sítio.
  */
-function NotaJuridica({ texto }: { texto: string }): ReactNode {
+function AdvertenciaJuridica(): ReactNode {
   const [aberta, setAberta] = useState(false);
-  const { intro, itens, fecho } = partirNota(texto);
+  const comNota = CATALOGO_ALERTAS.filter((a) => a.notaJuridica !== undefined);
+
   return (
-    <div style={{ marginTop: 10 }}>
+    <div style={{ marginTop: 26, borderTop: '1px solid var(--linha)', paddingTop: 10 }}>
       <button
         onClick={() => setAberta(!aberta)}
-        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontSize: 11.5, color: 'var(--texto-fraco)', display: 'flex', alignItems: 'center', gap: 6 }}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontSize: 11.5, color: 'var(--texto-fraco)', display: 'flex', alignItems: 'center', gap: 7 }}
       >
-        <span style={{ fontWeight: 700 }}>§</span> O que estas ações não dispensam
+        <span style={{ fontWeight: 700 }}>§</span>
+        Advertência jurídica — o que estas ações não dispensam
         <span style={{ fontSize: 9 }}>{aberta ? '▼' : '▶'}</span>
       </button>
+
       {aberta && (
-        <div style={{ marginTop: 6, padding: '9px 11px', borderLeft: '3px solid var(--linha-forte)', background: 'var(--superficie-2)', borderRadius: '0 7px 7px 0', fontSize: 11.5, color: 'var(--texto-suave)', lineHeight: 1.55 }}>
-          {intro}
-          {itens.length > 0 && (
-            <ul style={{ margin: '5px 0 0', paddingLeft: 17 }}>
-              {itens.map((i) => <li key={i} style={{ marginBottom: 2 }}>{i}</li>)}
-            </ul>
-          )}
-          {fecho !== undefined && <div style={{ marginTop: 6 }}>{fecho}</div>}
+        <div style={{ marginTop: 10, padding: '13px 15px', border: '1px solid var(--linha)', borderRadius: 9, background: 'var(--superficie-2)', fontSize: 11.5, color: 'var(--texto-suave)', lineHeight: 1.55 }}>
+          <p style={{ margin: '0 0 10px' }}>
+            A aplicação apoia a decisão de gestão: sinaliza prazos, quantifica impactos e enumera vias
+            possíveis a partir de regras determinísticas e de projeções do ritmo de execução recente.
+            <b> Não substitui o juízo jurídico, a instrução do procedimento nem a decisão do órgão competente</b>,
+            e a sua utilização <b>não transfere nem atenua a responsabilidade do gestor do contrato</b> pelos
+            atos que pratica ou deixa de praticar.
+          </p>
+          <p style={{ margin: '0 0 10px' }}>
+            As datas-limite resultam de prazos de instrução parametrizados na base legal versionada e podem
+            não corresponder ao prazo aplicável ao caso concreto. As projeções assumem a continuação do ritmo
+            recente e não são previsões certas. A ausência de alerta não atesta a conformidade da execução.
+          </p>
+          <p style={{ margin: '0 0 12px' }}>
+            Em especial, e por tipo de situação:
+          </p>
+
+          {FAMILIAS_ALERTAS.map((familia) => {
+            const daFamilia = comNota.filter((a) => a.familia === familia);
+            if (daFamilia.length === 0) return null;
+            return (
+              <div key={familia} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, color: 'var(--texto-fraco)', marginBottom: 5 }}>{familia}</div>
+                {daFamilia.map((a) => {
+                  const { intro, itens, fecho } = partirNota(a.notaJuridica!);
+                  return (
+                    <div key={a.codigo} style={{ marginBottom: 8, paddingLeft: 11, borderLeft: '2px solid var(--linha)' }}>
+                      <div style={{ fontWeight: 650, color: 'var(--texto)' }}>{a.titulo} <code style={{ fontSize: 10 }}>{a.codigo}</code></div>
+                      <div style={{ marginTop: 2 }}>{intro}</div>
+                      {itens.length > 0 && (
+                        <ul style={{ margin: '3px 0 0', paddingLeft: 17 }}>
+                          {itens.map((i) => <li key={i} style={{ marginBottom: 1 }}>{i}</li>)}
+                        </ul>
+                      )}
+                      {fecho !== undefined && <div style={{ marginTop: 3 }}>{fecho}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+
+          <p style={{ margin: '12px 0 0', color: 'var(--texto-fraco)' }}>
+            O catálogo completo das regras de negócio e dos alertas, com a respetiva base legal, está em
+            «Regras e alertas».
+          </p>
         </div>
       )}
     </div>
@@ -474,7 +512,7 @@ function Escada({ opcoes, contratoId, onEmCurso }: {
             onClick={() => setVerPerdidas(!verPerdidas)}
             style={{ width: '100%', textAlign: 'left', background: 'var(--superficie-2)', border: 'none', borderTop: '1px solid var(--linha)', padding: '7px 12px', cursor: 'pointer', font: 'inherit', fontSize: 11.5, color: 'var(--texto-fraco)' }}
           >
-            {verPerdidas ? '▼' : '▶'} {perdidas.length} opção(ões) já indisponível(eis)
+            {verPerdidas ? '▼' : '▶'} {perdidas.length === 1 ? '1 opção já indisponível' : `${perdidas.length} opções já indisponíveis`}
           </button>
           {verPerdidas && <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>{perdidas.map((o) => linha(o, true))}</ol>}
         </>
@@ -565,6 +603,10 @@ function AcaoPrincipal({ alerta, contrato, onFeito, onErro, onEmCurso }: {
  * Destino da ação principal de cada decisão. Onde há um ato de modificação
  * concreto, leva o tipo — o formulário abre já nesse tipo, sem obrigar a
  * procurá-lo na lista.
+ *
+ * Só constam decisões com um ATO a praticar. As que apenas remetiam para a
+ * ficha do contrato não têm ação própria: «Ver contrato» já está no cabeçalho
+ * do cartão, e repeti-lo por decisão é ruído sem escolha nenhuma.
  */
 const DESTINO_ACAO: Record<string, { rot: string; destino: AcaoOpcao['destino']; tipoModificacao?: string }> = {
   'AL-FOLGA-SEM-TEMPO': { rot: 'Prorrogar vigência', destino: 'MODIFICACOES', tipoModificacao: 'PRORROGACAO' },
@@ -579,12 +621,10 @@ const DESTINO_ACAO: Record<string, { rot: string; destino: AcaoOpcao['destino'];
   'AL-VALOR-DISPONIVEL': { rot: 'Registar complementares', destino: 'MODIFICACOES', tipoModificacao: 'SERVICOS_COMPLEMENTARES' },
   'AL-COMPLEMENTARES-40': { rot: 'Ver modificações', destino: 'MODIFICACOES', tipoModificacao: 'SERVICOS_COMPLEMENTARES' },
   'AL-COMPLEMENTARES-45': { rot: 'Ver modificações', destino: 'MODIFICACOES', tipoModificacao: 'SERVICOS_COMPLEMENTARES' },
-  'AL-NOVO-PROCEDIMENTO': { rot: 'Ver contrato', destino: 'FICHA' },
   'AL-TERMINO-3M': { rot: 'Prorrogar vigência', destino: 'MODIFICACOES', tipoModificacao: 'PRORROGACAO' },
   'AL-TERMINO-6M': { rot: 'Prorrogar vigência', destino: 'MODIFICACOES', tipoModificacao: 'PRORROGACAO' },
   'AL-EXECUCAO-FORA-VIGENCIA': { rot: 'Rever registos', destino: 'AFETACOES' },
   'AL-SUSPENSAO-ABERTA': { rot: 'Rever suspensão', destino: 'MODIFICACOES', tipoModificacao: 'SUSPENSAO' },
   'AL-SUSPENSAO-VIGENCIA': { rot: 'Rever suspensão', destino: 'MODIFICACOES', tipoModificacao: 'SUSPENSAO' },
   'AL-VISTO-PENDENTE': { rot: 'Registar visto', destino: 'FICHA' },
-  'AL-VIGENCIA-36M': { rot: 'Ver contrato', destino: 'FICHA' },
 };

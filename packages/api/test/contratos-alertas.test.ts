@@ -138,11 +138,16 @@ describe('alertas e auditoria', () => {
     const comEscada = (await ctx.repos.alertas.todos((a) => a.codigo === 'AL-PERFIL-ESGOTA-ANTES-TERMINO'))[0]!;
 
     expect(comEscada.opcoes!.length).toBeGreaterThan(1);
-    // Toda a opção viável tem prazo próprio e um sítio onde se pratica o ato.
+    // Toda a opção viável tem prazo próprio.
     for (const o of comEscada.opcoes!.filter((x) => x.viabilidade !== 'INVIAVEL')) {
       expect(o.dataLimite, o.titulo).toBeDefined();
-      expect(o.acao, o.titulo).toBeDefined();
     }
+    // As que se praticam na aplicação levam ao sítio certo; a preparação de novo
+    // procedimento é pré-contratual e não tem ação aqui.
+    const comAcao = comEscada.opcoes!.filter((o) => o.acao !== undefined);
+    expect(comAcao.length).toBeGreaterThan(0);
+    for (const o of comAcao) expect(['AFETACOES', 'MODIFICACOES', 'FICHA', 'REGISTOS'], o.titulo).toContain(o.acao!.destino);
+    expect(comEscada.opcoes!.find((o) => o.titulo === 'Preparar novo procedimento')?.acao).toBeUndefined();
     // O prazo do alerta é o mais curto das opções — a primeira a perder-se.
     const maisCurta = comEscada.opcoes!
       .filter((o) => o.dataLimite !== undefined && o.viabilidade !== 'INVIAVEL')

@@ -147,15 +147,6 @@ export interface EntradaEscada {
   dataEsgotamento: DataISO;
 }
 
-/**
- * Reserva jurídica das opções de capacidade. A escada resolve o problema de
- * gestão — quem executa continua obrigado ao que a lei e o contrato impõem.
- */
-export const NOTA_JURIDICA_CAPACIDADE =
-  'Estas opções não dispensam: a observância do objeto do contrato e do perfil contratado (não se reafeta para tarefa alheia ao objeto); ' +
-  'a verificação da habilitação e da idoneidade do executante; a autorização prévia da subcontratação ou da cessão da posição contratual; ' +
-  'a fundamentação e o registo da modificação contratual, quando exista; e o cabimento e compromisso prévios da despesa que resulte de qualquer delas.';
-
 /** Prazo de uma opção, a partir da data em que a alternativa deixa de existir. */
 function prazo(hoje: DataISO, dataLimite: DataISO): { dataLimite: DataISO; diasParaLimite: number } {
   return { dataLimite, diasParaLimite: diasEntre(hoje, dataLimite) };
@@ -254,8 +245,9 @@ export function escadaOpcoesPerfil(e: EntradaEscada): OpcaoAlerta[] {
         : ` Contando ${e.contrato.vistoTribunalContasNecessario ? 'a duração do procedimento e o visto prévio do Tribunal de Contas' : 'a duração do procedimento'}, tem de arrancar até ${jProc.dataLimiteAcao}.`),
     viabilidade: alternativas.length === 0 && interna.length === 0 ? 'VIAVEL' : 'CONDICIONADA',
     fundamento: 'CCP — planeamento da contratação.',
+    // Sem ação própria: a preparação do procedimento é fase pré-contratual e
+    // não se pratica nesta aplicação, que trata da execução.
     ...prazo(e.hoje, jProc.dataLimiteAcao),
-    acao: { destino: 'FICHA', rotulo: 'Ver contrato', contratoId: e.contrato.id },
   });
 
   return opcoes;

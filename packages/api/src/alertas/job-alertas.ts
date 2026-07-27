@@ -3,7 +3,7 @@ import {
   calcularConsumoPerfil, valorPrevistoPerfil, mesesAteTermino, excedeLimiteVigencia,
   portariaExigeReprogramacao, anoFinalPortaria, montantePortariaAno, mesesGanhosComReprogramacao,
   terminoExecucaoAjustado, periodosSuspensao, mesesEntre, vigenciaLiquidaMeses, LIMITE_VIGENCIA_MESES,
-  preverPerfil, preverContrato, ritmoValorDia, escadaOpcoesPerfil, prazoMaisCurto, NOTA_JURIDICA_CAPACIDADE,
+  preverPerfil, preverContrato, ritmoValorDia, escadaOpcoesPerfil, prazoMaisCurto,
   janelaTransicaoAno, janelaReprogramacaoPortaria, janelaModificacao, janelaNovoProcedimento, severidadePorJanela,
   fimAnoEconomico, diaDeInstante, diasEntre, diasUteisEntre, adicionarDias,
   reconciliarAlertas, chaveAlerta, definicaoAlerta,
@@ -41,7 +41,6 @@ interface Extras {
   impactoMinutos?: number;
   diasUteisRestantes?: number;
   opcoes?: OpcaoAlerta[];
-  notaJuridica?: string;
 }
 
 /**
@@ -75,7 +74,7 @@ export class JobAlertas {
     contratoId: string, codigo: string, severidade: SeveridadeAlerta,
     titulo: string, detalhe: string, destinatarioId: string, extras: Extras = {},
   ): AlertaCalculado {
-    const { referencia, janela, impactoValor, impactoMinutos, diasUteisRestantes, opcoes, notaJuridica } = extras;
+    const { referencia, janela, impactoValor, impactoMinutos, diasUteisRestantes, opcoes } = extras;
     return {
       contratoId, codigo, chave: chaveAlerta(contratoId, codigo, referencia),
       // Quando há janela de decisão, a severidade escala com a proximidade do
@@ -91,11 +90,9 @@ export class JobAlertas {
       ...(impactoMinutos !== undefined ? { impactoMinutos } : {}),
       ...(diasUteisRestantes !== undefined ? { diasUteisRestantes } : {}),
       ...(opcoes !== undefined && opcoes.length > 0 ? { opcoes } : {}),
-      // A reserva jurídica vem do catálogo, salvo quando o alerta traz uma
-      // própria (a escada de opções tem a sua, que cobre as várias vias).
-      ...(notaJuridica ?? definicaoAlerta(codigo)?.notaJuridica) !== undefined
-        ? { notaJuridica: notaJuridica ?? definicaoAlerta(codigo)!.notaJuridica! }
-        : {},
+      // A reserva jurídica é a do catálogo: uma só fonte para o alerta, para o
+      // rodapé do «Hoje» e para a documentação gerada.
+      ...(definicaoAlerta(codigo)?.notaJuridica !== undefined ? { notaJuridica: definicaoAlerta(codigo)!.notaJuridica! } : {}),
     };
   }
 
@@ -314,7 +311,6 @@ export class JobAlertas {
           destinatario, {
             referencia: p.id, janela: j, impactoMinutos: prev.minutosRestantes, opcoes,
             diasUteisRestantes: diasUteisEntre(hoje, prev.dataEsgotamento),
-            notaJuridica: NOTA_JURIDICA_CAPACIDADE,
           }));
       }
 

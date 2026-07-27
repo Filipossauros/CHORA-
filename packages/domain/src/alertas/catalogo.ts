@@ -147,6 +147,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     eventoAncora: 'data prevista de esgotamento do perfil',
     regraRelacionada: 'RN-505',
     base: 'Projeção determinística do ritmo recente (camada de previsões).',
+    notaJuridica:
+      'As vias de reforço de capacidade não dispensam: a observância do objeto do contrato e do perfil contratado — não se reafeta pessoal para tarefa alheia ao objeto; a verificação da habilitação e da idoneidade do executante; a autorização prévia da subcontratação ou da cessão da posição contratual; a fundamentação e o registo da modificação contratual, quando exista; e o cabimento e compromisso prévios da despesa que dela resulte.',
   },
   {
     codigo: 'AL-PERFIL-80',

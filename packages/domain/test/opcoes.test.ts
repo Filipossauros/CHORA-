@@ -193,5 +193,7 @@ describe('escada de opções', () => {
     expect(opcoes.find((o) => o.titulo.includes('C-2'))!.acao).toMatchObject({ destino: 'AFETACOES', contratoId: 'c2' });
     // Reforçar é uma modificação, e leva o tipo a pré-selecionar.
     expect(opcoes.find((o) => o.titulo.includes('Reforçar'))!.acao).toMatchObject({ destino: 'MODIFICACOES', tipoModificacao: 'SERVICOS_COMPLEMENTARES' });
+    // Preparar procedimento é fase pré-contratual: não se pratica na aplicação.
+    expect(opcoes.find((o) => o.titulo === 'Preparar novo procedimento')!.acao).toBeUndefined();
   });
 });
