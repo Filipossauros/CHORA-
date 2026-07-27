@@ -22,6 +22,16 @@ export { ServicoRecursos, ServicoAcessos } from './servicos/recursos-acessos.js'
 export { ServicoAlertas, ATO_RESOLVE } from './servicos/alertas.js';
 export { ServicoEntregaveis } from './servicos/entregaveis.js';
 export { ServicoOrcamentos, type OrcamentoComResumo } from './servicos/orcamentos.js';
+export { ServicoAssistente, type Interpretacao } from './servicos/assistente.js';
+export { CAPACIDADES, capacidadePorNome } from './assistente/capacidades.js';
+export { encaminhar, normalizar, numeroContratoNaFrase, valorHoraNaFrase, type Encaminhamento } from './assistente/router.js';
+export { AgenteLocal, CONFIG_MODELO_OMISSAO, type ConfigModeloLocal } from './assistente/agente-local.js';
+export type {
+  Capacidade, CapacidadePublica, TipoCapacidade, Simulacao, RegraAvaliada,
+  ResultadoCapacidade, TabelaResposta, UiEmbebida, Exportavel,
+} from './assistente/tipos.js';
+export { type Diretorio, DIRETORIO_VAZIO } from './contexto.js';
+export { DIRETORIO_SEED, PESSOAS } from './seed/diretorio.js';
 export type { Acesso, RelatorioEvidencia } from './repositorios/memoria/index.js';
 export { JobAlertas, NotifierConsola } from './alertas/job-alertas.js';
 export { paraProblema, ErroProibido, ErroNaoEncontrado, type Problema } from './erros/problema.js';

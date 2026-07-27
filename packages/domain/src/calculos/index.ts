@@ -6,3 +6,5 @@ export * from './previsoes.js';
 export * from './janela-decisao.js';
 export * from './opcoes.js';
 export * from './orcamento.js';
+export * from './capacidade.js';
+export * from './projeto.js';

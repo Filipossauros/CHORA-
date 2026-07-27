@@ -18,6 +18,21 @@ export const CONFIG_OMISSAO: Config = {
   retencaoAuditoriaAnos: 5,
 };
 
+/**
+ * Diretório de pessoas (Entra ID / Azure). Não é uma entidade do domínio: as
+ * pessoas não se criam aqui, herdam-se do workspace. O assistente precisa dele
+ * para resolver «o Diogo Marques» num identificador — sem isto só se poderia
+ * falar em `oid-recurso-02`.
+ */
+export interface Diretorio {
+  nome(id: string): string | undefined;
+  /** Pessoas cujo nome corresponde ao texto (correspondência tolerante). */
+  procurar(texto: string): Array<{ id: string; nome: string }>;
+}
+
+/** Diretório vazio — a aplicação funciona sem ele, só não resolve nomes. */
+export const DIRETORIO_VAZIO: Diretorio = { nome: () => undefined, procurar: () => [] };
+
 /** Contentor de dependências da aplicação. */
 export interface Contexto {
   repos: Repositorios;
@@ -26,6 +41,7 @@ export interface Contexto {
   auditoria: ServicoAuditoria;
   config: Config;
   tokenValidator: TokenValidator;
+  diretorio: Diretorio;
 }
 
 export interface OpcoesContexto {
@@ -34,6 +50,7 @@ export interface OpcoesContexto {
   config?: Partial<Config>;
   tokenValidator: TokenValidator;
   repos?: Repositorios;
+  diretorio?: Diretorio;
 }
 
 export function criarContexto(opcoes: OpcoesContexto): Contexto {
@@ -47,6 +64,7 @@ export function criarContexto(opcoes: OpcoesContexto): Contexto {
     ids,
     config,
     tokenValidator: opcoes.tokenValidator,
+    diretorio: opcoes.diretorio ?? DIRETORIO_VAZIO,
     auditoria: new ServicoAuditoria(repos, relogio, ids),
   };
 }

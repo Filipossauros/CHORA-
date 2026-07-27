@@ -22,7 +22,7 @@ const G_CONTRATO: PapelAplicacional = 'GESTOR_CONTRATO';
 const G_TECNICO: PapelAplicacional = 'GESTOR_TECNICO';
 const ELEMENTO: PapelAplicacional = 'ELEMENTO_EQUIPA_TECNICA';
 
-const MATRIZ: Record<Operacao, ReadonlyArray<PapelAplicacional>> = {
+export const MATRIZ: Record<Operacao, ReadonlyArray<PapelAplicacional>> = {
   'registo.criar.proprio': [G_CONTRATO, G_TECNICO, ELEMENTO],
   'registo.ver.terceiros': [G_CONTRATO, G_TECNICO],
   'registo.aprovar': [G_CONTRATO, G_TECNICO],

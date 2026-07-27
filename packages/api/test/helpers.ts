@@ -4,6 +4,7 @@ import { construirServidor } from '../src/server.js';
 import { FakeTokenValidator } from '../src/auth/fake-token-validator.js';
 import { UTILIZADORES_DEV } from '../src/seed/utilizadores.js';
 import { semear } from '../src/seed/semear.js';
+import { DIRETORIO_SEED } from '../src/seed/diretorio.js';
 import { criarGeradorSequencial } from '../src/util/id.js';
 
 export const INSTANTE_TESTE = '2026-07-21T09:00:00.000Z';
@@ -11,7 +12,7 @@ export const INSTANTE_TESTE = '2026-07-21T09:00:00.000Z';
 export async function montarApp(comSeed = true): Promise<{ app: ReturnType<typeof construirServidor>; ctx: Contexto }> {
   const relogio = relogioFixo(INSTANTE_TESTE);
   const tokenValidator = new FakeTokenValidator(UTILIZADORES_DEV, relogio);
-  const ctx = criarContexto({ tokenValidator, relogio, ids: criarGeradorSequencial() });
+  const ctx = criarContexto({ tokenValidator, relogio, ids: criarGeradorSequencial(), diretorio: DIRETORIO_SEED });
   if (comSeed) await semear(ctx);
   const app = construirServidor(ctx);
   await app.ready();

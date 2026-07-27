@@ -17,7 +17,7 @@ import { useMudancas } from '../comum.js';
  * A «Orçamentação» substituiu as «Previsões»: projetar o ritmo de execução por
  * contrato já se lê nas decisões do «Hoje» e no consumo da lista de contratos.
  * O que faltava era a pergunta anual — que contratos vão ser precisos e quanto
- * custam — e essa merece destino próprio.
+ * custam. Vive na gaveta porque é trabalho de uma época do ano, não do dia a dia.
  */
 const NAV = [
   { grupo: 'Trabalho', itens: [
@@ -26,15 +26,13 @@ const NAV = [
     { to: '/registos', rot: 'Registos e aprovações' },
     { to: '/faturacao', rot: 'Faturação' },
   ] },
-  { grupo: 'Análise', itens: [
-    { to: '/relatorios', rot: 'Relatórios' },
-    { to: '/orcamentacao', rot: 'Orçamentação' },
-  ] },
+  { grupo: 'Análise', itens: [{ to: '/relatorios', rot: 'Relatórios' }] },
 ];
 
 /** Gaveta: transparência, administração e consulta. */
 const GAVETA = [
   { to: '/regras', rot: 'Regras e alertas' },
+  { to: '/orcamentacao', rot: 'Orçamentação' },
   { to: '/recursos', rot: 'Recursos' },
   { to: '/auditoria', rot: 'Auditoria' },
   { to: '/acessos', rot: 'Acessos' },
@@ -98,7 +96,7 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
             className="grupo"
             style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, fontFamily: 'inherit' }}
           >
-            <span aria-hidden="true">⚙</span> Configuração e transparência <span style={{ marginLeft: 'auto' }}>{gavetaAberta ? '▾' : '▸'}</span>
+            <span aria-hidden="true">⚙</span> Configurações e outros <span style={{ marginLeft: 'auto' }}>{gavetaAberta ? '▾' : '▸'}</span>
           </button>
           {gavetaAberta && GAVETA.map((i) => (
             <NavLink key={i.to} to={i.to} className={({ isActive }) => `nav-i${isActive ? ' ativo' : ''}`}>{i.rot}</NavLink>

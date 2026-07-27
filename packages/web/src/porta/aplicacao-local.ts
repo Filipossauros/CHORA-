@@ -2,7 +2,7 @@ import {
   criarContexto, semear, resumoSeed, JobAlertas, FakeTokenValidator, UTILIZADORES_DEV,
   ServicoContratos, ServicoRegistosTempo, ServicoProcedimentos, ServicoEstrutura,
   ServicoAfetacoes, ServicoFaturas, ServicoRecursos, ServicoAcessos, ServicoEntregaveis,
-  ServicoOrcamentos,
+  ServicoOrcamentos, DIRETORIO_SEED, PESSOAS,
   type Contexto, type Repositorios, type ContextoUtilizador,
 } from '@chora/api/nucleo';
 import { relogioSistema, type PapelAplicacional } from '@chora/domain';
@@ -21,14 +21,7 @@ export const UTILIZADORES = [
  * têm conta Azure — não se criam manualmente. Serve para selecionar o gestor do
  * contrato e para apresentar o nome/prestador dos recursos.
  */
-export const AZURE_USERS: Array<{ id: string; nome: string; prestador?: string }> = [
-  { id: 'oid-gestor-contrato', nome: 'Ana Gestora (Contraente)' },
-  { id: 'oid-gestor-tecnico', nome: 'Bruno Técnico (Contraente)' },
-  { id: 'oid-recurso-01', nome: 'Carla Andrade', prestador: 'Prestador Alfa, Lda.' },
-  { id: 'oid-recurso-02', nome: 'Diogo Marques', prestador: 'Prestador Alfa, Lda.' },
-  { id: 'oid-recurso-03', nome: 'Eva Nogueira', prestador: 'Subcontratado Beta, S.A.' },
-  { id: 'oid-recurso-09', nome: 'Filipe Costa', prestador: 'Prestador Alfa, Lda.' },
-];
+export const AZURE_USERS: ReadonlyArray<{ id: string; nome: string; prestador?: string }> = PESSOAS;
 export const nomeAzure = (id: string): string => AZURE_USERS.find((u) => u.id === id)?.nome ?? id;
 export const prestadorAzure = (id: string): string | undefined => AZURE_USERS.find((u) => u.id === id)?.prestador;
 
@@ -38,7 +31,7 @@ export const prestadorAzure = (id: string): string | undefined => AZURE_USERS.fi
  * utilizador não tem como saber que o que vê é de uma versão anterior. Subir
  * este número repõe a demonstração no arranque seguinte.
  */
-const VERSAO_DADOS = '2026-07-27.orcamentacao';
+const VERSAO_DADOS = '2026-07-27.assistente';
 const CHAVE_VERSAO = 'chora:versao';
 
 function criarReposLocais(): Repositorios {
@@ -71,7 +64,7 @@ export class AplicacaoLocal {
 
   constructor() {
     const tokenValidator = new FakeTokenValidator(UTILIZADORES_DEV, relogioSistema);
-    this.ctx = criarContexto({ tokenValidator, relogio: relogioSistema, repos: criarReposLocais() });
+    this.ctx = criarContexto({ tokenValidator, relogio: relogioSistema, repos: criarReposLocais(), diretorio: DIRETORIO_SEED });
     this.contratos = new ServicoContratos(this.ctx);
     this.registos = new ServicoRegistosTempo(this.ctx);
     this.procedimentos = new ServicoProcedimentos(this.ctx);

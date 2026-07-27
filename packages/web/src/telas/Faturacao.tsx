@@ -82,7 +82,16 @@ function Dropzone({ id, rot, ficheiro, onFicheiro, ativo }: {
  * crédito — e essa aparece em destaque no topo, porque é a que exige uma
  * diligência junto do fornecedor.
  */
-export function Faturacao(): ReactNode {
+export function Faturacao({ inicial, embebido = false }: {
+  /** Valores iniciais do formulário — usado quando o ecrã é montado no chat. */
+  inicial?: Partial<{ numero: string; numeroContrato: string; nifPrestador: string; montanteSemIva: string }>;
+  /**
+   * Montado dentro da conversa: sem cabeçalho próprio e sem o histórico
+   * lateral. É o MESMO componente, não uma cópia — é isso que impede o fluxo do
+   * chat de divergir do fluxo do ecrã.
+   */
+  embebido?: boolean;
+} = {}): ReactNode {
   const podeGerir = app.papeisAtuais().includes('GESTOR_CONTRATO');
   const [params] = useSearchParams();
   const [faturaId, setFaturaId] = useState('');
@@ -91,8 +100,11 @@ export function Faturacao(): ReactNode {
   const [motivo, setMotivo] = useState('');
   const [erro, setErro] = useState<string>();
   const [nova, setNova] = useState({
-    numero: '', numeroContrato: params.get('contrato') ?? '', nifPrestador: '',
-    periodoDe: '', periodoAte: '', montanteSemIva: '', montanteIva: '',
+    numero: inicial?.numero ?? '',
+    numeroContrato: inicial?.numeroContrato ?? params.get('contrato') ?? '',
+    nifPrestador: inicial?.nifPrestador ?? '',
+    periodoDe: '', periodoAte: '',
+    montanteSemIva: inicial?.montanteSemIva ?? '', montanteIva: '',
     tipo: undefined as TipoFaturacao | undefined, entregavelId: '', ficheiroUnico: true,
   });
   const [pend, setPend] = useState<Partial<Record<TipoDoc, File>>>({});
@@ -227,13 +239,15 @@ export function Faturacao(): ReactNode {
 
   return (
     <>
-      <Cabecalho titulo="Conferência de faturas" sub="Registar · conferir · decidir" acoes={
-        fatura !== null ? <button className="btn" onClick={limpar}>+ Nova fatura</button> : undefined
-      } />
+      {!embebido && (
+        <Cabecalho titulo="Conferência de faturas" sub="Registar · conferir · decidir" acoes={
+          fatura !== null ? <button className="btn" onClick={limpar}>+ Nova fatura</button> : undefined
+        } />
+      )}
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
 
       {/* Único pendente possível: a fatura errada à espera da nota de crédito. */}
-      {fatura === null && aguardam.length > 0 && (
+      {!embebido && fatura === null && aguardam.length > 0 && (
         <div className="cartao" style={{ marginBottom: 16, borderLeft: '3px solid var(--ambar)' }}>
           <h3>A aguardar nota de crédito<span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{aguardam.length} fatura(s) por conferir</span></h3>
           <table><tbody>
@@ -253,7 +267,7 @@ export function Faturacao(): ReactNode {
 
       {/* ── REGISTO MANUAL ─────────────────────────────────────────────────── */}
       {fatura === null && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: embebido ? '1fr' : '1fr 300px', gap: 16 }}>
           <div className="cartao"><h3>Registar fatura{contrato !== null && <span className="pill p-azul" style={{ marginLeft: 8 }}>{ROT_TIPO[tipo]}</span>}</h3><div className="corpo">
             {!podeGerir && <div className="aviso">Só o gestor de contrato confere faturas.</div>}
 
@@ -322,7 +336,7 @@ export function Faturacao(): ReactNode {
             <button className="btn pri" disabled={!podeGerir || contrato === null} onClick={() => void registarEConferir()}>Registar e conferir →</button>
           </div></div>
 
-          <HistoricoFaturas faturas={faturas} numeroContrato={numeroContrato} onAbrir={(id) => void abrir(id)} />
+          {!embebido && <HistoricoFaturas faturas={faturas} numeroContrato={numeroContrato} onAbrir={(id) => void abrir(id)} />}
         </div>
       )}
 

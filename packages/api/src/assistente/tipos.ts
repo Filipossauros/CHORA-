@@ -1,0 +1,120 @@
+import type { z } from 'zod';
+import type { FonteResposta, PapelAplicacional } from '@chora/domain';
+import type { Contexto } from '../contexto.js';
+import type { ContextoUtilizador } from '../auth/token-validator.js';
+
+/**
+ * CATÁLOGO DE CAPACIDADES — a única superfície por onde o assistente toca na
+ * aplicação.
+ *
+ * O princípio que sustenta tudo o resto: **o modelo encaminha e narra; as regras
+ * decidem; os cálculos calculam.** Um modelo local de poucos milhares de
+ * milhões de parâmetros erra contas, datas e limites legais — e erra-os com
+ * confiança. Por isso não lhe é dado escrever números nem juízos: é-lhe dado
+ * escolher uma função de uma lista fechada e preencher-lhe os parâmetros, que
+ * são validados por esquema antes de qualquer execução.
+ *
+ * Daí decorrem três garantias:
+ *
+ *  1. **Lista fechada.** Um nome de capacidade que não exista, ou um parâmetro
+ *     fora do esquema, é rejeitado sem executar nada. Não há prompt que faça o
+ *     assistente chamar o que não está aqui.
+ *  2. **Mesmo caminho da UI.** `executar` invoca os mesmos serviços que os
+ *     botões dos ecrãs, com os mesmos `exigir(RN_xxx)`. Não existe código onde
+ *     contornar uma regra, logo o assistente não a pode contornar.
+ *  3. **Implicações calculadas.** As ações trazem `simular`, que avalia as
+ *     regras em seco e descreve os efeitos a partir dos cálculos. O «isto
+ *     implica tal e tal» é apurado, não redigido por um modelo.
+ */
+
+/** Consultas leem; ações escrevem — e só as ações passam por confirmação. */
+export type TipoCapacidade = 'CONSULTA' | 'ACAO';
+
+/** Avaliação de uma regra em seco, antes de executar. */
+export interface RegraAvaliada {
+  codigo: string;
+  descricao: string;
+  ok: boolean;
+  mensagem?: string;
+}
+
+/**
+ * O que vai acontecer se a ação for confirmada. Cada efeito sai de uma função
+ * determinística; cada regra de uma avaliação real de `Regra.avaliar()`.
+ */
+export interface Simulacao {
+  titulo: string;
+  /** Antes/depois, em linguagem de gestão. */
+  efeitos: string[];
+  regras: RegraAvaliada[];
+  avisos: string[];
+  /** Alguma regra bloqueante falhou: a confirmação não é oferecida. */
+  bloqueada: boolean;
+}
+
+/** Tabela apresentada no chat e exportável para folha de cálculo. */
+export interface TabelaResposta {
+  titulo: string;
+  colunas: string[];
+  linhas: Array<Array<string | number>>;
+}
+
+/** Ecrã real a embeber na conversa, com valores iniciais. */
+export interface UiEmbebida {
+  ecra: 'FATURACAO' | 'AFETACOES' | 'MODIFICACOES';
+  titulo: string;
+  props: Record<string, unknown>;
+}
+
+/** Folha de cálculo a gerar no cliente (o domínio não escreve ficheiros). */
+export interface Exportavel {
+  nome: string;
+  folhas: Array<{ nome: string; linhas: Array<Record<string, string | number>> }>;
+}
+
+export interface ResultadoCapacidade {
+  texto: string;
+  fontes: FonteResposta[];
+  tabela?: TabelaResposta;
+  exportavel?: Exportavel;
+  ui?: UiEmbebida;
+  /** A capacidade correu mas não encontrou o que lhe pediram. */
+  semResultado?: boolean;
+}
+
+export interface ContextoExecucao {
+  ctx: Contexto;
+  utilizador: ContextoUtilizador;
+  hoje: string;
+}
+
+export interface Capacidade<P = unknown> {
+  nome: string;
+  titulo: string;
+  /** O que faz, em linguagem de gestão. Aparece no catálogo público. */
+  descricao: string;
+  tipo: TipoCapacidade;
+  parametros: z.ZodType<P>;
+  /** Descrição dos parâmetros para o catálogo e para o pedido ao modelo. */
+  parametrosDescricao: Array<{ nome: string; tipo: string; obrigatorio: boolean; descricao: string }>;
+  /** Operação da matriz de permissões que autoriza esta capacidade. */
+  operacao?: import('../auth/permissoes.js').Operacao;
+  /** Regras de negócio avaliadas na execução. Vazio nas consultas. */
+  regras: string[];
+  /** Frases que a acionam — servem o router determinístico e o modelo. */
+  exemplos: string[];
+  simular?(p: P, e: ContextoExecucao): Promise<Simulacao>;
+  executar(p: P, e: ContextoExecucao): Promise<ResultadoCapacidade>;
+}
+
+/** Vista pública de uma capacidade, para o ecrã «Regras e alertas». */
+export interface CapacidadePublica {
+  nome: string;
+  titulo: string;
+  descricao: string;
+  tipo: TipoCapacidade;
+  parametros: Array<{ nome: string; tipo: string; obrigatorio: boolean; descricao: string }>;
+  regras: string[];
+  exemplos: string[];
+  papeis: PapelAplicacional[];
+}
