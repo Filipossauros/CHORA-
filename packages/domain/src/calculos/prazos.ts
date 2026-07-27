@@ -1,6 +1,6 @@
-import type { Contrato } from '../entidades/contrato.js';
+import type { Contrato, PortariaExtensaoEncargos } from '../entidades/contrato.js';
 import type { Alteracao } from '../entidades/estrutura.js';
-import type { DataISO } from '../tipos/primitivos.js';
+import type { Cent, DataISO } from '../tipos/primitivos.js';
 import { adicionarDias, diasEntre, mesesEntre } from '../tipos/tempo.js';
 
 /**
@@ -146,6 +146,51 @@ export function portariaExigeReprogramacao(contrato: Contrato): boolean {
 export function montantePortariaAno(contrato: Contrato, ano: number): number {
   const rep = contrato.portariaExtensaoEncargos?.reparticaoAnual;
   return rep?.find((r) => r.ano === ano)?.montante ?? 0;
+}
+
+/**
+ * REPROGRAMAÇÃO DA PORTARIA DE EXTENSÃO DE ENCARGOS.
+ *
+ * Um acréscimo de despesa plurianual (trabalhos complementares, por exemplo) só
+ * tem cobertura orçamental depois de a portaria repartir esse acréscimo pelos
+ * anos económicos em que vai ser executado. Esta função calcula a nova
+ * repartição: distribui o acréscimo pelos anos do período abrangido,
+ * proporcionalmente ao que já estava repartido nesses anos — quem executa mais
+ * num ano precisa de mais cobertura nesse ano —, e em partes iguais quando não
+ * há base de repartição (anos ainda não cobertos). O arredondamento em cêntimos
+ * é absorvido pelo último ano, para a soma fechar ao cêntimo.
+ */
+export function reprogramarPortaria(
+  portaria: PortariaExtensaoEncargos,
+  acrescimo: Cent,
+  anoInicio: number,
+  anoFim: number,
+): PortariaExtensaoEncargos {
+  if (acrescimo === 0 || anoFim < anoInicio) return portaria;
+  const anos: number[] = [];
+  for (let a = anoInicio; a <= anoFim; a += 1) anos.push(a);
+
+  const atual = new Map(portaria.reparticaoAnual.map((r) => [r.ano, r.montante]));
+  const base = anos.reduce((s, a) => s + (atual.get(a) ?? 0), 0);
+
+  let distribuido = 0;
+  anos.forEach((ano, i) => {
+    const ultimo = i === anos.length - 1;
+    const quota = ultimo
+      ? acrescimo - distribuido
+      : base > 0
+        ? Math.round((acrescimo * (atual.get(ano) ?? 0)) / base)
+        : Math.round(acrescimo / anos.length);
+    distribuido += quota;
+    atual.set(ano, (atual.get(ano) ?? 0) + quota);
+  });
+
+  return {
+    ...portaria,
+    reparticaoAnual: [...atual.entries()]
+      .map(([ano, montante]) => ({ ano, montante }))
+      .sort((x, y) => x.ano - y.ano),
+  };
 }
 
 /**

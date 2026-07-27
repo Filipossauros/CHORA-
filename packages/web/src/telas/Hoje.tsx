@@ -534,7 +534,7 @@ function rotaDaAcao(acao: AcaoOpcao, contratoIdOmissao: string): string {
   }
   if (acao.destino === 'FICHA') return `/contratos/${id}?tab=Ficha`;
   if (acao.destino === 'REGISTOS') return `/registos?contrato=${id}`;
-  return `/contratos/${id}?tab=${encodeURIComponent('Execução')}`;
+  return `/contratos/${id}?tab=${encodeURIComponent('Afetações')}`;
 }
 
 /**

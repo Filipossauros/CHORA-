@@ -19,11 +19,12 @@ const zPrestador = z.object({
   agrupamento: z.object({ membros: z.array(zMembroAgrupamento) }).optional(),
 });
 
-const zPortariaExtensaoEncargos = z.object({
+export const zPortariaExtensaoEncargos = z.object({
   numero: z.string().min(1),
   data: zDataISO,
   reparticaoAnual: z.array(z.object({ ano: zAnoCivil, montante: zCent })),
 });
+export type PortariaExtensaoEncargos = z.infer<typeof zPortariaExtensaoEncargos>;
 
 const zGestorContrato = z.object({
   utilizadorId: z.string().min(1), // oid do utilizador Azure selecionado

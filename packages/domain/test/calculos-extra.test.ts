@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Dotacao, PerfilContratual, Alteracao } from '../src/entidades/estrutura.js';
 import type { Contrato } from '../src/entidades/contrato.js';
 import { totalDotacoes, totalPrevistoPerfis, montanteLiquidoFatura } from '../src/calculos/financeira.js';
-import { anoFinalPortaria, portariaExigeReprogramacao, vigenciaLiquidaMeses } from '../src/calculos/prazos.js';
+import { anoFinalPortaria, portariaExigeReprogramacao, reprogramarPortaria, vigenciaLiquidaMeses } from '../src/calculos/prazos.js';
 import {
   periodosSuspensao,
   suspensoesSobrepoem,
@@ -110,5 +110,46 @@ describe('prazos — utilitários', () => {
       portariaExtensaoEncargos: { numero: 'P-2', data: '2025-01-01', reparticaoAnual: [{ ano: 2025, montante: 100 }, { ano: 2026, montante: 100 }] },
     } as Contrato;
     expect(portariaExigeReprogramacao(coberto)).toBe(false); // término em 2026 = ano final
+  });
+});
+
+describe('reprogramarPortaria', () => {
+  const portaria = {
+    numero: 'P-2026/103', data: '2025-12-20',
+    reparticaoAnual: [{ ano: 2026, montante: 30_000_00 }, { ano: 2027, montante: 120_000_00 }],
+  };
+
+  it('reparte o acréscimo na proporção do que já está repartido', () => {
+    const nova = reprogramarPortaria(portaria, 30_000_00, 2026, 2027);
+    // 30 000 : 120 000 = 20% : 80% → 6 000 e 24 000.
+    expect(nova.reparticaoAnual).toEqual([
+      { ano: 2026, montante: 36_000_00 },
+      { ano: 2027, montante: 144_000_00 },
+    ]);
+  });
+
+  it('acrescenta anos ainda não cobertos pela portaria', () => {
+    const nova = reprogramarPortaria(portaria, 40_000_00, 2027, 2028);
+    // 2028 não estava coberto: entra na repartição.
+    expect(nova.reparticaoAnual.map((r) => r.ano)).toEqual([2026, 2027, 2028]);
+    expect(nova.reparticaoAnual.find((r) => r.ano === 2026)!.montante).toBe(30_000_00);
+    // Base do período = só 2027 (120 000); 2028 tinha 0, pelo que absorve o resto.
+    const total = nova.reparticaoAnual.reduce((s, r) => s + r.montante, 0);
+    expect(total).toBe(150_000_00 + 40_000_00);
+  });
+
+  it('reparte por igual quando nenhum dos anos tinha cobertura', () => {
+    const nova = reprogramarPortaria(portaria, 30_000_00, 2028, 2030);
+    expect(nova.reparticaoAnual.filter((r) => r.ano >= 2028).map((r) => r.montante)).toEqual([10_000_00, 10_000_00, 10_000_00]);
+  });
+
+  it('fecha ao cêntimo, absorvendo o arredondamento no último ano', () => {
+    const nova = reprogramarPortaria(portaria, 10_000_01, 2026, 2027);
+    const acrescimo = nova.reparticaoAnual.reduce((s, r) => s + r.montante, 0) - 150_000_00;
+    expect(acrescimo).toBe(10_000_01);
+  });
+
+  it('não mexe na repartição quando o acréscimo é zero', () => {
+    expect(reprogramarPortaria(portaria, 0, 2026, 2027)).toEqual(portaria);
   });
 });

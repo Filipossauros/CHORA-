@@ -63,6 +63,8 @@ export const zAlteracao = z.object({
   suspensao: zSuspensao.optional(),
   novoPrestador: z.object({ nome: z.string().min(1), nipc: z.string().min(1) }).optional(), // CESSAO_POSICAO_CONTRATUAL
   novoGestorId: z.string().optional(), // SUBSTITUICAO_GESTOR — oid do novo gestor principal
+  /** Nº da portaria de extensão de encargos reprogramada com esta modificação. */
+  portariaReprogramada: z.string().optional(),
   registadoEm: zInstanteISO,
   registadoPor: z.string().min(1),
   atualizadoEm: zInstanteISO,

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { decisoesPendentes, vigenciaLiquidaMeses, ESTADOS_CONTRATO, LIMITE_VIGENCIA_MESES, type Alerta, type Afetacao, type Alteracao, type Contrato, type EstadoContrato, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
+import { decisoesPendentes, reprogramarPortaria, vigenciaLiquidaMeses, ESTADOS_CONTRATO, LIMITE_VIGENCIA_MESES, type Alerta, type Afetacao, type Alteracao, type Contrato, type EstadoContrato, type EventoAuditoria, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
 import { app, AZURE_USERS, nomeAzure, prestadorAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
@@ -26,12 +26,13 @@ function resumirEvento(e: { operacao: string; regraViolada?: string; depois?: un
 }
 
 /**
- * Três separadores em vez de seis: Estrutura, Afetações e Capacidade
- * respondiam todos a «quem trabalha e com que saldo» e juntam-se à execução
- * financeira num só — «Execução». «Entregáveis» só existe nos contratos
- * chave-na-mão, onde o preço se reparte por resultados em vez de horas.
+ * FICHA — o que o contrato é e como vai: dados contratuais seguidos da execução
+ * física e financeira. AFETAÇÕES — quem trabalha nele: perfis, pessoas afetas e
+ * o histórico de substituições e inativações. MODIFICAÇÕES — o que lhe
+ * aconteceu. «Entregáveis» só existe nos contratos chave-na-mão, onde o preço se
+ * reparte por resultados em vez de horas.
  */
-const TABS = ['Execução', 'Entregáveis', 'Ficha', 'Modificações'] as const;
+const TABS = ['Ficha', 'Afetações', 'Entregáveis', 'Modificações'] as const;
 type Tab = (typeof TABS)[number];
 function tabsDe(c: Contrato): readonly Tab[] {
   return TABS.filter((t) => t !== 'Entregáveis' || c.tipologia === 'CHAVE_NA_MAO');
@@ -44,7 +45,7 @@ export function ContratoDetalhe(): ReactNode {
   // Uma decisão que remeta para uma modificação traz o tipo de ato no URL: o
   // formulário abre já nesse tipo, em vez de o obrigar a procurar na lista.
   const tipoPedido = params.get('modificacao') ?? undefined;
-  const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Execução');
+  const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Ficha');
   const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
   // O ciclo de vida do contrato (estado) é competência do gestor de contrato (RN-501).
   const ehGestorContrato = app.papeisAtuais().includes('GESTOR_CONTRATO');
@@ -54,7 +55,7 @@ export function ContratoDetalhe(): ReactNode {
   // A mesma rota /contratos/:id é reutilizada entre contratos (não remonta):
   // ao mudar de contrato, repõe o separador pedido no URL (ou a Ficha) e fecha a edição.
   useEffect(() => {
-    setTab((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Execução');
+    setTab((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Ficha');
     setEditar(false);
     setErro(undefined);
   }, [id, tabPedido]);
@@ -66,18 +67,20 @@ export function ContratoDetalhe(): ReactNode {
     const alteracoes = await app.ctx.repos.alteracoes.todos((a) => a.contratoId === id);
     const aprovados = await app.ctx.repos.registosTempo.todos((r) => r.contratoId === id && r.estado === 'APROVADO');
     const eventos = (await app.ctx.repos.eventosAuditoria.todos((e) => e.entidade === 'Contrato' && e.entidadeId === id)).sort((a, b) => (a.ocorridoEm < b.ocorridoEm ? 1 : -1));
+    const idsAfetacao = new Set(afetacoes.map((a) => a.id));
+    const eventosAfetacoes = (await app.ctx.repos.eventosAuditoria.todos((e) => e.entidade === 'Afetacao' && idsAfetacao.has(e.entidadeId))).sort((a, b) => (a.ocorridoEm < b.ocorridoEm ? 1 : -1));
     const recursos = await app.ctx.repos.recursos.todos();
     const resumo = await app.contratos.resumoExecucao(id) as ResumoExec;
     const decisoes = decisoesPendentes(await app.ctx.repos.alertas.todos((a) => a.contratoId === id));
-    return { contrato, perfis, afetacoes, alteracoes, aprovados, eventos, recursos, resumo, decisoes };
+    return { contrato, perfis, afetacoes, alteracoes, aprovados, eventos, eventosAfetacoes, recursos, resumo, decisoes };
   }, [id]);
 
   const dados = base.dados;
   if (dados === undefined || dados.contrato === null) return <p className="vazio">A carregar…</p>;
   const c = dados.contrato;
   const tabs = tabsDe(c);
-  // Um separador pedido no URL que não exista nesta tipologia cai na Execução.
-  const tabAtiva: Tab = tabs.includes(tab) ? tab : 'Execução';
+  // Um separador pedido no URL que não exista nesta tipologia cai na Ficha.
+  const tabAtiva: Tab = tabs.includes(tab) ? tab : 'Ficha';
 
   return (
     <>
@@ -87,61 +90,64 @@ export function ContratoDetalhe(): ReactNode {
 
       {tabAtiva === 'Entregáveis' && <Entregaveis contrato={c} podeGerir={podeGerir} onErro={setErro} />}
 
+      {/* FICHA — o contrato e como vai: dados contratuais e, a seguir, a execução. */}
       {tabAtiva === 'Ficha' && (editar ? <FichaEdicao contrato={c} podeAlterarEstado={ehGestorContrato} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
-        <div className="cartao">
-          {podeGerir && <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}><button className="btn" onClick={() => { setEditar(true); setErro(undefined); }}>Alterar dados</button></div>}
-          <div className="corpo g3">
-          <Campo k="Prestador" v={c.prestador.nome} /><Campo k="NIPC" v={c.prestador.nipc} /><Campo k="Tipologia" v={c.tipologia === 'CHAVE_NA_MAO' ? 'Chave-na-mão' : 'Bolsa de horas'} />
-          <Campo k="Nº procedimento de origem" v={c.numeroProcedimento ?? '—'} /><Campo k="Tipo de procedimento" v={(c.tipoProcedimento ?? '—').replace(/_/g, ' ').toLowerCase()} /><Campo k="Nº do lote" v={c.numeroLote !== undefined ? String(c.numeroLote) : '—'} />
-          <Campo k="Valor inicial do contrato" v={formatarMoeda(c.precoContratualInicial)} /><Campo k="Valor atual do contrato" v={formatarMoeda(c.precoContratualAtual)} /><Campo k="Vigência" v={`${c.dataInicioVigencia} – ${c.dataTerminoContratual}`} />
-          <Campo k="Visto prévio do TdC necessário" v={c.vistoTribunalContasNecessario ? 'Sim' : 'Não'} /><Campo k="Data de obtenção do visto do TdC" v={c.dataVistoTribunalContas ?? '—'} /><Campo k="Nº portaria de extensão de encargos" v={c.numeroPortariaExtensaoEncargos ?? '—'} />
-          <Campo k="Gestor do contrato" v={c.gestores.map((g) => nomeAzure(g.utilizadorId)).join(', ')} />
-          {c.motivoInativacao !== undefined && <Campo k="Motivo de inativação" v={c.motivoInativacao} />}
-          {c.notaAlteracaoEstado !== undefined && <Campo k="Nota da última alteração de estado" v={c.notaAlteracaoEstado} />}
-        </div></div>
-      ))}
-
-      {tabAtiva === 'Execução' && (
         <>
-      {(
+          <div className="cartao" style={{ marginBottom: 16 }}>
+            {podeGerir && <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}><button className="btn" onClick={() => { setEditar(true); setErro(undefined); }}>Alterar dados</button></div>}
+            <div className="corpo g3">
+            <Campo k="Prestador" v={c.prestador.nome} /><Campo k="NIPC" v={c.prestador.nipc} /><Campo k="Tipologia" v={c.tipologia === 'CHAVE_NA_MAO' ? 'Chave-na-mão' : 'Bolsa de horas'} />
+            <Campo k="Nº procedimento de origem" v={c.numeroProcedimento ?? '—'} /><Campo k="Tipo de procedimento" v={(c.tipoProcedimento ?? '—').replace(/_/g, ' ').toLowerCase()} /><Campo k="Nº do lote" v={c.numeroLote !== undefined ? String(c.numeroLote) : '—'} />
+            <Campo k="Valor inicial do contrato" v={formatarMoeda(c.precoContratualInicial)} /><Campo k="Valor atual do contrato" v={formatarMoeda(c.precoContratualAtual)} /><Campo k="Vigência" v={`${c.dataInicioVigencia} – ${c.dataTerminoContratual}`} />
+            <Campo k="Visto prévio do TdC necessário" v={c.vistoTribunalContasNecessario ? 'Sim' : 'Não'} /><Campo k="Data de obtenção do visto do TdC" v={c.dataVistoTribunalContas ?? '—'} /><Campo k="Nº portaria de extensão de encargos" v={c.numeroPortariaExtensaoEncargos ?? c.portariaExtensaoEncargos?.numero ?? '—'} />
+            <Campo k="Gestor do contrato" v={c.gestores.map((g) => nomeAzure(g.utilizadorId)).join(', ')} />
+            {c.motivoInativacao !== undefined && <Campo k="Motivo de inativação" v={c.motivoInativacao} />}
+            {c.notaAlteracaoEstado !== undefined && <Campo k="Nota da última alteração de estado" v={c.notaAlteracaoEstado} />}
+          </div></div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: podeGerir ? '1fr 320px' : '1fr', gap: 16 }}>
-          <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'CHAVE_NA_MAO' ? ' (bolsa de horas do contrato)' : ' (bolsa de horas)'}</h3><table>
-            <thead><tr><th>Perfil</th><th className="num">Horas</th><th className="num">€/hora vigente</th></tr></thead>
-            <tbody>{dados.perfis.map((p) => { const ultimo = p.precos[p.precos.length - 1]; return (
-              <tr key={p.id}><td><div className="prim">{p.nome}</div>{p.consomeBolsaValor && <div className="sec">consome bolsa de valor</div>}</td><td className="num">{formatarHoras(p.quantidadePrevista)}</td><td className="num">{ultimo ? formatarMoeda(ultimo.valorHora) : '—'}</td></tr>
-            ); })}{dados.perfis.length === 0 && <tr><td colSpan={3} className="vazio">{c.tipologia === 'CHAVE_NA_MAO' ? 'Sem perfis. Num contrato chave-na-mão os perfis são facultativos — servem apenas a bolsa de horas para trabalhos não previstos.' : 'Sem perfis.'}</td></tr>}</tbody>
-          </table></div>
-          {podeGerir && <NovoPerfil contrato={c} onCriado={() => base.recarregar()} onErro={setErro} />}
-        </div>
-      )}
+          <LinhaSeccao rotulo="Execução física e financeira" />
 
-      {(
-        <GestaoAfetacoes contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} podeGerir={podeGerir} onMudou={() => base.recarregar()} onErro={setErro} />
-      )}
-
-      {(
-        <>
           <div className="grelha-kpi">
             <div className="kpi"><div className="rot">Valor inicial do contrato</div><div className="val">{formatarMoeda(dados.resumo.valorInicialContrato)}</div></div>
             <div className="kpi"><div className="rot">Valor atual do contrato</div><div className="val">{formatarMoeda(dados.resumo.valorAtualContrato)}</div></div>
-            <div className="kpi"><div className="rot">Valor executado</div><div className="val">{formatarMoeda(dados.resumo.valorExecutado)}</div></div>
+            <div className="kpi"><div className="rot">Valor executado</div><div className="val">{formatarMoeda(dados.resumo.valorExecutado)}</div><div className="sub">{pct(dados.resumo.valorAtualContrato > 0 ? dados.resumo.valorExecutado / dados.resumo.valorAtualContrato : 0)} do valor atual</div></div>
             <div className="kpi"><div className="rot">Valor disponível</div><div className="val" style={{ color: dados.resumo.valorDisponivel <= dados.resumo.valorAtualContrato * 0.4 ? 'var(--ambar)' : undefined }}>{formatarMoeda(dados.resumo.valorDisponivel)}</div><div className="sub">{pct(dados.resumo.valorAtualContrato > 0 ? dados.resumo.valorDisponivel / dados.resumo.valorAtualContrato : 0)} do valor atual</div></div>
           </div>
+
           <div className="cartao" style={{ marginBottom: 16 }}><h3>Trabalhos complementares (limite legal 50% — RN-301)</h3><div className="corpo">
             <Barra fracao={dados.resumo.complementares.percentagem} />
             <div className="sec" style={{ marginTop: 6 }}>{dados.resumo.complementares.atingido ? 'Limite de 50% ATINGIDO' : `Máximo admissível disponível: ${formatarMoeda(dados.resumo.complementares.disponivel)}`}</div>
           </div></div>
-          <div className="cartao"><h3>Saldos por perfil — horas e valor restantes</h3><table>
+
+          {c.portariaExtensaoEncargos !== undefined && <Portaria contrato={c} />}
+
+          <div className="cartao" style={{ marginBottom: 16 }}><h3>Saldos por perfil — horas e valor restantes</h3><table>
             <thead><tr><th>Perfil</th><th className="num">Horas restantes</th><th style={{ width: 130 }}>Consumo horas</th><th className="num">Valor restante</th></tr></thead>
             <tbody>{dados.resumo.saldosPerfis.map((s) => { const frac = s.minutosPrevistos > 0 ? s.minutosConsumidos / s.minutosPrevistos : 0; return (
               <tr key={s.perfilId}><td className="prim">{s.nome}</td><td className="num">{formatarHoras(s.minutosRestantes)}<div className="sec">de {formatarHoras(s.minutosPrevistos)}</div></td><td><Barra fracao={frac} /></td><td className="num">{formatarMoeda(s.valorRestante)}<div className="sec">de {formatarMoeda(s.valorPrevisto)}</div></td></tr>
             ); })}{dados.resumo.saldosPerfis.length === 0 && <tr><td colSpan={4} className="vazio">Sem perfis.</td></tr>}</tbody>
           </table></div>
-        </>
-      )}
 
-      {dados.perfis.length > 0 && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
+          {dados.perfis.length > 0 && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
+        </>
+      ))}
+
+      {/* AFETAÇÕES — quem trabalha no contrato: perfis, pessoas e o histórico. */}
+      {tabAtiva === 'Afetações' && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: podeGerir ? '1fr 320px' : '1fr', gap: 16 }}>
+            <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'CHAVE_NA_MAO' ? ' (bolsa de horas do contrato)' : ' (bolsa de horas)'}</h3><table>
+              <thead><tr><th>Perfil</th><th className="num">Horas</th><th className="num">€/hora vigente</th></tr></thead>
+              <tbody>{dados.perfis.map((p) => { const ultimo = p.precos[p.precos.length - 1]; return (
+                <tr key={p.id}><td><div className="prim">{p.nome}</div>{p.consomeBolsaValor && <div className="sec">consome bolsa de valor</div>}</td><td className="num">{formatarHoras(p.quantidadePrevista)}</td><td className="num">{ultimo ? formatarMoeda(ultimo.valorHora) : '—'}</td></tr>
+              ); })}{dados.perfis.length === 0 && <tr><td colSpan={3} className="vazio">{c.tipologia === 'CHAVE_NA_MAO' ? 'Sem perfis. Num contrato chave-na-mão os perfis são facultativos — servem apenas a bolsa de horas para trabalhos não previstos.' : 'Sem perfis.'}</td></tr>}</tbody>
+            </table></div>
+            {podeGerir && <NovoPerfil contrato={c} onCriado={() => base.recarregar()} onErro={setErro} />}
+          </div>
+
+          <GestaoAfetacoes contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} podeGerir={podeGerir} onMudou={() => base.recarregar()} onErro={setErro} />
+
+          <HistoricoAfetacoes eventos={dados.eventosAfetacoes} afetacoes={dados.afetacoes} perfis={dados.perfis} />
         </>
       )}
 
@@ -323,10 +329,156 @@ function Campo({ k, v }: { k: string; v: string }): ReactNode {
   return <div className="campo" style={{ margin: 0 }}><label>{k}</label><div style={{ fontWeight: 600, fontSize: 13.5 }}>{v}</div></div>;
 }
 
+/** Separador de secção dentro de um separador, para o olho não confundir blocos. */
+function LinhaSeccao({ rotulo }: { rotulo: string }): ReactNode {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 11, margin: '20px 0 12px', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--texto-fraco)', fontWeight: 700 }}>
+      {rotulo}<span style={{ flex: 1, height: 1, background: 'var(--linha)' }} />
+    </div>
+  );
+}
+
+/**
+ * Repartição plurianual da portaria de extensão de encargos: quanto está coberto
+ * em cada ano económico. É o que a reprogramação atualiza quando se registam
+ * trabalhos complementares com reprogramação financeira.
+ */
+function Portaria({ contrato }: { contrato: Contrato }): ReactNode {
+  const p = contrato.portariaExtensaoEncargos;
+  if (p === undefined) return null;
+  const total = p.reparticaoAnual.reduce((s, r) => s + r.montante, 0);
+  return (
+    <div className="cartao" style={{ marginBottom: 16 }}><h3>Portaria de extensão de encargos {p.numero}<span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>de {p.data}</span></h3><table>
+      <thead><tr><th>Ano económico</th><th className="num">Montante repartido</th></tr></thead>
+      <tbody>
+        {p.reparticaoAnual.map((r) => (
+          <tr key={r.ano}><td className="tabnum">{r.ano}</td><td className="num">{formatarMoeda(r.montante)}</td></tr>
+        ))}
+        <tr><td className="prim">Total coberto</td><td className="num prim">{formatarMoeda(total)}</td></tr>
+      </tbody>
+    </table></div>
+  );
+}
+
+/**
+ * REPROGRAMAÇÃO DA PORTARIA no registo de trabalhos complementares.
+ *
+ * O acréscimo de despesa só tem cobertura depois de a portaria o repartir pelos
+ * anos económicos em que vai ser executado. A portaria tem de estar previamente
+ * carregada — a aplicação reprograma a repartição, não emite portarias —, e o
+ * cálculo é mostrado antes de gravar, para o gestor conferir o que vai pedir.
+ */
+function Reprogramacao({ contrato, acrescimo, dataEfeito, novaData, selecionada, onSelecionar }: {
+  contrato: Contrato; acrescimo: number; dataEfeito: string; novaData: string;
+  selecionada: string; onSelecionar: (numero: string) => void;
+}): ReactNode {
+  const portaria = contrato.portariaExtensaoEncargos;
+
+  if (portaria === undefined) {
+    return (
+      <div className="erro-cx" style={{ marginBottom: 10 }}>
+        Este contrato não tem portaria de extensão de encargos carregada. A reprogramação atualiza a repartição
+        plurianual de uma portaria existente: carregue-a primeiro na ficha do contrato, ou desmarque a reprogramação
+        financeira.
+      </div>
+    );
+  }
+
+  const anoInicio = Number(dataEfeito.slice(0, 4));
+  const anoFim = Math.max(anoInicio, Number((novaData !== '' ? novaData : contrato.dataTerminoContratual).slice(0, 4)));
+  const nova = reprogramarPortaria(portaria, acrescimo, anoInicio, anoFim);
+  const antes = new Map(portaria.reparticaoAnual.map((r) => [r.ano, r.montante]));
+
+  return (
+    <div style={{ border: '1px solid var(--linha-forte)', borderRadius: 9, padding: 12, margin: '2px 0 10px' }}>
+      <div className="campo"><label>Portaria de extensão de encargos a reprogramar</label>
+        <select value={selecionada} onChange={(e) => onSelecionar(e.target.value)}>
+          <option value="">— selecionar —</option>
+          <option value={portaria.numero}>{portaria.numero} · de {portaria.data}</option>
+        </select>
+      </div>
+      <div className="sec" style={{ marginBottom: 8 }}>
+        O acréscimo de <b>{formatarMoeda(acrescimo)}</b> é repartido de {anoInicio} a {anoFim}, na proporção do que já
+        está repartido nesses anos. Repartição resultante:
+      </div>
+      <table>
+        <thead><tr><th>Ano</th><th className="num">Antes</th><th className="num">Acréscimo</th><th className="num">Depois</th></tr></thead>
+        <tbody>
+          {nova.reparticaoAnual.map((r) => {
+            const anterior = antes.get(r.ano) ?? 0;
+            const delta = r.montante - anterior;
+            return (
+              <tr key={r.ano}>
+                <td className="tabnum">{r.ano}</td>
+                <td className="num">{formatarMoeda(anterior)}</td>
+                <td className="num" style={{ color: delta > 0 ? 'var(--verde)' : undefined }}>{delta > 0 ? `+${formatarMoeda(delta)}` : '—'}</td>
+                <td className="num prim">{formatarMoeda(r.montante)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="aviso" style={{ margin: '10px 0 0' }}>
+        A repartição é gravada no contrato ao registar a modificação. A portaria em si continua a carecer de emissão e
+        autorização pelos membros do Governo competentes — a aplicação regista a reprogramação, não a autoriza.
+      </div>
+    </div>
+  );
+}
+
+const ROT_OP_AFETACAO: Record<string, string> = {
+  CRIAR: 'Afetação criada', SUBSTITUIR: 'Substituição de recurso', ATIVAR: 'Reativação', INATIVAR: 'Inativação',
+};
+
+/**
+ * Histórico das afetações do contrato — substituições, inativações e
+ * reativações. A tabela de afetações mostra o estado de agora; quem responde
+ * por um contrato precisa também de saber quem esteve afeto e quando saiu.
+ */
+function HistoricoAfetacoes({ eventos, afetacoes, perfis }: {
+  eventos: EventoAuditoria[]; afetacoes: Afetacao[]; perfis: PerfilContratual[];
+}): ReactNode {
+  const nomePerfil = (id: string): string => perfis.find((p) => p.id === id)?.nome ?? id;
+
+  /** Descreve o movimento a partir do antes/depois guardados na auditoria. */
+  function detalhe(e: { operacao: string; antes?: unknown; depois?: unknown }): string {
+    const antes = e.antes as Afetacao | undefined;
+    const depois = e.depois as Afetacao | undefined;
+    if (e.operacao === 'SUBSTITUIR' && antes !== undefined && depois !== undefined) {
+      return `${nomeAzure(antes.recursoId)} → ${nomeAzure(depois.recursoId)}`;
+    }
+    const alvo = depois ?? antes;
+    return alvo !== undefined ? nomeAzure(alvo.recursoId) : '—';
+  }
+
+  return (
+    <div className="cartao" style={{ marginTop: 16 }}><h3>Histórico de afetações · substituições e inativações</h3><table>
+      <thead><tr><th>Quando</th><th>Movimento</th><th>Recurso</th><th>Perfil</th><th>Autor</th></tr></thead>
+      <tbody>
+        {eventos.map((e) => {
+          const af = afetacoes.find((a) => a.id === e.entidadeId);
+          return (
+            <tr key={e.id}>
+              <td className="tabnum">{e.ocorridoEm.replace('T', ' ').slice(0, 16)}</td>
+              <td>{ROT_OP_AFETACAO[e.operacao] ?? e.operacao}</td>
+              <td className="sec">{detalhe(e)}</td>
+              <td className="sec">{af !== undefined ? nomePerfil(af.perfilId) : '—'}</td>
+              <td>{nomeAzure(e.utilizadorId)}</td>
+            </tr>
+          );
+        })}
+        {eventos.length === 0 && <tr><td colSpan={5} className="vazio">Sem substituições nem inativações registadas.</td></tr>}
+      </tbody>
+    </table></div>
+  );
+}
+
 type FamiliaMod = 'Modificações objetivas' | 'Modificações subjetivas' | 'Vicissitudes da execução' | 'Gestão orçamental plurianual';
 interface DescritorMod {
   v: TipoAlteracao; r: string; familia: FamiliaMod; base: string;
-  valor?: boolean; vigencia?: boolean; susp?: boolean; cessao?: boolean; gestor?: boolean; transicao?: boolean;
+  valor?: boolean; vigencia?: boolean; susp?: boolean; cessao?: boolean; transicao?: boolean;
+  /** Admite reprogramação dos encargos plurianuais (portaria de extensão). */
+  reprogramavel?: boolean;
   dataEfeitos?: boolean; // pede "Data de produção de efeitos" ao utilizador (senão é derivada)
 }
 
@@ -336,12 +488,10 @@ interface DescritorMod {
  * (obrigatória); nesses, não se pede data de produção de efeitos.
  */
 const TIPOS_ALT: DescritorMod[] = [
-  { v: 'SERVICOS_COMPLEMENTARES', r: 'Trabalhos/serviços complementares', familia: 'Modificações objetivas', base: 'CCP, art. 370.º/454.º', valor: true, vigencia: true },
-  { v: 'REVISAO_PRECOS', r: 'Revisão de preços', familia: 'Modificações objetivas', base: 'CCP, art. 300.º', dataEfeitos: true },
+  { v: 'SERVICOS_COMPLEMENTARES', r: 'Trabalhos/serviços complementares', familia: 'Modificações objetivas', base: 'CCP, art. 370.º/454.º', valor: true, vigencia: true, reprogramavel: true },
   { v: 'PRORROGACAO', r: 'Prorrogação do prazo de vigência', familia: 'Modificações objetivas', base: 'CCP, art. 311.º e 440.º/48.º', vigencia: true },
   { v: 'REFORCO_BOLSA_VALOR', r: 'Reforço de bolsa de valor', familia: 'Modificações objetivas', base: 'CCP, art. 370.º', valor: true, dataEfeitos: true },
   { v: 'CESSAO_POSICAO_CONTRATUAL', r: 'Cessão da posição contratual', familia: 'Modificações subjetivas', base: 'CCP, art. 316.º e ss.', cessao: true, dataEfeitos: true },
-  { v: 'SUBSTITUICAO_GESTOR', r: 'Substituição do gestor do contrato', familia: 'Modificações subjetivas', base: 'CCP, art. 290.º-A', gestor: true, dataEfeitos: true },
   { v: 'SUSPENSAO', r: 'Suspensão da execução', familia: 'Vicissitudes da execução', base: 'CCP, art. 297.º-298.º', susp: true },
   { v: 'TRANSICAO_ANO_ECONOMICO', r: 'Transição para o ano económico seguinte', familia: 'Gestão orçamental plurianual', base: 'LCPA / DL 127/2012', transicao: true },
 ];
@@ -349,10 +499,9 @@ const FAMILIAS_MOD: FamiliaMod[] = ['Modificações objetivas', 'Modificações 
 function rotularTipoAlt(t: TipoAlteracao): string { return TIPOS_ALT.find((x) => x.v === t)?.r ?? t.replace(/_/g, ' ').toLowerCase(); }
 function familiaModificacao(t: TipoAlteracao): string { return TIPOS_ALT.find((x) => x.v === t)?.familia ?? '—'; }
 function detalheModificacao(a: Alteracao): string {
-  if (a.novaDataTermino !== undefined) return `nova vigência até ${a.novaDataTermino}${a.reprogramacaoFinanceira === true ? ' · com reprogramação financeira' : ''}`;
+  if (a.novaDataTermino !== undefined) return `nova vigência até ${a.novaDataTermino}${a.reprogramacaoFinanceira === true ? ` · com reprogramação financeira${a.portariaReprogramada !== undefined ? ` da portaria ${a.portariaReprogramada}` : ''}` : ''}`;
   if (a.tipo === 'SUSPENSAO' && a.suspensao !== undefined) return `${a.suspensao.dataInicio}${a.suspensao.dataFim !== undefined ? ` a ${a.suspensao.dataFim}` : ' (em aberto)'}${a.suspensao.suspendePrazoExecucao ? ' · desloca execução' : ''}`;
   if (a.tipo === 'CESSAO_POSICAO_CONTRATUAL' && a.novoPrestador !== undefined) return `novo prestador: ${a.novoPrestador.nome} (${a.novoPrestador.nipc})`;
-  if (a.tipo === 'SUBSTITUICAO_GESTOR' && a.novoGestorId !== undefined) return `novo gestor: ${nomeAzure(a.novoGestorId)}`;
   if (a.tipo === 'TRANSICAO_ANO_ECONOMICO') return 'transição de saldo para o ano seguinte';
   return '—';
 }
@@ -360,7 +509,7 @@ function detalheModificacao(a: Alteracao): string {
 const ALT_INICIAL = {
   tipo: 'SERVICOS_COMPLEMENTARES' as TipoAlteracao, dataEfeitos: hoje(), fundamentacao: '', valor: '',
   novaData: '', reprog: false, suspInicio: hoje(), suspFim: '', suspExecucao: true, excecao: '',
-  novoNome: '', novoNipc: '', novoGestorId: '', montante: '', executavelAte: '',
+  novoNome: '', novoNipc: '', montante: '', executavelAte: '', portaria: '',
 };
 
 /** Registo de modificações contratuais formais, alinhado com os tipos do CCP. */
@@ -400,17 +549,22 @@ function GestaoAlteracoes({ contrato, resumo, alteracoes, tipoInicial, onMudou, 
       if (tipoSel.valor && eurosParaCent(a.valor) <= 0) { onErro('Indique o valor acrescido (€ > 0).'); return; }
       if (tipoSel.vigencia && a.novaData === '') { onErro('Indique a nova data de vigência do contrato.'); return; }
       if (vigenciaExcede && a.excecao.trim() === '') { onErro('A nova vigência excede 36 meses: indique a fundamentação da exceção (RN-202).'); return; }
+      // A reprogramação atualiza a repartição plurianual de uma portaria que tem
+      // de existir no contrato: sem ela, o acréscimo fica sem cobertura.
+      if (a.reprog && tipoSel.reprogramavel === true) {
+        if (contrato.portariaExtensaoEncargos === undefined) { onErro('O contrato não tem portaria de extensão de encargos carregada. Carregue-a na ficha do contrato ou desmarque a reprogramação financeira.'); return; }
+        if (a.portaria === '') { onErro('Indique a portaria de extensão de encargos a reprogramar.'); return; }
+      }
       if (tipoSel.susp && a.suspInicio === '') { onErro('Indique a data de início da suspensão.'); return; }
       if (tipoSel.cessao && (a.novoNome.trim() === '' || a.novoNipc.trim() === '')) { onErro('Indique o novo prestador (nome e NIPC).'); return; }
-      if (tipoSel.gestor && a.novoGestorId === '') { onErro('Selecione o novo gestor do contrato.'); return; }
       if (tipoSel.dataEfeitos && a.dataEfeitos === '') { onErro('Indique a data de produção de efeitos.'); return; }
       await app.estrutura.registarAlteracao(contrato.id, {
         tipo: a.tipo, dataEfeito: dataEfeito(), descricao: tipoSel.r, fundamentacao: a.fundamentacao,
         ...(tipoSel.valor ? { valorAcrescido: eurosParaCent(a.valor) } : {}),
         ...(tipoSel.vigencia ? { novaDataTermino: a.novaData, reprogramacaoFinanceira: a.reprog } : {}),
+        ...(a.reprog && tipoSel.reprogramavel === true && a.portaria !== '' ? { portariaReprogramada: a.portaria } : {}),
         ...(tipoSel.susp ? { suspensao: { dataInicio: a.suspInicio, ...(a.suspFim !== '' ? { dataFim: a.suspFim } : {}), suspendePrazoExecucao: a.suspExecucao } } : {}),
         ...(tipoSel.cessao ? { novoPrestador: { nome: a.novoNome.trim(), nipc: a.novoNipc.trim() } } : {}),
-        ...(tipoSel.gestor ? { novoGestorId: a.novoGestorId } : {}),
         ...(a.excecao.trim() !== '' ? { excecaoVigencia: a.excecao } : {}),
       }, app.utilizador());
       reset(); onMudou();
@@ -429,7 +583,7 @@ function GestaoAlteracoes({ contrato, resumo, alteracoes, tipoInicial, onMudou, 
             ))}
           </select>
         </div>
-        {tipoSel.dataEfeitos && <div className="campo"><label>{tipoSel.gestor ? 'Data de designação' : 'Data de produção de efeitos'}</label><input type="date" value={a.dataEfeitos} onChange={(e) => mudar({ dataEfeitos: e.target.value })} /></div>}
+        {tipoSel.dataEfeitos && <div className="campo"><label>Data de produção de efeitos</label><input type="date" value={a.dataEfeitos} onChange={(e) => mudar({ dataEfeitos: e.target.value })} /></div>}
       </div>
       <div className="sec" style={{ marginTop: -4, marginBottom: 8 }}>Base legal: {tipoSel.base}</div>
 
@@ -442,6 +596,9 @@ function GestaoAlteracoes({ contrato, resumo, alteracoes, tipoInicial, onMudou, 
             <div className="campo"><label>Vigência resultante (líquida)</label><div style={{ marginTop: 2, fontWeight: 600 }}>{a.novaData !== '' ? `${mesesNovaVigencia.toFixed(1)} meses` : '—'}</div></div>
           </div>
           <label className="check" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '2px 0 8px' }}><input type="checkbox" checked={a.reprog} onChange={(e) => mudar({ reprog: e.target.checked })} /> Houve reprogramação financeira dos encargos plurianuais</label>
+          {a.reprog && tipoSel.reprogramavel === true && (
+            <Reprogramacao contrato={contrato} acrescimo={eurosParaCent(a.valor)} dataEfeito={dataEfeito()} novaData={a.novaData} selecionada={a.portaria} onSelecionar={(numero) => mudar({ portaria: numero })} />
+          )}
         </>
       )}
 
@@ -462,14 +619,6 @@ function GestaoAlteracoes({ contrato, resumo, alteracoes, tipoInicial, onMudou, 
         </div>
       )}
 
-      {tipoSel.gestor && (
-        <div className="campo"><label>Novo gestor do contrato</label>
-          <select value={a.novoGestorId} onChange={(e) => mudar({ novoGestorId: e.target.value })}>
-            <option value="">Selecionar…</option>
-            {AZURE_USERS.filter((u) => u.prestador === undefined).map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-          </select>
-        </div>
-      )}
 
       {tipoSel.transicao ? (
         temPortaria ? (
@@ -495,7 +644,6 @@ function GestaoAlteracoes({ contrato, resumo, alteracoes, tipoInicial, onMudou, 
       {tipoSel.vigencia && <div className="aviso" style={{ marginBottom: 10 }}>Esta modificação fixa a <b>nova data de vigência</b> do contrato (obrigatória). A vigência é contada <b>descontando os períodos de suspensão</b> e não deve exceder 36 meses; acima disso exige exceção fundamentada <code>RN-202</code>.</div>}
       {tipoSel.susp && <div className="aviso" style={{ marginBottom: 10 }}>A suspensão que desloca a execução pode empurrar a vigência além dos 36 meses; nesse caso, aviso e exceção fundamentada <code>RN-204</code>. Períodos não se podem sobrepor <code>RN-205</code>.</div>}
       {tipoSel.cessao && <div className="aviso" style={{ marginBottom: 10 }}>A cessão da posição contratual substitui o prestador do contrato (modificação subjetiva). Confirme os requisitos de habilitação do cessionário.</div>}
-      {tipoSel.gestor && <div className="aviso" style={{ marginBottom: 10 }}>A substituição designa um novo gestor principal e cessa o anterior. Competência do <b>Gestor de Contrato</b> (RN-501).</div>}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button className="btn pri" onClick={() => void registar()}>{tipoSel.transicao ? 'Registar transição' : 'Registar modificação'}</button>

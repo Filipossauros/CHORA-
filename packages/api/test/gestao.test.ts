@@ -34,6 +34,62 @@ describe('estrutura contratual', () => {
   });
 });
 
+describe('trabalhos complementares com reprogramação da portaria', () => {
+  /** Contrato do seed com portaria repartida por dois anos. */
+  async function comPortaria(ctx: Contexto): Promise<string> {
+    const c = (await ctx.repos.contratos.todos()).find((x) => (x.portariaExtensaoEncargos?.reparticaoAnual.length ?? 0) >= 2)!;
+    return c.id;
+  }
+  const complementares = (over: Record<string, unknown> = {}) => ({
+    tipo: 'SERVICOS_COMPLEMENTARES', dataEfeito: '2026-07-01', descricao: 'Trabalhos complementares',
+    fundamentacao: 'Circunstância imprevista fundamentada.', valorAcrescido: 20_000_00,
+    novaDataTermino: '2027-06-30', reprogramacaoFinanceira: true, ...over,
+  });
+
+  it('reparte o acréscimo pelos anos da portaria', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const id = await comPortaria(ctx);
+    const antes = (await ctx.repos.contratos.obter(id))!.portariaExtensaoEncargos!;
+    const totalAntes = antes.reparticaoAnual.reduce((s, r) => s + r.montante, 0);
+
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/alteracoes`, headers: comoGestor(), payload: complementares({ portariaReprogramada: antes.numero }) });
+    expect(r.statusCode).toBe(201);
+
+    const depois = (await ctx.repos.contratos.obter(id))!.portariaExtensaoEncargos!;
+    const totalDepois = depois.reparticaoAnual.reduce((s, r2) => s + r2.montante, 0);
+    // A portaria passa a cobrir o acréscimo, ao cêntimo.
+    expect(totalDepois - totalAntes).toBe(20_000_00);
+    expect((r.json() as { portariaReprogramada?: string }).portariaReprogramada).toBe(antes.numero);
+  });
+
+  it('sem reprogramação, a portaria fica intacta', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const id = await comPortaria(ctx);
+    const antes = (await ctx.repos.contratos.obter(id))!.portariaExtensaoEncargos!;
+    await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/alteracoes`, headers: comoGestor(), payload: complementares({ reprogramacaoFinanceira: false }) });
+    expect((await ctx.repos.contratos.obter(id))!.portariaExtensaoEncargos).toEqual(antes);
+  });
+
+  it('recusa a reprogramação quando o contrato não tem portaria carregada', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const semPortaria = (await ctx.repos.contratos.todos()).find((c) => c.portariaExtensaoEncargos === undefined && c.estado === 'EM_VIGOR')!;
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${semPortaria.id}/alteracoes`, headers: comoGestor(), payload: complementares({ novaDataTermino: '2028-06-30' }) });
+    expect(r.statusCode).toBe(400);
+    expect((r.json() as { detail: string }).detail).toContain('portaria de extensão de encargos');
+  });
+
+  it('recusa uma portaria diferente da do contrato', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const id = await comPortaria(ctx);
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/alteracoes`, headers: comoGestor(), payload: complementares({ portariaReprogramada: 'P-INEXISTENTE' }) });
+    expect(r.statusCode).toBe(400);
+  });
+});
+
 describe('alterações — prorrogação e suspensão', () => {
   const alt = (payload: Record<string, unknown>) => ({ tipo: 'PRORROGACAO', dataEfeito: '2026-06-01', descricao: 'x', fundamentacao: 'Necessidade fundamentada.', ...payload });
 

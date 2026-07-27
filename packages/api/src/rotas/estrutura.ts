@@ -21,6 +21,7 @@ const zAlteracao = z.object({
   suspensao: z.object({ dataInicio: zDataISO, dataFim: zDataISO.optional(), suspendePrazoExecucao: z.boolean() }).optional(),
   novoPrestador: z.object({ nome: z.string().min(1), nipc: z.string().min(1) }).optional(),
   novoGestorId: z.string().optional(),
+  portariaReprogramada: z.string().optional(),
   excecaoVigencia: z.string().optional(),
 });
 const zEntregavel = z.object({

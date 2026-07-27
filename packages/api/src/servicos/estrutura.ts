@@ -2,9 +2,9 @@ import {
   RN_105, RN_110, RN_201, RN_202, RN_205, RN_301, RN_303, RN_304, exigir, adicionarDias,
   totalPrevistoPerfis, valorPrevistoPerfil, complementaresAcumulados,
   periodosSuspensao, terminoExecucaoAjustado, mesesEntre, vigenciaLiquidaMeses, LIMITE_VIGENCIA_MESES,
-  ViolacaoRegra,
-  type PerfilContratual, type Alteracao, type DocumentoHabilitacao, type ExcecaoContrato,
-  type TipoDotacao, type TipoAlteracao, type Cent, type DataISO, type Minutos,
+  reprogramarPortaria, ViolacaoRegra,
+  type PerfilContratual, type Alteracao, type Contrato, type DocumentoHabilitacao, type ExcecaoContrato,
+  type PortariaExtensaoEncargos, type TipoDotacao, type TipoAlteracao, type Cent, type DataISO, type Minutos,
 } from '@chora/domain';
 import type { Contexto } from '../contexto.js';
 import { ErroNaoEncontrado, ErroValidacao } from '../erros/problema.js';
@@ -85,6 +85,8 @@ export class ServicoEstrutura {
       suspensao?: Alteracao['suspensao'];
       novoPrestador?: { nome: string; nipc: string }; // CESSAO_POSICAO_CONTRATUAL
       novoGestorId?: string; // SUBSTITUICAO_GESTOR
+      /** Nº da portaria de extensão de encargos a reprogramar (com `reprogramacaoFinanceira`). */
+      portariaReprogramada?: string;
       /** Fundamentação da exceção ao limite de 36 meses (RN-202/RN-204), quando aplicável. */
       excecaoVigencia?: string;
     },
@@ -146,14 +148,26 @@ export class ServicoEstrutura {
       ...(dados.suspensao !== undefined ? { suspensao: dados.suspensao } : {}),
       ...(dados.novoPrestador !== undefined ? { novoPrestador: dados.novoPrestador } : {}),
       ...(dados.novoGestorId !== undefined ? { novoGestorId: dados.novoGestorId } : {}),
+      ...(dados.portariaReprogramada !== undefined ? { portariaReprogramada: dados.portariaReprogramada } : {}),
       registadoEm: agora, registadoPor: u.utilizadorId, atualizadoEm: agora, atualizadoPor: u.utilizadorId,
     };
     await this.ctx.repos.alteracoes.guardar(alt);
 
     // Serviços complementares atualizam o valor atual do contrato (sem dotações).
+    // Havendo reprogramação financeira, o acréscimo é também repartido pelos anos
+    // económicos da portaria de extensão de encargos: sem isso, o valor sobe no
+    // contrato mas fica sem cobertura orçamental no(s) ano(s) em que se executa.
     if (dados.tipo === 'SERVICOS_COMPLEMENTARES' && dados.valorAcrescido !== undefined) {
       const contrato = await this.contrato(contratoId);
-      await this.ctx.repos.contratos.guardar({ ...contrato, precoContratualAtual: contrato.precoContratualAtual + dados.valorAcrescido, atualizadoEm: agora, atualizadoPor: u.utilizadorId });
+      const portaria = dados.reprogramacaoFinanceira === true
+        ? this.reprogramar(contrato, dados.valorAcrescido, dados.dataEfeito, dados.novaDataTermino, dados.portariaReprogramada)
+        : undefined;
+      await this.ctx.repos.contratos.guardar({
+        ...contrato,
+        precoContratualAtual: contrato.precoContratualAtual + dados.valorAcrescido,
+        ...(portaria !== undefined ? { portariaExtensaoEncargos: portaria, numeroPortariaExtensaoEncargos: portaria.numero } : {}),
+        atualizadoEm: agora, atualizadoPor: u.utilizadorId,
+      });
     }
 
     // Modificações que fixam nova vigência: deslocam o término contratual,
@@ -208,6 +222,31 @@ export class ServicoEstrutura {
       await new ServicoAlertas(this.ctx).resolverPorAto(contratoId, resolve, `Modificação registada: ${dados.descricao}.`);
     }
     return alt;
+  }
+
+  /**
+   * Reparte o acréscimo de despesa pelos anos económicos da portaria de extensão
+   * de encargos. A portaria tem de estar previamente carregada no contrato: a
+   * aplicação reprograma a repartição existente, não emite portarias.
+   */
+  private reprogramar(
+    contrato: Contrato, acrescimo: Cent, dataEfeito: DataISO,
+    novaDataTermino: DataISO | undefined, numeroIndicado: string | undefined,
+  ): PortariaExtensaoEncargos {
+    const portaria = contrato.portariaExtensaoEncargos;
+    if (portaria === undefined) {
+      throw new ErroValidacao(
+        'O contrato não tem portaria de extensão de encargos carregada: sem ela não é possível reprogramar os encargos plurianuais. Carregue a portaria na ficha do contrato ou desmarque a reprogramação financeira.',
+      );
+    }
+    if (numeroIndicado !== undefined && numeroIndicado.trim() !== '' && numeroIndicado.trim() !== portaria.numero) {
+      throw new ErroValidacao(`A portaria indicada (${numeroIndicado}) não corresponde à do contrato (${portaria.numero}).`);
+    }
+    // O acréscimo reparte-se do ano em que produz efeitos até ao último ano de
+    // vigência — que a própria modificação pode ter estendido.
+    const anoInicio = Number(dataEfeito.slice(0, 4));
+    const anoFim = Math.max(anoInicio, Number((novaDataTermino ?? contrato.dataTerminoContratual).slice(0, 4)));
+    return reprogramarPortaria(portaria, acrescimo, anoInicio, anoFim);
   }
 
   /** Acrescenta (idempotente) uma exceção fundamentada de vigência quando aplicável. */
