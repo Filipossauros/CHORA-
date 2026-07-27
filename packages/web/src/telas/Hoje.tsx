@@ -170,7 +170,7 @@ export function Hoje(): ReactNode {
         background: 'var(--fundo)', borderTop: '1px solid var(--linha)',
         boxShadow: '0 -10px 18px -12px rgba(0,0,0,.28)',
       }}>
-        <Perguntar contratos={contratos} />
+        <Perguntar />
       </div>
     </>
   );

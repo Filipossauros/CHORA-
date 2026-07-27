@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import * as XLSX from 'xlsx';
 import { ServicoAssistente, AgenteLocal, encaminhar, type Interpretacao } from '@chora/api/nucleo';
-import type { Contrato, Proveniencia } from '@chora/domain';
+import type { Proveniencia } from '@chora/domain';
 import { app } from '../porta/aplicacao-local.js';
 import { hoje, mensagemErro } from '../comum.js';
 import { Faturacao } from '../telas/Faturacao.js';
@@ -35,7 +35,7 @@ interface Turno {
  * As CONSULTAS respondem já. As AÇÕES mostram primeiro o que vai acontecer, com
  * as regras avaliadas em seco, e só executam depois de confirmadas.
  */
-export function Perguntar({ contratos }: { contratos: Contrato[] }): ReactNode {
+export function Perguntar(): ReactNode {
   const [q, setQ] = useState('');
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [aPensar, setAPensar] = useState(false);
@@ -43,7 +43,6 @@ export function Perguntar({ contratos }: { contratos: Contrato[] }): ReactNode {
   const proximo = useRef(1);
 
   const servico = new ServicoAssistente(app.ctx);
-  const sugestoes = servico.sugestoes(app.papeisAtuais()).slice(0, 4);
 
   function novoTurno(t: Omit<Turno, 'id'>): number {
     const id = proximo.current++;
@@ -149,18 +148,6 @@ export function Perguntar({ contratos }: { contratos: Contrato[] }): ReactNode {
           ref={refFicheiro} type="file" accept="application/pdf" multiple style={{ display: 'none' }}
           onChange={(e) => { void receberFicheiros(e.target.files); e.target.value = ''; }}
         />
-      </div>
-
-      {turnos.length === 0 && (
-        <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
-          {sugestoes.map((s) => (
-            <button key={s} className="btn sm" style={{ fontWeight: 400 }} onClick={() => void perguntar(s)}>{s}</button>
-          ))}
-        </div>
-      )}
-      <div className="sec" style={{ marginTop: 8, fontSize: 11.5 }}>
-        Só faço o que está em <b>Regras e alertas → Funções do assistente</b>. As alterações são sempre mostradas antes
-        de serem executadas, e passam pelas mesmas regras dos ecrãs.
       </div>
     </div>
   );
