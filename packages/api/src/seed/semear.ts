@@ -452,7 +452,7 @@ async function semearCenariosDeAlerta(ctx: Contexto, c: ContextoCenarios): Promi
 
   // ── N · Suspensão em aberto que empurra a vigência além dos 36 meses ──────
   const nSuspensao = base({
-    id: ids.novo('ctr'), numero: 'C-2026-SU1',
+    id: ids.novo('ctr'), numero: 'C-2026-SU1', estado: 'SUSPENSO',
     objeto: 'Contrato com suspensão em aberto há vários meses',
     dataInicioVigencia: isoMeses(-24), dataTerminoContratual: isoMeses(11), dataTerminoOriginal: isoMeses(11),
   });

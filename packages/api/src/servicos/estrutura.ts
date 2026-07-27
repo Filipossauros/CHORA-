@@ -187,6 +187,19 @@ export class ServicoEstrutura {
       });
     }
 
+    // Uma suspensão em vigor põe o CONTRATO suspenso: o estado tem de dizer o
+    // que se passa, senão a lista mostra «Em vigor» um contrato parado. Uma
+    // suspensão registada já terminada não mexe no estado.
+    if (dados.tipo === 'SUSPENSAO' && dados.suspensao !== undefined) {
+      const hoje = agora.slice(0, 10);
+      const emVigor = dados.suspensao.dataInicio <= hoje && (dados.suspensao.dataFim === undefined || dados.suspensao.dataFim >= hoje);
+      const contrato = await this.contrato(contratoId);
+      if (emVigor && contrato.estado === 'EM_VIGOR') {
+        await this.ctx.repos.contratos.guardar({ ...contrato, estado: 'SUSPENSO', atualizadoEm: agora, atualizadoPor: u.utilizadorId });
+        await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Contrato', entidadeId: contratoId, operacao: 'ALTERAR_ESTADO:EM_VIGOR->SUSPENSO', resultado: 'PERMITIDO', depois: { notaAlteracaoEstado: `Suspensão da execução desde ${dados.suspensao.dataInicio}.` } });
+      }
+    }
+
     // Suspensão que desloca a execução: se a vigência projetada exceder 36 meses,
     // regista a exceção fundamentada (RN-204, consultiva — não bloqueia).
     if (dados.tipo === 'SUSPENSAO' && dados.suspensao?.suspendePrazoExecucao === true) {

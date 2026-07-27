@@ -36,6 +36,17 @@ function urgenciaMaior(decisoes: ReadonlyArray<Alerta>): Urgencia {
   }, 'SEM_PRAZO');
 }
 
+/**
+ * Prazo em linguagem corrente, para a barra de urgência da decisão. O prazo por
+ * extenso vive no descritivo: a fila só precisa de sinalizar quão apertado está.
+ */
+function rotuloPrazo(a: Alerta): string {
+  const d = a.diasParaLimite;
+  if (d === undefined || a.dataLimiteAcao === undefined) return 'Sem prazo definido';
+  if (d < 0) return `Prazo esgotado há ${-d} dias (era ${a.dataLimiteAcao})`;
+  return `Faltam ${d} dias (até ${a.dataLimiteAcao})`;
+}
+
 /** Grupo temporal em que a decisão cai, pela sua janela. */
 type Grupo = 'Prazo esgotado' | 'Próximos 30 dias' | 'Mais tarde' | 'Sem prazo definido';
 function grupoDe(a: Alerta): Grupo {
@@ -101,8 +112,6 @@ export function Hoje(): ReactNode {
       />
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
 
-      <Perguntar contratos={contratos} />
-
       {pendentes.length === 0 && (
         <div className="cartao" style={{ marginTop: 16 }}><div className="vazio">Nada a decidir. A execução de todos os contratos está dentro do previsto.</div></div>
       )}
@@ -143,6 +152,43 @@ export function Hoje(): ReactNode {
         onErro={setErro}
       />
 
+      <AdvertenciaJuridica />
+
+      {/*
+        O «Perguntar» fecha a página em vez de a abrir: quem chega ao «Hoje» vem
+        ver o que tem de decidir, não fazer uma pergunta. Fica colado ao fundo do
+        ecrã para continuar ao alcance sem disputar o topo com a fila.
+      */}
+      <div style={{ position: 'sticky', bottom: 0, zIndex: 6, marginTop: 20, paddingTop: 14, background: 'linear-gradient(to top, var(--fundo) 62%, transparent)' }}>
+        <Perguntar contratos={contratos} />
+      </div>
+    </>
+  );
+}
+
+/**
+ * As decisões de UM contrato, com a mesma leitura e as mesmas ações da fila do
+ * «Hoje». Serve o separador «Ações» do detalhe do contrato: quem está dentro de
+ * um contrato não deve ter de voltar ao «Hoje» para agir sobre ele.
+ */
+export function DecisoesDoContrato({ contrato, decisoes, podeGerir, onMudou, onErro }: {
+  contrato: Contrato; decisoes: Alerta[]; podeGerir: boolean; onMudou: () => void; onErro: (m?: string) => void;
+}): ReactNode {
+  const [aberta, setAberta] = useState<string>();
+  const ordenadas = [...decisoes].sort((x, y) => (x.diasParaLimite ?? 9e9) - (y.diasParaLimite ?? 9e9));
+
+  return (
+    <>
+      <div className="cartao" style={{ overflow: 'hidden' }}>
+        {ordenadas.map((d) => (
+          <Decisao
+            key={d.id} alerta={d} contrato={contrato} podeGerir={podeGerir}
+            aberta={aberta === d.id} onAbrir={() => setAberta(aberta === d.id ? undefined : d.id)}
+            onMudou={onMudou} onErro={onErro}
+          />
+        ))}
+        {ordenadas.length === 0 && <div className="vazio">Sem decisões pendentes neste contrato.</div>}
+      </div>
       <AdvertenciaJuridica />
     </>
   );
@@ -239,9 +285,7 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
   const [aDispensar, setADispensar] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [dias, setDias] = useState('30');
-  const dLim = alerta.diasParaLimite;
-  const urgencia = urgenciaDe(dLim);
-  const urgente = urgencia === 'ESGOTADO';
+  const urgencia = urgenciaDe(alerta.diasParaLimite);
 
   async function dispensar(): Promise<void> {
     onErro();
@@ -265,14 +309,7 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
 
   return (
     <div style={{ display: 'flex', gap: 12, padding: '12px 14px', borderBottom: '1px solid var(--linha)', alignItems: 'flex-start', background: aberta ? 'var(--superficie-2)' : undefined }}>
-      <div style={{ flex: '0 0 88px', textAlign: 'right', paddingTop: 1 }}>
-        {alerta.dataLimiteAcao !== undefined ? (
-          <>
-            <div className="tabnum" style={{ fontSize: 12.5, fontWeight: 700, color: COR_URGENCIA[urgencia] }}>{alerta.dataLimiteAcao.slice(8)}/{alerta.dataLimiteAcao.slice(5, 7)}</div>
-            <div className="sec" title={alerta.eventoAncora}>{urgente ? `há ${-dLim!} dias` : `em ${dLim} dias`}</div>
-          </>
-        ) : <div className="sec">sem prazo</div>}
-      </div>
+      <div style={{ flex: '0 0 3px', alignSelf: 'stretch', borderRadius: 3, background: COR_URGENCIA[urgencia] }} title={rotuloPrazo(alerta)} />
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 650, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

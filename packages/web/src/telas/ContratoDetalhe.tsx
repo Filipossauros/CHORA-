@@ -3,10 +3,11 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { decisoesPendentes, reprogramarPortaria, vigenciaLiquidaMeses, ESTADOS_CONTRATO, LIMITE_VIGENCIA_MESES, type Alerta, type Afetacao, type Alteracao, type Contrato, type EstadoContrato, type EventoAuditoria, type PerfilContratual, type RegistoTempo, type TipoAlteracao } from '@chora/domain';
 import { app, AZURE_USERS, nomeAzure, prestadorAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, pct, useAsync } from '../comum.js';
+import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, notificarMudanca, pct, useAsync } from '../comum.js';
 import { calcularCapacidade } from '../capacidade.js';
 import { ExtrairDocumento } from '../componentes/ExtrairDocumento.js';
 import { Entregaveis } from './Entregaveis.js';
+import { DecisoesDoContrato } from './Hoje.js';
 
 const RECURSOS_AZURE = AZURE_USERS.filter((u) => u.prestador !== undefined);
 function rotularOperacao(op: string): string {
@@ -32,10 +33,18 @@ function resumirEvento(e: { operacao: string; regraViolada?: string; depois?: un
  * aconteceu. «Entregáveis» só existe nos contratos chave-na-mão, onde o preço se
  * reparte por resultados em vez de horas.
  */
-const TABS = ['Ficha', 'Afetações', 'Entregáveis', 'Modificações'] as const;
+const TABS = ['Ficha', 'Ações', 'Afetações', 'Entregáveis', 'Modificações'] as const;
 type Tab = (typeof TABS)[number];
-function tabsDe(c: Contrato): readonly Tab[] {
-  return TABS.filter((t) => t !== 'Entregáveis' || c.tipologia === 'CHAVE_NA_MAO');
+/**
+ * «Ações» só existe quando há decisões pendentes — um separador vazio é ruído.
+ * «Entregáveis» só nos contratos de preço fixo.
+ */
+function tabsDe(c: Contrato, decisoes: number): readonly Tab[] {
+  return TABS.filter((t) => {
+    if (t === 'Entregáveis') return c.tipologia === 'CHAVE_NA_MAO';
+    if (t === 'Ações') return decisoes > 0;
+    return true;
+  });
 }
 
 export function ContratoDetalhe(): ReactNode {
@@ -78,7 +87,7 @@ export function ContratoDetalhe(): ReactNode {
   const dados = base.dados;
   if (dados === undefined || dados.contrato === null) return <p className="vazio">A carregar…</p>;
   const c = dados.contrato;
-  const tabs = tabsDe(c);
+  const tabs = tabsDe(c, dados.decisoes.length);
   // Um separador pedido no URL que não exista nesta tipologia cai na Ficha.
   const tabAtiva: Tab = tabs.includes(tab) ? tab : 'Ficha';
 
@@ -89,6 +98,13 @@ export function ContratoDetalhe(): ReactNode {
       <div className="seps">{tabs.map((t) => <button key={t} className={`sep${tabAtiva === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
 
       {tabAtiva === 'Entregáveis' && <Entregaveis contrato={c} podeGerir={podeGerir} onErro={setErro} />}
+
+      {tabAtiva === 'Ações' && (
+        <DecisoesDoContrato
+          contrato={c} decisoes={dados.decisoes} podeGerir={podeGerir}
+          onMudou={() => { base.recarregar(); notificarMudanca(); }} onErro={setErro}
+        />
+      )}
 
       {/* FICHA — o contrato e como vai: dados contratuais e, a seguir, a execução. */}
       {tabAtiva === 'Ficha' && (editar ? <FichaEdicao contrato={c} podeAlterarEstado={ehGestorContrato} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
