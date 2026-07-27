@@ -63,6 +63,18 @@ export const zFatura = zAuditavel.extend({
   montanteIva: zCent,
   linhas: z.array(zLinhaFatura),
   estado: zEstadoFatura,
+  /**
+   * Nota de crédito que corrige a fatura. Existe quando o fornecedor faturou a
+   * mais e a correção vem por documento próprio em vez de fatura substituta: o
+   * que se valida passa a ser o líquido (fatura − nota de crédito), decidido de
+   * uma só vez (RN-612).
+   */
+  notaCredito: z.object({
+    numero: z.string().min(1),
+    montante: zCentNaoNegativo,
+    motivo: z.string().min(1),
+    registadaEm: zDataISO,
+  }).optional(),
   /** Data da DECISÃO (validação ou invalidação). Não há data de pagamento. */
   dataAprovacao: zDataISO.optional(),
   montanteAprovado: zCent.optional(),

@@ -40,10 +40,16 @@ describe('máquina do contrato (secção 7.2)', () => {
 describe('máquina da fatura (secção 7.3)', () => {
   it('recebida → em conferência', () =>
     expect(maquinaFatura.transicaoPermitida('RECEBIDA', 'EM_CONFERENCIA', 'GESTOR_CONTRATO').permitida).toBe(true));
-  it('conferência → validada/invalidada/devolvida', () => {
+  it('conferência → validada/invalidada/aguarda nota de crédito', () => {
     expect(maquinaFatura.transicaoPermitida('EM_CONFERENCIA', 'VALIDADA', 'GESTOR_CONTRATO').permitida).toBe(true);
     expect(maquinaFatura.transicaoPermitida('EM_CONFERENCIA', 'INVALIDADA', 'GESTOR_CONTRATO').permitida).toBe(true);
-    expect(maquinaFatura.transicaoPermitida('EM_CONFERENCIA', 'DEVOLVIDA', 'GESTOR_CONTRATO').permitida).toBe(true);
+    expect(maquinaFatura.transicaoPermitida('EM_CONFERENCIA', 'AGUARDA_NOTA_CREDITO', 'GESTOR_CONTRATO').permitida).toBe(true);
+  });
+  it('a espera pela nota de crédito devolve à conferência, não à validação', () => {
+    // Fatura e nota decidem-se em conjunto: passar direto a VALIDADA saltaria a
+    // verificação do líquido (RN-612).
+    expect(maquinaFatura.transicaoPermitida('AGUARDA_NOTA_CREDITO', 'EM_CONFERENCIA', 'GESTOR_CONTRATO').permitida).toBe(true);
+    expect(maquinaFatura.transicaoPermitida('AGUARDA_NOTA_CREDITO', 'VALIDADA', 'GESTOR_CONTRATO').permitida).toBe(false);
   });
   it('a decisão fecha o ciclo: não há transição de pagamento', () => {
     // O pagamento acontece no sistema financeiro da empresa, fora da aplicação.

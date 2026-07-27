@@ -139,6 +139,7 @@ export class JobAlertas {
       const alteracoes = await this.ctx.repos.alteracoes.todos((a) => a.contratoId === contrato.id);
       const perfis = todosPerfis.filter((p) => p.contratoId === contrato.id);
       const aprovados = await this.ctx.repos.registosTempo.todos((r) => r.contratoId === contrato.id && r.estado === 'APROVADO');
+      const faturas = await this.ctx.repos.faturas.todos((f) => f.contratoId === contrato.id);
 
       const meses = mesesAteTermino(contrato, hoje);
       const valorExecutado = aprovados.reduce((s, r) => s + r.valorImputado, 0);
@@ -150,7 +151,7 @@ export class JobAlertas {
         ...this.coberturaPlurianual(contrato, hoje, alteracoes, aprovados, destinatario),
         ...this.capacidade(contrato, hoje, perfis, alteracoes, aprovados, todosContratos, todosPerfis, recursos, destinatario),
         ...this.fimDeCiclo(contrato, hoje, meses, destinatario),
-        ...this.higiene(contrato, hoje, alteracoes, aprovados, destinatario),
+        ...this.higiene(contrato, hoje, alteracoes, aprovados, faturas, destinatario),
       );
     }
 
@@ -391,6 +392,7 @@ export class JobAlertas {
     contrato: Contrato, hoje: DataISO,
     alteracoes: Awaited<ReturnType<Contexto['repos']['alteracoes']['todos']>>,
     aprovados: Awaited<ReturnType<Contexto['repos']['registosTempo']['todos']>>,
+    faturas: Awaited<ReturnType<Contexto['repos']['faturas']['todos']>>,
     destinatario: string,
   ): AlertaCalculado[] {
     const out: AlertaCalculado[] = [];
@@ -433,6 +435,20 @@ export class JobAlertas {
     // AL-VISTO-PENDENTE
     if (contrato.vistoTribunalContasNecessario && contrato.dataVistoTribunalContas === undefined && (contrato.vistoTacito ?? false) === false) {
       out.push(this.novoAlerta(contrato.id, 'AL-VISTO-PENDENTE', 'CRITICO', 'Visto do TdC pendente', 'Contrato em execução sem visto do Tribunal de Contas.', destinatario));
+    }
+
+    // AL-NOTA-CREDITO-PENDENTE — fatura errada em espera há demasiado tempo.
+    // Uma fatura por conferir não é neutra: enquanto a nota não chega, nem o
+    // valor conferido segue para pagamento nem o fornecedor é interpelado.
+    for (const f of faturas.filter((x) => x.estado === 'AGUARDA_NOTA_CREDITO')) {
+      const desde = f.notaCredito?.registadaEm ?? f.dataRececao;
+      const dias = diasEntre(desde, hoje);
+      if (dias <= 30) continue;
+      const esperado = f.notaCredito?.montante ?? 0;
+      out.push(this.novoAlerta(contrato.id, 'AL-NOTA-CREDITO-PENDENTE', 'AVISO',
+        'Fatura à espera de nota de crédito',
+        `A fatura ${f.numero} está por conferir desde ${desde} (${dias} dias), à espera de nota de crédito de ${eur(esperado)}. Interpele o cocontratante ou decida a fatura.`,
+        destinatario, { referencia: f.id, impactoValor: esperado }));
     }
     return out;
   }

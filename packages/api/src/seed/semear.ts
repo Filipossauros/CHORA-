@@ -270,14 +270,22 @@ export async function semear(ctx: Contexto): Promise<void> {
 
   const docCombinado = { tipo: 'FATURA_COM_RELATORIO' as const, ficheiroRef: 'arq://fc1', nomeOriginal: 'fatura-e-horas.pdf', hashSha256: 'e'.repeat(64), tamanhoBytes: 3072, recebidoEm: agora, carregadoPor: 'oid-gestor-contrato' };
 
-  // Fatura 1 — bolsa de horas conforme, com fatura e relatório em separado.
+  // As faturas entram MANUALMENTE, uma de cada vez, e são decididas no mesmo
+  // ecrã: não há fila de faturas por conferir. A única exceção é a fatura que
+  // ficou à espera de nota de crédito — essa fica mesmo em aberto, e é por isso
+  // que o seed a traz.
+
+  // Fatura 1 — bolsa de horas conforme, já validada.
   await repos.faturas.guardar(fatura({ id: ids.novo('fat'), numero: 'FT-001', documentos: [docFatura, docRelatorio],
-    linhas: [{ perfilId: perfilSenior.id, recursoId: 'oid-recurso-01', quantidade: 480, valorHora: 5000, montante: 40000, origem: 'MANUAL' }] }));
-  // Fatura 2 — sem relatório de horas (aciona RN-602).
-  await repos.faturas.guardar(fatura({ id: ids.novo('fat'), numero: 'FT-002', documentos: [docFatura] }));
-  // Fatura 3 — divergência de quantidade (aciona RN-603).
+    linhas: [{ perfilId: perfilSenior.id, recursoId: 'oid-recurso-01', quantidade: 480, valorHora: 5000, montante: 40000, origem: 'MANUAL' }],
+    estado: 'VALIDADA', montanteAprovado: 40000, dataAprovacao: '2026-03-06' }));
+  // Fatura 3 — faturada a mais: fica POR CONFERIR à espera da nota de crédito,
+  // para que fatura e nota sejam decididas em conjunto (RN-612). Em espera há
+  // tempo suficiente para acionar AL-NOTA-CREDITO-PENDENTE.
   await repos.faturas.guardar(fatura({ id: ids.novo('fat'), numero: 'FT-003', documentos: [docFatura, docRelatorio],
-    linhas: [{ perfilId: perfilSenior.id, recursoId: 'oid-recurso-01', quantidade: 600, valorHora: 5000, montante: 50000, origem: 'MANUAL' }] }));
+    linhas: [{ perfilId: perfilSenior.id, recursoId: 'oid-recurso-01', quantidade: 600, valorHora: 5000, montante: 50000, origem: 'MANUAL' }],
+    montanteSemIva: 50000, montanteIva: 11500, estado: 'AGUARDA_NOTA_CREDITO',
+    notaCredito: { numero: 'por emitir', montante: 10000, motivo: 'Faturadas 10 h acima das horas aprovadas no período.', registadaEm: isoMeses(-2) } }));
   // Fatura 4 — bolsa de horas com a fatura e o relatório NO MESMO ficheiro, já
   // decidida: dá história ao relatório de faturação aprovada.
   await repos.faturas.guardar(fatura({
@@ -301,7 +309,7 @@ export async function semear(ctx: Contexto): Promise<void> {
       documentos: [docFatura, docAuto], linhas: [],
       dataEmissao: isoMeses(-6), dataRececao: isoMeses(-6), periodoDe: isoMeses(-8), periodoAte: isoMeses(-6),
       montanteSemIva: 30_000_00, montanteIva: 6_900_00, estado: 'VALIDADA',
-      montanteAprovado: 30_000_00, ...audit,
+      montanteAprovado: 30_000_00, dataAprovacao: isoMeses(-6), ...audit,
     });
     const e1 = await repos.entregaveis.obter(idE1);
     if (e1 !== null) await repos.entregaveis.guardar({ ...e1, faturaId: fatE1, faturadoEm: agora });

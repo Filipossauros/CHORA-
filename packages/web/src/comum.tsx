@@ -22,12 +22,14 @@ export function hoje(): string { return new Date().toISOString().slice(0, 10); }
 const CORES_ESTADO: Record<string, string> = {
   RASCUNHO: 'p-ard', SUBMETIDO: 'p-azul', APROVADO: 'p-verde', REJEITADO: 'p-verm', ANULADO: 'p-ard',
   EM_VIGOR: 'p-verde', AGUARDA_VISTO: 'p-ambar', SUSPENSO: 'p-ard', TERMINADO: 'p-ard', EM_PREPARACAO: 'p-ard',
-  RECEBIDA: 'p-ard', EM_CONFERENCIA: 'p-azul', VALIDADA: 'p-verde', INVALIDADA: 'p-verm', DEVOLVIDA: 'p-ambar',
+  RECEBIDA: 'p-ard', EM_CONFERENCIA: 'p-azul', VALIDADA: 'p-verde', INVALIDADA: 'p-verm',
+  AGUARDA_NOTA_CREDITO: 'p-ambar',
   Ativa: 'p-verde', Inativa: 'p-ard',
 };
 /** Rótulos explícitos para estados cujo nome, por si só, seria ambíguo. */
 const ROTULOS_ESTADO: Record<string, string> = {
   AGUARDA_VISTO: 'Aguarda visto TdC',
+  AGUARDA_NOTA_CREDITO: 'Aguarda nota de crédito',
 };
 export function Estado({ v }: { v: string }): ReactNode {
   const rot = ROTULOS_ESTADO[v] ?? v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');

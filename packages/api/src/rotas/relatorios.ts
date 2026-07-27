@@ -91,8 +91,14 @@ export function rotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
           return {
             faturaId: f.id, numero: f.numero, tipo: f.tipo,
             mes: (f.dataAprovacao ?? f.dataRececao).slice(0, 7),
+            dataEmissao: f.dataEmissao, dataRececao: f.dataRececao,
+            dataAprovacao: f.dataAprovacao,
+            periodoDe: f.periodoDe, periodoAte: f.periodoAte,
+            montanteSemIva: f.montanteSemIva,
+            ...(f.notaCredito !== undefined ? { notaCredito: { numero: f.notaCredito.numero, montante: f.notaCredito.montante } } : {}),
             montanteAprovado: aprovado,
             disponivelApos: Math.max(0, contrato.precoContratualAtual - acumulado),
+            relatorioEvidenciaId: f.relatorioEvidenciaId,
           };
         }),
         totalAprovado: acumulado,

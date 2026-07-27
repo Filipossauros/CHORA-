@@ -46,7 +46,66 @@ export function Relatorios(): ReactNode {
       </table></div>
 
       <FaturacaoAprovada contratos={contratos} faturas={faturas} ano={ano} anos={anos} onAno={setAno} />
+      <FaturasValidadas contratos={contratos} faturas={faturas} ano={ano} />
     </>
+  );
+}
+
+/**
+ * LISTAGEM DE FATURAS VALIDADAS, uma por linha.
+ *
+ * O quadro por contrato e mês serve para acompanhar o esgotamento do valor; esta
+ * listagem serve para responder pela decisão — quem pergunte «esta fatura foi
+ * validada quando, por que valor e com que evidência?» encontra a resposta numa
+ * linha, sem ter de abrir o contrato. Inclui a nota de crédito quando existe:
+ * sem ela, o aprovado parece não bater certo com o faturado.
+ */
+function FaturasValidadas({ contratos, faturas, ano }: {
+  contratos: Contrato[]; faturas: Fatura[]; ano: string;
+}): ReactNode {
+  const numeroContrato = (id: string): string => contratos.find((c) => c.id === id)?.numero ?? id;
+  const doAno = faturas
+    .filter((f) => (f.dataAprovacao ?? f.dataRececao).startsWith(ano))
+    .sort((a, b) => ((a.dataAprovacao ?? a.dataRececao) < (b.dataAprovacao ?? b.dataRececao) ? 1 : -1));
+  const total = doAno.reduce((s, f) => s + (f.montanteAprovado ?? f.montanteSemIva), 0);
+
+  return (
+    <div className="cartao" style={{ marginTop: 16 }}>
+      <h3>
+        Faturas validadas no projeto
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className="sec">{doAno.length} fatura(s) · {formatarMoeda(total)} em {ano}</span>
+        </span>
+      </h3>
+      <div style={{ overflowX: 'auto' }}>
+        <table>
+          <thead><tr>
+            <th>Data de aprovação</th><th>Fatura</th><th>Contrato</th><th>Tipo</th><th>Período</th>
+            <th className="num">Faturado</th><th className="num">Nota de crédito</th><th className="num">Aprovado</th><th>Evidência</th>
+          </tr></thead>
+          <tbody>
+            {doAno.map((f) => (
+              <tr key={f.id}>
+                <td className="tabnum prim">{f.dataAprovacao ?? '—'}</td>
+                <td>{f.numero}<div className="sec">emitida {f.dataEmissao} · recebida {f.dataRececao}</div></td>
+                <td>{numeroContrato(f.contratoId)}</td>
+                <td className="sec">{ROT_TIPO[f.tipo]}</td>
+                <td className="tabnum sec">{f.periodoDe} a {f.periodoAte}</td>
+                <td className="num tabnum">{formatarMoeda(f.montanteSemIva)}</td>
+                <td className="num tabnum">{f.notaCredito !== undefined ? <>−{formatarMoeda(f.notaCredito.montante)}<div className="sec">{f.notaCredito.numero}</div></> : <span className="sec">—</span>}</td>
+                <td className="num tabnum prim">{formatarMoeda(f.montanteAprovado ?? f.montanteSemIva)}</td>
+                <td className="sec">{f.relatorioEvidenciaId !== undefined ? 'arquivada' : '—'}</td>
+              </tr>
+            ))}
+            {doAno.length === 0 && <tr><td colSpan={9} className="vazio">Sem faturas validadas em {ano}.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="aviso" style={{ margin: 12 }}>
+        Cada linha é uma decisão de validação, com a data em que foi tomada e o relatório de evidência que a suporta.
+        O aprovado é o líquido: nas faturas corrigidas por nota de crédito, é o faturado menos a nota <code>RN-612</code>.
+      </div>
+    </div>
   );
 }
 

@@ -13,7 +13,7 @@ na base legal versionada). Nesses, a severidade escala à medida que a janela se
 A **nota jurídica** acompanha as ações propostas na aplicação: enuncia o que a
 facilidade de praticar o ato **não dispensa**.
 
-Total de alertas: **22**.
+Total de alertas: **23**.
 
 ## Tempo × dinheiro
 
@@ -61,3 +61,4 @@ Total de alertas: **22**.
 | AL-SUSPENSAO-ABERTA | Suspensão sem data de fim | Existe uma suspensão em aberto há mais de 90 dias: o prazo de execução está parado por tempo indeterminado, o que é achado frequente em auditoria. | AVISO | — | RN-205 | CCP, art. 297.º-298.º — a suspensão deve ser temporária e delimitada. | Delimitar ou levantar a suspensão não dispensa: o registo fundamentado do facto que a determinou; o acordo ou notificação ao cocontratante; e a reprogramação dos prazos e encargos que dela resultem. |
 | AL-EXECUCAO-FORA-VIGENCIA | Execução registada fora da vigência | Há registos de tempo aprovados com data fora do período de vigência do contrato ou dentro de um período de suspensão da execução. | CRITICO | — | RN-208 | Não há execução válida fora da vigência nem durante a suspensão. | Corrigir os registos não dispensa apurar se houve prestação efetiva fora da vigência ou em período suspenso. A correção do registo não sana a execução indevida nem legitima o pagamento correspondente. |
 | AL-VISTO-PENDENTE | Visto do TdC pendente | Contrato em execução que exige visto prévio, sem visto obtido nem visto tácito. | CRITICO | — | — | LOPTC (Lei n.º 98/97) — fiscalização prévia. | Regularizar o visto não dispensa: a remessa do contrato ao Tribunal de Contas nos termos e prazos legais; e a proibição de produzir efeitos financeiros antes do visto, salvo nos casos legalmente admitidos. Os atos praticados antes do visto ficam sujeitos ao respetivo regime. |
+| AL-NOTA-CREDITO-PENDENTE | Fatura à espera de nota de crédito | Há uma fatura por conferir há mais de 30 dias à espera da nota de crédito que a corrige. Enquanto a nota não chegar, a fatura não pode ser validada nem o valor conferido segue para pagamento. | AVISO | — | RN-612 | A fatura emitida a mais mantém-se em aberto até ser corrigida por nota de crédito. | Aguardar a nota de crédito não dispensa: a interpelação do cocontratante para a emitir; a verificação de que o prazo de pagamento da parte não contestada corre nos termos legais; e a decisão sobre a fatura logo que a nota seja recebida. A espera prolongada sem diligências documentadas é achado de auditoria. |

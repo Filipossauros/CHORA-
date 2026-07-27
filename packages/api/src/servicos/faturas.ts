@@ -1,5 +1,5 @@
 import {
-  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, RN_610, RN_611, exigir, ViolacaoRegra,
+  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, RN_610, RN_611, RN_612, exigir, ViolacaoRegra,
   totalFaturado, dentroDoIntervalo, maquinaFatura,
   type Fatura, type Compromisso, type DataISO, type Cent, type AnoCivil,
   type LinhaConferencia, type TipoFaturacao,
@@ -19,11 +19,24 @@ type LinhaFatura = Fatura['linhas'][number];
 export interface ResultadoConferencia {
   linhas: LinhaConferencia[];
   conforme: boolean;
+  /** O que a aplicação apurou que devia ter sido faturado. */
+  montanteConferido: Cent;
+  /** O que a fatura vale depois da nota de crédito (igual ao faturado se não houver). */
+  montanteLiquido: Cent;
   entregavel?: { designacao: string; valor: Cent; entregue: boolean; entregueEm?: DataISO };
   /** Contexto da licença, quando o que se confere é um licenciamento. */
   licenciamento?: { precoContratual: Cent; vigencia?: { de: DataISO; ate: DataISO } };
   /** Motivo da não conformidade, já redigido — evita obrigar a escrevê-lo. */
   motivo?: string;
+}
+
+/** Dados da nota de crédito que corrige uma fatura emitida a mais. */
+export interface DadosNotaCredito {
+  numero: string;
+  montante: Cent;
+  /** Quando não vem, mantém-se o motivo registado ao pôr a fatura em espera. */
+  motivo?: string;
+  documento?: DocFatura;
 }
 
 export class ServicoFaturas {
@@ -139,29 +152,50 @@ export class ServicoFaturas {
    */
   async conferir(faturaId: string): Promise<ResultadoConferencia> {
     const fatura = await this.carregar(faturaId);
+    const nc = fatura.notaCredito;
+    const liquido = fatura.montanteSemIva - (nc?.montante ?? 0);
+
+    /**
+     * Aplica a nota de crédito ao veredicto. Havendo nota, o que se decide é o
+     * LÍQUIDO: a fatura emitida a mais não deixa de estar errada, mas a correção
+     * já está documentada e a decisão é uma só sobre os dois documentos (RN-612).
+     */
+    const comNotaCredito = (base: ResultadoConferencia): ResultadoConferencia => {
+      if (nc === undefined) return base;
+      const r = RN_612.avaliar({
+        temNotaCredito: true,
+        documentoNotaCreditoPresente: fatura.documentos.some((d) => d.tipo === 'NOTA_CREDITO'),
+        montanteFatura: fatura.montanteSemIva,
+        montanteNotaCredito: nc.montante,
+        montanteConferido: base.montanteConferido,
+      });
+      const { motivo: _antigo, ...semMotivo } = base;
+      return { ...semMotivo, conforme: r.ok, ...(r.ok ? {} : { motivo: r.mensagem }) };
+    };
 
     if (fatura.tipo === 'LICENCIAMENTO') {
       const contrato = await this.ctx.repos.contratos.obter(fatura.contratoId);
-      const r611 = RN_611.avaliar({ tipoFaturacao: 'LICENCIAMENTO', montante: fatura.montanteSemIva, precoContratualAtual: contrato?.precoContratualAtual ?? 0 });
-      return {
-        linhas: [], conforme: r611.ok,
+      const precoContratual = contrato?.precoContratualAtual ?? 0;
+      const r611 = RN_611.avaliar({ tipoFaturacao: 'LICENCIAMENTO', montante: fatura.montanteSemIva, precoContratualAtual: precoContratual });
+      return comNotaCredito({
+        linhas: [], conforme: r611.ok, montanteConferido: precoContratual, montanteLiquido: liquido,
         licenciamento: {
-          precoContratual: contrato?.precoContratualAtual ?? 0,
+          precoContratual,
           vigencia: contrato?.vigenciaLicenciamento,
         },
         ...(!r611.ok ? { motivo: r611.mensagem } : {}),
-      };
+      });
     }
 
     if (fatura.tipo === 'ENTREGAVEL') {
       const e = fatura.entregavelId !== undefined ? await this.ctx.repos.entregaveis.obter(fatura.entregavelId) : null;
       const r608 = RN_608.avaliar({ tipoFaturacao: 'ENTREGAVEL', entregavelIdentificado: e !== null, entregue: e?.entregue ?? false });
       const r609 = RN_609.avaliar({ tipoFaturacao: 'ENTREGAVEL', montanteFatura: fatura.montanteSemIva, valorEntregavel: e?.valor ?? 0 });
-      return {
-        linhas: [], conforme: r608.ok && r609.ok,
+      return comNotaCredito({
+        linhas: [], conforme: r608.ok && r609.ok, montanteConferido: e?.valor ?? 0, montanteLiquido: liquido,
         ...(e !== null ? { entregavel: { designacao: e.designacao, valor: e.valor, entregue: e.entregue, entregueEm: e.entregueEm } } : {}),
         ...(!r608.ok ? { motivo: r608.mensagem } : !r609.ok ? { motivo: r609.mensagem } : {}),
-      };
+      });
     }
 
     const aprovados = await this.ctx.repos.registosTempo.todos(
@@ -177,11 +211,77 @@ export class ServicoFaturas {
         quantidadeAprovada, valorAprovado,
       };
     });
+    // O conferido é o que os registos aprovados do período valem — a referência
+    // independente da fatura, e a que a nota de crédito tem de fazer bater.
+    const montanteConferido = aprovados.reduce((s, r) => s + r.valorImputado, 0);
     const resultado = RN_603.avaliar({ linhas });
-    return {
-      linhas, conforme: resultado.ok,
+    return comNotaCredito({
+      linhas, conforme: resultado.ok, montanteConferido, montanteLiquido: liquido,
       ...(resultado.ok ? {} : { motivo: motivoDivergencia(linhas) }),
+    });
+  }
+
+  /**
+   * Marca a fatura como errada e por conferir até chegar a nota de crédito.
+   *
+   * Não é invalidar — a fatura existe e vai ser corrigida — nem validar, porque
+   * o montante ainda não é o certo. Fica em espera para que a decisão aconteça
+   * uma só vez, sobre a fatura e a nota em conjunto.
+   */
+  async aguardarNotaCredito(faturaId: string, motivo: string, u: ContextoUtilizador): Promise<Fatura> {
+    const fatura = await this.carregar(faturaId);
+    const t = maquinaFatura.transicaoPermitida(fatura.estado, 'AGUARDA_NOTA_CREDITO', 'GESTOR_CONTRATO');
+    if (!t.permitida) throw new ErroConflitoEstado(t.motivo ?? 'Transição inválida.');
+    if (motivo.trim().length === 0) {
+      throw new ErroValidacao('Indique porque a fatura fica a aguardar nota de crédito.');
+    }
+    const agora = this.ctx.relogio.agora();
+    const { montanteConferido } = await this.conferir(faturaId);
+    const atualizada: Fatura = {
+      ...fatura, estado: 'AGUARDA_NOTA_CREDITO',
+      notaCredito: {
+        numero: 'por emitir',
+        montante: Math.max(0, fatura.montanteSemIva - montanteConferido),
+        motivo: motivo.trim(),
+        registadaEm: agora.slice(0, 10),
+      },
+      atualizadoEm: agora, atualizadoPor: u.utilizadorId,
     };
+    await this.ctx.repos.faturas.guardar(atualizada);
+    await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Fatura', entidadeId: faturaId, operacao: 'AGUARDAR_NOTA_CREDITO', resultado: 'PERMITIDO', depois: { motivo: motivo.trim(), montanteEsperado: atualizada.notaCredito?.montante } });
+    return atualizada;
+  }
+
+  /**
+   * Regista a nota de crédito recebida (com o respetivo PDF) e devolve a fatura
+   * à conferência, para que fatura e nota sejam decididas em simultâneo.
+   */
+  async registarNotaCredito(faturaId: string, dados: DadosNotaCredito, u: ContextoUtilizador): Promise<{ fatura: Fatura; conferencia: ResultadoConferencia }> {
+    const fatura = await this.carregar(faturaId);
+    if (fatura.estado !== 'AGUARDA_NOTA_CREDITO' && fatura.estado !== 'EM_CONFERENCIA') {
+      throw new ErroConflitoEstado('Só se regista nota de crédito numa fatura por conferir.');
+    }
+    if (dados.numero.trim().length === 0) throw new ErroValidacao('Indique o número da nota de crédito.');
+    if (dados.montante <= 0) throw new ErroValidacao('A nota de crédito tem de ter montante positivo.');
+    if (dados.montante > fatura.montanteSemIva) {
+      throw new ErroValidacao('A nota de crédito não pode exceder o montante da fatura.');
+    }
+    const agora = this.ctx.relogio.agora();
+    const documentos = dados.documento !== undefined
+      ? [...fatura.documentos.filter((d) => d.tipo !== 'NOTA_CREDITO'), dados.documento]
+      : fatura.documentos;
+    const atualizada: Fatura = {
+      ...fatura, estado: 'EM_CONFERENCIA', documentos,
+      notaCredito: {
+        numero: dados.numero.trim(), montante: dados.montante,
+        motivo: (dados.motivo ?? '').trim().length > 0 ? dados.motivo!.trim() : fatura.notaCredito?.motivo ?? 'correção do montante faturado',
+        registadaEm: agora.slice(0, 10),
+      },
+      atualizadoEm: agora, atualizadoPor: u.utilizadorId,
+    };
+    await this.ctx.repos.faturas.guardar(atualizada);
+    await this.ctx.auditoria.registar({ utilizadorId: u.utilizadorId, entidade: 'Fatura', entidadeId: faturaId, operacao: 'NOTA_CREDITO:REGISTAR', resultado: 'PERMITIDO', depois: atualizada.notaCredito });
+    return { fatura: atualizada, conferencia: await this.conferir(faturaId) };
   }
 
   /**
@@ -237,18 +337,30 @@ export class ServicoFaturas {
     const t = maquinaFatura.transicaoPermitida(fatura.estado, decisao, 'GESTOR_CONTRATO');
     if (!t.permitida) throw new ErroConflitoEstado(t.motivo ?? 'Transição inválida.');
 
-    const { linhas, conforme, motivo: motivoNaoConforme } = await this.conferir(faturaId);
+    const { linhas, conforme, motivo: motivoNaoConforme, montanteConferido, montanteLiquido } = await this.conferir(faturaId);
+    const nc = fatura.notaCredito;
 
     if (decisao === 'VALIDADA') {
-      // Divergência bloqueia a validação: face aos registos aprovados (RN-603)
-      // ou face ao entregável que a fatura diz liquidar (RN-608/RN-609).
-      if (!conforme && fatura.tipo === 'ENTREGAVEL') {
+      // Com nota de crédito, o que se valida é o líquido: RN-612 exige a nota
+      // documentada e o líquido a corresponder ao conferido.
+      if (nc !== undefined) {
+        exigir(RN_612, {
+          temNotaCredito: true,
+          documentoNotaCreditoPresente: fatura.documentos.some((d) => d.tipo === 'NOTA_CREDITO'),
+          montanteFatura: fatura.montanteSemIva,
+          montanteNotaCredito: nc.montante,
+          montanteConferido,
+        });
+      } else if (!conforme && fatura.tipo === 'ENTREGAVEL') {
+        // Divergência bloqueia a validação: face aos registos aprovados (RN-603)
+        // ou face ao entregável que a fatura diz liquidar (RN-608/RN-609).
         throw new ViolacaoRegra(RN_609, motivoNaoConforme ?? 'A fatura não corresponde ao entregável que liquida.');
+      } else if (!conforme) {
+        throw new ViolacaoRegra(RN_603, 'Há divergências entre a fatura e os registos aprovados do período.', { divergencias: linhas.filter((l) => l.quantidadeFatura !== l.quantidadeAprovada || l.valorFatura !== l.valorAprovado) });
       }
-      if (!conforme) throw new ViolacaoRegra(RN_603, 'Há divergências entre a fatura e os registos aprovados do período.', { divergencias: linhas.filter((l) => l.quantidadeFatura !== l.quantidadeAprovada || l.valorFatura !== l.valorAprovado) });
       const contrato = await this.ctx.repos.contratos.obter(fatura.contratoId);
       const outras = (await this.ctx.repos.faturas.todos((f) => f.contratoId === fatura.contratoId && f.id !== fatura.id));
-      exigir(RN_607, { totalFaturado: totalFaturado(outras), novoMontante: fatura.montanteSemIva, precoContratualAtual: contrato?.precoContratualAtual ?? 0 });
+      exigir(RN_607, { totalFaturado: totalFaturado(outras), novoMontante: montanteLiquido, precoContratualAtual: contrato?.precoContratualAtual ?? 0 });
     } else if ((motivo ?? '').trim().length === 0) {
       throw new ViolacaoRegra(RN_604, 'A invalidação exige a indicação do motivo.');
     }
@@ -256,7 +368,7 @@ export class ServicoFaturas {
     const relatorio: RelatorioEvidencia = {
       id: this.ctx.ids.novo('rev'), faturaId, contratoId: fatura.contratoId, decisao,
       ...(decisao === 'INVALIDADA' && motivo !== undefined ? { motivo } : {}),
-      frase: gerarFraseEvidencia({ decisao, numeroFatura: fatura.numero, periodoDe: fatura.periodoDe, periodoAte: fatura.periodoAte, tipo: fatura.tipo, ...(motivo !== undefined ? { motivo } : {}) }),
+      frase: gerarFraseEvidencia({ decisao, numeroFatura: fatura.numero, periodoDe: fatura.periodoDe, periodoAte: fatura.periodoAte, tipo: fatura.tipo, ...(nc !== undefined ? { notaCredito: { numero: nc.numero, montante: nc.montante, liquido: montanteLiquido } } : {}), ...(motivo !== undefined ? { motivo } : {}) }),
       linhas: linhas.map((l) => ({ perfil: l.perfilId, recurso: l.recursoId, quantidadeFatura: l.quantidadeFatura, quantidadeAprovada: l.quantidadeAprovada, valorFatura: l.valorFatura, valorAprovado: l.valorAprovado, confere: l.quantidadeFatura === l.quantidadeAprovada && l.valorFatura === l.valorAprovado })),
       geradoEm: this.ctx.relogio.agora(), geradoPor: u.utilizadorId,
     };
@@ -267,7 +379,7 @@ export class ServicoFaturas {
     const atualizada: Fatura = {
       ...fatura, estado: decisao, relatorioEvidenciaId: relatorio.id,
       dataAprovacao: agora.slice(0, 10),
-      ...(decisao === 'VALIDADA' ? { montanteAprovado: fatura.montanteSemIva } : {}),
+      ...(decisao === 'VALIDADA' ? { montanteAprovado: montanteLiquido } : {}),
       atualizadoEm: agora, atualizadoPor: u.utilizadorId,
     };
     await this.ctx.repos.faturas.guardar(atualizada);
@@ -290,8 +402,25 @@ export class ServicoFaturas {
  * quantitativa; na invalidação, reporta apenas a não conformidade, sem
  * reconhecer a realização dos trabalhos.
  */
-export function gerarFraseEvidencia(dados: { decisao: 'VALIDADA' | 'INVALIDADA'; numeroFatura: string; periodoDe: DataISO; periodoAte: DataISO; tipo?: TipoFaturacao; motivo?: string }): string {
+export function gerarFraseEvidencia(dados: {
+  decisao: 'VALIDADA' | 'INVALIDADA'; numeroFatura: string; periodoDe: DataISO; periodoAte: DataISO;
+  tipo?: TipoFaturacao; motivo?: string;
+  notaCredito?: { numero: string; montante: Cent; liquido: Cent };
+}): string {
   const periodo = `${dados.periodoDe} a ${dados.periodoAte}`;
+
+  // Havendo nota de crédito, o que se atesta é o LÍQUIDO: a frase tem de o
+  // dizer, sob pena de o sistema de faturação processar o valor emitido a mais.
+  if (dados.decisao === 'VALIDADA' && dados.notaCredito !== undefined) {
+    const eur = (c: number): string => `${(c / 100).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+    return (
+      `Da conferência da fatura ${dados.numeroFatura}, relativa ao período de ${periodo}, resultou divergência face aos elementos de execução aprovados, ` +
+      `corrigida pela nota de crédito ${dados.notaCredito.numero}, no montante de ${eur(dados.notaCredito.montante)}. ` +
+      `Conferidos ambos os documentos em conjunto, o montante líquido de ${eur(dados.notaCredito.liquido)} corresponde integralmente ao apurado. ` +
+      `Nessa medida, e exclusivamente para efeitos da presente validação, atesta-se a conformidade do valor líquido conferido. ` +
+      `A presente validação circunscreve-se ao montante líquido verificado, não constituindo pronúncia sobre quaisquer outras matérias.`
+    );
+  }
 
   // Numa fatura de entregável o facto conferido é a entrega, não o tempo: a
   // frase tem de o dizer, sob pena de atestar algo que não foi verificado.

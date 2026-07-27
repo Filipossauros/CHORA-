@@ -254,6 +254,45 @@ export const RN_611: Regra<{ tipoFaturacao: string; montante: Cent; precoContrat
   },
 };
 
+/**
+ * RN-612 — a validação de fatura corrigida por nota de crédito exige a nota
+ * documentada e o líquido a bater certo.
+ *
+ * Quando o fornecedor fatura a mais, a correção pode vir por nota de crédito em
+ * vez de fatura substituta. Nesse caso o que se valida não é o montante da
+ * fatura mas o líquido — e a decisão é uma só, sobre os dois documentos em
+ * conjunto: validar a fatura sem a nota anexada seria atestar um valor que o
+ * arquivo não suporta.
+ */
+export const RN_612: Regra<{
+  temNotaCredito: boolean;
+  documentoNotaCreditoPresente: boolean;
+  montanteFatura: Cent;
+  montanteNotaCredito: Cent;
+  montanteConferido: Cent;
+}> = {
+  codigo: 'RN-612',
+  descricao:
+    'A validação de uma fatura corrigida por nota de crédito exige que a nota de crédito esteja documentada em PDF e que o líquido (fatura menos nota de crédito) corresponda ao montante conferido.',
+  requisito: 'novo',
+  base: 'A nota de crédito integra a evidência da decisão: valida-se o líquido, não o valor emitido a mais.',
+  excecaoFundamentavel: false,
+  avaliar({ temNotaCredito, documentoNotaCreditoPresente, montanteFatura, montanteNotaCredito, montanteConferido }) {
+    if (!temNotaCredito) return conforme;
+    if (!documentoNotaCreditoPresente) {
+      return violada('Falta o PDF da nota de crédito: sem ele a decisão não fica documentada.');
+    }
+    const liquido = montanteFatura - montanteNotaCredito;
+    if (liquido !== montanteConferido) {
+      return violada(
+        'O líquido da fatura após a nota de crédito não corresponde ao montante conferido.',
+        { montanteFatura, montanteNotaCredito, liquido, montanteConferido, diferenca: liquido - montanteConferido },
+      );
+    }
+    return conforme;
+  },
+};
+
 export const REGRAS_FATURACAO = [
   RN_601,
   RN_602,
@@ -265,4 +304,5 @@ export const REGRAS_FATURACAO = [
   RN_609,
   RN_610,
   RN_611,
+  RN_612,
 ] as const;

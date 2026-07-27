@@ -15,7 +15,7 @@ const zNovaFatura = z.object({
   entregavelId: z.string().optional(),
   referenciaSistemaFaturacao: z.string().optional(),
   dataEmissao: zDataISO, dataRececao: zDataISO, periodoDe: zDataISO, periodoAte: zDataISO,
-  montanteSemIva: zCent, montanteIva: zCent, dataLimitePagamento: zDataISO.optional(),
+  montanteSemIva: zCent, montanteIva: zCent,
 });
 const zDoc = z.object({ tipo: zTipoDocumentoFatura, ficheiroRef: z.string().min(1), nomeOriginal: z.string().min(1), hashSha256: z.string().regex(/^[a-f0-9]{64}$/i), tamanhoBytes: z.number().int().nonnegative() });
 const zLinha = z.object({ perfilId: z.string().optional(), recursoId: z.string().optional(), quantidade: zMinutos, valorHora: zCent, montante: zCent, origem: z.enum(['MANUAL', 'EXTRAIDA']) });
@@ -24,6 +24,11 @@ const zReceberEConferir = zNovaFatura.extend({
   linhas: z.array(zLinha).optional(),
 });
 const zDecidir = z.object({ decisao: z.enum(['VALIDADA', 'INVALIDADA']), motivo: z.string().optional() });
+const zAguardarNotaCredito = z.object({ motivo: z.string().min(1) });
+const zNotaCredito = z.object({
+  numero: z.string().min(1), montante: zCentNaoNegativo, motivo: z.string().default(''),
+  documento: zDoc.optional(),
+});
 
 function parse<T>(s: z.ZodType<T>, corpo: unknown): T { const r = s.safeParse(corpo); if (!r.success) throw new ErroValidacao('Corpo inválido.', r.error.issues); return r.data; }
 function exigirGestorFaturas(papeis: import('@chora/domain').PapelAplicacional[]): void {
@@ -101,6 +106,22 @@ export function rotasFaturas(app: FastifyInstance, ctx: Contexto): void {
     const { id } = req.params as { id: string };
     const { decisao, motivo } = parse(zDecidir, req.body);
     return servico.decidir(id, decisao, motivo, u);
+  });
+  /** A fatura está errada: fica por conferir à espera da nota de crédito. */
+  app.post('/api/v1/faturas/:id/aguardar-nota-credito', async (req) => {
+    const u = exigirUtilizador(req); exigirGestorFaturas(u.papeis);
+    const { id } = req.params as { id: string };
+    return servico.aguardarNotaCredito(id, parse(zAguardarNotaCredito, req.body).motivo, u);
+  });
+  /** Chegou a nota de crédito: volta à conferência para decidir tudo de uma vez. */
+  app.post('/api/v1/faturas/:id/nota-credito', async (req, reply) => {
+    const u = exigirUtilizador(req); exigirGestorFaturas(u.papeis);
+    const { id } = req.params as { id: string };
+    const { documento: doc, ...d } = parse(zNotaCredito, req.body);
+    const documento = doc !== undefined
+      ? { ...doc, recebidoEm: ctx.relogio.agora(), carregadoPor: u.utilizadorId }
+      : undefined;
+    await reply.status(201).send(await servico.registarNotaCredito(id, { ...d, ...(documento !== undefined ? { documento } : {}) }, u));
   });
   app.get('/api/v1/faturas/:id/relatorio-evidencia', async (req) => {
     exigirUtilizador(req);

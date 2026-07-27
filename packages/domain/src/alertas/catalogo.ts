@@ -297,6 +297,18 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     notaJuridica:
       'Renovar ou substituir o licenciamento não dispensa: a verificação de que a necessidade se mantém; a escolha do procedimento adequado ao valor e ao objeto, sem fracionamento da despesa; e o cabimento e compromisso prévios. A continuação de uso sem título válido não se regulariza a posteriori.',
   },
+  {
+    codigo: 'AL-NOTA-CREDITO-PENDENTE',
+    titulo: 'Fatura à espera de nota de crédito',
+    descricao:
+      'Há uma fatura por conferir há mais de 30 dias à espera da nota de crédito que a corrige. Enquanto a nota não chegar, a fatura não pode ser validada nem o valor conferido segue para pagamento.',
+    familia: 'Higiene e risco de auditoria',
+    severidadeBase: 'AVISO',
+    regraRelacionada: 'RN-612',
+    base: 'A fatura emitida a mais mantém-se em aberto até ser corrigida por nota de crédito.',
+    notaJuridica:
+      'Aguardar a nota de crédito não dispensa: a interpelação do cocontratante para a emitir; a verificação de que o prazo de pagamento da parte não contestada corre nos termos legais; e a decisão sobre a fatura logo que a nota seja recebida. A espera prolongada sem diligências documentadas é achado de auditoria.',
+  },
 ];
 
 export const FAMILIAS_ALERTAS: ReadonlyArray<FamiliaAlerta> = [

@@ -675,9 +675,9 @@ components:
       enum:
         - RECEBIDA
         - EM_CONFERENCIA
+        - AGUARDA_NOTA_CREDITO
         - VALIDADA
         - INVALIDADA
-        - DEVOLVIDA
     TipoDotacao:
       type: string
       enum:

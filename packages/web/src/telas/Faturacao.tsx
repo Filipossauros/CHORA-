@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
-import { estadoEntregavel, type Contrato, type Entregavel, type TipoFaturacao } from '@chora/domain';
+import { estadoEntregavel, type Contrato, type Entregavel, type Fatura, type TipoFaturacao } from '@chora/domain';
 import { app, nomeAzure } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Estado, eurosParaCent, formatarHoras, formatarMoeda, hoje, mensagemErro, useAsync } from '../comum.js';
@@ -9,12 +10,14 @@ interface LinhaConf { perfilId?: string; recursoId?: string; quantidadeFatura: n
 interface Conferencia {
   linhas: LinhaConf[];
   conforme: boolean;
+  montanteConferido: number;
+  montanteLiquido: number;
   entregavel?: { designacao: string; valor: number; entregue: boolean; entregueEm?: string };
   licenciamento?: { precoContratual: number; vigencia?: { de: string; ate: string } };
   motivo?: string;
 }
 interface Relatorio { decisao: string; motivo?: string; frase: string; geradoEm: string }
-type TipoDoc = 'FATURA' | 'RELATORIO_HORAS_FORNECEDOR' | 'FATURA_COM_RELATORIO' | 'AUTO_ENTREGA';
+type TipoDoc = 'FATURA' | 'RELATORIO_HORAS_FORNECEDOR' | 'FATURA_COM_RELATORIO' | 'AUTO_ENTREGA' | 'NOTA_CREDITO';
 
 const ROT_TIPO: Record<TipoFaturacao, string> = {
   BOLSA_HORAS: 'Bolsa de horas', ENTREGAVEL: 'Entregável', LICENCIAMENTO: 'Licenciamento',
@@ -50,16 +53,39 @@ async function sha256(file: File): Promise<string> {
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Carregador de PDF, reutilizado pelo formulário e pela nota de crédito. */
+function Dropzone({ id, rot, ficheiro, onFicheiro, ativo }: {
+  id: string; rot: string; ficheiro?: File; onFicheiro: (f: File) => void; ativo: boolean;
+}): ReactNode {
+  const ref = useRef<HTMLInputElement | null>(null);
+  return (
+    <div>
+      <div className="campo" style={{ margin: 0 }}><label>{rot}</label></div>
+      <div className={`dropzone${ficheiro !== undefined ? ' ok' : ''}`} onClick={() => ativo && ref.current?.click()} style={{ cursor: ativo ? 'pointer' : 'default' }} data-doc={id}>
+        {ficheiro !== undefined ? <b>✓ {ficheiro.name}</b> : <>Arraste ou clique para carregar o PDF</>}
+      </div>
+      <input ref={ref} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f !== undefined) onFicheiro(f); e.target.value = ''; }} />
+    </div>
+  );
+}
+
 /**
- * CONFERÊNCIA DE FATURAS em três passos, e cada um decide alguma coisa:
- * receber (com os documentos), ver o resultado da conferência determinística e
- * decidir, encerrar com a evidência. A receção corre a extração, a passagem a
- * conferência e a própria conferência numa transição — não havia decisão pelo
- * meio que justificasse os três cliques que isto era.
+ * CONFERÊNCIA DE FATURAS.
+ *
+ * As faturas entram à mão, uma de cada vez — a aplicação não tem acesso ao
+ * sistema de faturação da empresa —, pelo que o ecrã abre no FORMULÁRIO e não
+ * numa fila: registar é a única coisa que se pode fazer sem uma fatura em mão.
+ * Registar corre a conferência determinística e apresenta o veredito no mesmo
+ * ecrã: não há passo intermédio, porque não há decisão pelo meio.
+ *
+ * A única coisa que fica mesmo pendente é a fatura errada à espera de nota de
+ * crédito — e essa aparece em destaque no topo, porque é a que exige uma
+ * diligência junto do fornecedor.
  */
 export function Faturacao(): ReactNode {
   const podeGerir = app.papeisAtuais().includes('GESTOR_CONTRATO');
-  const [contratoId, setContratoId] = useState('');
+  const [params] = useSearchParams();
+  const [contratoId, setContratoId] = useState(params.get('contrato') ?? '');
   const [faturaId, setFaturaId] = useState('');
   const [conf, setConf] = useState<Conferencia>();
   const [relatorio, setRelatorio] = useState<Relatorio>();
@@ -67,7 +93,6 @@ export function Faturacao(): ReactNode {
   const [erro, setErro] = useState<string>();
   const [nova, setNova] = useState({ numero: '', periodoDe: '', periodoAte: '', montanteSemIva: '', montanteIva: '', tipo: undefined as TipoFaturacao | undefined, entregavelId: '', ficheiroUnico: true });
   const [pend, setPend] = useState<Partial<Record<TipoDoc, File>>>({});
-  const refs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const base = useAsync(async () => {
     const contratos = await app.ctx.repos.contratos.todos();
@@ -85,6 +110,7 @@ export function Faturacao(): ReactNode {
   const tipo = nova.tipo ?? tipoSugerido(contrato, faturaveis);
   const entregavelSel = faturaveis.find((e: Entregavel) => e.id === nova.entregavelId);
   const docs = documentosExigidos(tipo, nova.ficheiroUnico);
+  const aguardam = faturas.filter((f) => f.estado === 'AGUARDA_NOTA_CREDITO');
 
   function limpar(novoContrato?: string): void {
     const alvo = contratos.find((c) => c.id === (novoContrato ?? cid));
@@ -96,8 +122,8 @@ export function Faturacao(): ReactNode {
     });
   }
 
-  /** Recebe a fatura e confere-a: um clique, um resultado. */
-  async function receberEConferir(): Promise<void> {
+  /** Regista a fatura e confere-a: um clique, um veredito. */
+  async function registarEConferir(): Promise<void> {
     setErro(undefined);
     const semIva = eurosParaCent(nova.montanteSemIva); const iva = eurosParaCent(nova.montanteIva);
     if (nova.numero.trim() === '' || nova.periodoDe === '' || nova.periodoAte === '' || semIva === 0) {
@@ -137,8 +163,8 @@ export function Faturacao(): ReactNode {
     } catch (e) { setErro(mensagemErro(e)); }
   }
 
-  /** Reabre a conferência de uma fatura já recebida (retomar do histórico). */
-  async function reconferir(id: string): Promise<void> {
+  /** Abre uma fatura já registada, correndo logo a conferência. */
+  async function abrir(id: string): Promise<void> {
     setErro(undefined); setFaturaId(id); setRelatorio(undefined);
     try {
       const r = await app.faturas.conferir(id) as Conferencia;
@@ -155,6 +181,15 @@ export function Faturacao(): ReactNode {
     } catch (e) { setErro(mensagemErro(e)); }
   }
 
+  async function aguardarNota(): Promise<void> {
+    if (fatura === null) return;
+    setErro(undefined);
+    try {
+      await app.faturas.aguardarNotaCredito(fatura.id, motivo.trim().length > 0 ? motivo : 'Montante faturado acima do apurado na conferência.', app.utilizador());
+      setConf(undefined); setFaturaId(''); base.recarregar();
+    } catch (e) { setErro(mensagemErro(e)); }
+  }
+
   function descarregarPdf(): void {
     if (relatorio === undefined || fatura === null) return;
     const doc = new jsPDF();
@@ -165,21 +200,22 @@ export function Faturacao(): ReactNode {
     doc.text(`Tipo de faturação: ${ROT_TIPO[fatura.tipo]}`, 15, 46);
     doc.text(`Período: ${fatura.periodoDe} a ${fatura.periodoAte}`, 15, 53);
     doc.text(`Decisão: ${relatorio.decisao}`, 15, 60);
-    if (relatorio.motivo !== undefined) doc.text(doc.splitTextToSize(`Motivo: ${relatorio.motivo}`, 180), 15, 67);
+    let y = 67;
+    if (fatura.notaCredito !== undefined) {
+      doc.text(`Nota de crédito: ${fatura.notaCredito.numero} · ${formatarMoeda(fatura.notaCredito.montante)}`, 15, y); y += 7;
+    }
+    if (relatorio.motivo !== undefined) { doc.text(doc.splitTextToSize(`Motivo: ${relatorio.motivo}`, 180), 15, y); y += 14; }
     doc.setFontSize(10);
-    doc.text(doc.splitTextToSize(relatorio.frase, 180), 15, 85);
+    doc.text(doc.splitTextToSize(relatorio.frase, 180), 15, y + 12);
     doc.setFontSize(8); doc.text(`Gerado em ${relatorio.geradoEm}`, 15, 285);
     doc.save(`relatorio-evidencia-${fatura.numero}.pdf`);
   }
 
   const decidida = fatura !== null && ['VALIDADA', 'INVALIDADA'].includes(fatura.estado);
-  const passo = fatura === null ? 1 : decidida ? 3 : 2;
-  const porDecidir = faturas.filter((f) => f.estado === 'RECEBIDA' || f.estado === 'EM_CONFERENCIA');
-  const decididas = faturas.filter((f) => f.estado === 'VALIDADA' || f.estado === 'INVALIDADA' || f.estado === 'DEVOLVIDA');
 
   return (
     <>
-      <Cabecalho titulo="Conferência de faturas" sub="Receber · conferir · decidir" acoes={
+      <Cabecalho titulo="Conferência de faturas" sub="Registar · conferir · decidir" acoes={
         <>
           {fatura !== null && <button className="btn" onClick={() => limpar()}>+ Nova fatura</button>}
           <select value={cid} onChange={(e) => { setContratoId(e.target.value); limpar(e.target.value); }}>
@@ -189,16 +225,28 @@ export function Faturacao(): ReactNode {
       } />
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
 
-      <div className="stepper">
-        {['Receção', 'Conferência e decisão', 'Encerramento'].map((t, i) => (
-          <div key={t} className={`passo${passo === i + 1 ? ' ativo' : passo > i + 1 ? ' feito' : ''}`}><span className="n">{passo > i + 1 ? '✓' : i + 1}</span>{t}</div>
-        ))}
-      </div>
+      {/* Único pendente possível: a fatura errada à espera da nota de crédito. */}
+      {fatura === null && aguardam.length > 0 && (
+        <div className="cartao" style={{ marginBottom: 16, borderLeft: '3px solid var(--ambar)' }}>
+          <h3>A aguardar nota de crédito<span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{aguardam.length} fatura(s) por conferir</span></h3>
+          <table><tbody>
+            {aguardam.map((f) => (
+              <tr key={f.id}>
+                <td className="prim">{f.numero}<div className="sec">{f.notaCredito?.motivo ?? 'em espera'}</div></td>
+                <td className="num tabnum">faturado {formatarMoeda(f.montanteSemIva)}</td>
+                <td className="num tabnum">nota esperada {formatarMoeda(f.notaCredito?.montante ?? 0)}</td>
+                <td className="sec">em espera desde {f.notaCredito?.registadaEm ?? f.dataRececao}</td>
+                <td style={{ textAlign: 'right' }}><button className="btn sm pri" disabled={!podeGerir} onClick={() => void abrir(f.id)}>Registar nota de crédito</button></td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
 
-      {/* ── 1 · RECEÇÃO ─────────────────────────────────────────────────── */}
+      {/* ── REGISTO MANUAL ─────────────────────────────────────────────────── */}
       {fatura === null && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
-          <div className="cartao"><h3>Nova fatura<span className="pill p-azul" style={{ marginLeft: 8 }}>{ROT_TIPO[tipo]}</span></h3><div className="corpo">
+          <div className="cartao"><h3>Registar fatura<span className="pill p-azul" style={{ marginLeft: 8 }}>{ROT_TIPO[tipo]}</span></h3><div className="corpo">
             {!podeGerir && <div className="aviso">Só o gestor de contrato confere faturas.</div>}
 
             <div className="aviso" style={{ marginBottom: 12 }}>
@@ -248,33 +296,19 @@ export function Faturacao(): ReactNode {
 
             <div className={docs.length > 1 ? 'g2' : ''}>
               {docs.map(({ tipo: t, rot }) => (
-                <div key={t}>
-                  <div className="campo" style={{ margin: 0 }}><label>{rot}</label></div>
-                  <div className={`dropzone${pend[t] !== undefined ? ' ok' : ''}`} onClick={() => podeGerir && refs.current[t]?.click()} style={{ cursor: podeGerir ? 'pointer' : 'default' }}>
-                    {pend[t] !== undefined ? <b>✓ {pend[t]?.name}</b> : <>Arraste ou clique para carregar o PDF</>}
-                  </div>
-                  <input ref={(el) => { refs.current[t] = el; }} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f !== undefined) setPend((s) => ({ ...s, [t]: f })); e.target.value = ''; }} />
-                </div>
+                <Dropzone key={t} id={t} rot={rot} ficheiro={pend[t]} ativo={podeGerir} onFicheiro={(f) => setPend((s) => ({ ...s, [t]: f }))} />
               ))}
             </div>
 
-            <div className="aviso" style={{ margin: '10px 0 12px' }}>Os PDF são selados pelo hash SHA-256 <code>RN-602-A</code>. Ao receber, a aplicação extrai as linhas dos registos aprovados do período e confere de imediato.</div>
-            <button className="btn pri" disabled={!podeGerir} onClick={() => void receberEConferir()}>Receber e conferir →</button>
+            <div className="aviso" style={{ margin: '10px 0 12px' }}>Os PDF são selados pelo hash SHA-256 <code>RN-602-A</code>. Ao registar, a aplicação confere de imediato contra os elementos de execução aprovados e apresenta o veredito.</div>
+            <button className="btn pri" disabled={!podeGerir} onClick={() => void registarEConferir()}>Registar e conferir →</button>
           </div></div>
 
-          <div className="cartao"><h3>Faturas do contrato</h3><table>
-            <tbody>
-              {porDecidir.length > 0 && <tr><td colSpan={2} className="sec" style={{ fontWeight: 600 }}>Por decidir</td></tr>}
-              {porDecidir.map((f) => <tr key={f.id} className="click" onClick={() => void reconferir(f.id)}><td className="prim">{f.numero}<div className="sec">{ROT_TIPO[f.tipo]} · {formatarMoeda(f.montanteSemIva)}</div></td><td><Estado v={f.estado} /></td></tr>)}
-              {decididas.length > 0 && <tr><td colSpan={2} className="sec" style={{ fontWeight: 600, paddingTop: 10 }}>Decididas</td></tr>}
-              {decididas.map((f) => <tr key={f.id} className="click" onClick={() => { setFaturaId(f.id); setConf(undefined); setRelatorio(undefined); }}><td className="prim">{f.numero}<div className="sec">{ROT_TIPO[f.tipo]} · {formatarMoeda(f.montanteAprovado ?? f.montanteSemIva)}</div></td><td><Estado v={f.estado} /></td></tr>)}
-              {faturas.length === 0 && <tr><td colSpan={2} className="vazio">Sem faturas neste contrato.</td></tr>}
-            </tbody>
-          </table></div>
+          <HistoricoFaturas faturas={faturas} onAbrir={(id) => void abrir(id)} />
         </div>
       )}
 
-      {/* ── 2 · CONFERÊNCIA E DECISÃO ───────────────────────────────────── */}
+      {/* ── CONFERÊNCIA E DECISÃO ──────────────────────────────────────────── */}
       {fatura !== null && (
         <>
           <div className="cartao" style={{ marginBottom: 16 }}>
@@ -284,21 +318,17 @@ export function Faturacao(): ReactNode {
               <span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{fatura.periodoDe} a {fatura.periodoAte}</span>
               <span style={{ marginLeft: 'auto' }}><Estado v={fatura.estado} /></span>
             </h3>
-            <div className="corpo" style={{ fontSize: 12.5, color: 'var(--texto-suave)' }}>
-              Montante s/ IVA {formatarMoeda(fatura.montanteSemIva)} · IVA {formatarMoeda(fatura.montanteIva)} ·
-              documentos: {fatura.documentos.map((d) => d.nomeOriginal).join(', ') || '—'}
-            </div>
+            <div className="corpo"><Documentos fatura={fatura} /></div>
           </div>
 
-          {!decidida && conf === undefined && (
-            <div className="cartao"><div className="corpo">
-              <p className="sec" style={{ marginTop: 0 }}>Fatura recebida e por conferir.</p>
-              <button className="btn pri" onClick={() => void reconferir(fatura.id)}>Conferir</button>
-            </div></div>
+          {fatura.estado === 'AGUARDA_NOTA_CREDITO' && (
+            <NotaCredito fatura={fatura} podeGerir={podeGerir} onErro={setErro} onFeito={(id) => { void abrir(id); base.recarregar(); }} />
           )}
 
-          {!decidida && conf !== undefined && (
-            <div className="cartao"><h3>Conferência determinística <code>{fatura.tipo === 'ENTREGAVEL' ? 'RN-608 · RN-609' : fatura.tipo === 'LICENCIAMENTO' ? 'RN-611' : 'RN-603'}</code></h3><div className="corpo">
+          {!decidida && fatura.estado !== 'AGUARDA_NOTA_CREDITO' && conf !== undefined && (
+            <div className="cartao"><h3>Conferência <code>{fatura.tipo === 'ENTREGAVEL' ? 'RN-608 · RN-609' : fatura.tipo === 'LICENCIAMENTO' ? 'RN-611' : 'RN-603'}</code>{fatura.notaCredito !== undefined && <code style={{ marginLeft: 6 }}>RN-612</code>}</h3><div className="corpo">
+              <Veredito fatura={fatura} conf={conf} />
+
               {fatura.tipo === 'BOLSA_HORAS' && (
                 <table>
                   <thead><tr><th>Perfil · Recurso</th><th className="num">Qt. fatura</th><th className="num">Qt. aprovada</th><th className="num">€ fatura</th><th className="num">€ aprovado</th><th>Resultado</th></tr></thead>
@@ -336,23 +366,17 @@ export function Faturacao(): ReactNode {
                 </table>
               )}
 
-              {conf.conforme
-                ? <div className="aviso" style={{ margin: '10px 0' }}>Sem divergências: a fatura pode ser validada.</div>
-                : <div className="erro-cx" style={{ margin: '10px 0' }}>{conf.motivo ?? 'Há divergências que obstam à validação.'}</div>}
-
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--linha)' }}>
-                <div className="campo"><label>Motivo da invalidação {conf.conforme ? '(preencha se invalidar)' : '(redigido a partir da divergência — reveja antes de decidir)'}</label>
-                  <textarea rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo da invalidação…" />
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn pri" disabled={!conf.conforme || !podeGerir} onClick={() => void decidir('VALIDADA')}>Validar</button>
-                  <button className="btn" style={{ borderColor: 'var(--vermelho)', color: 'var(--vermelho)' }} disabled={motivo.trim() === '' || !podeGerir} onClick={() => void decidir('INVALIDADA')}>Invalidar</button>
-                </div>
-              </div>
+              <Decisao
+                conforme={conf.conforme} podeGerir={podeGerir} motivo={motivo} onMotivo={setMotivo}
+                temNotaCredito={fatura.notaCredito !== undefined}
+                onValidar={() => void decidir('VALIDADA')}
+                onInvalidar={() => void decidir('INVALIDADA')}
+                onAguardar={() => void aguardarNota()}
+              />
             </div></div>
           )}
 
-          {/* ── 3 · ENCERRAMENTO ────────────────────────────────────────── */}
+          {/* ── ENCERRAMENTO ─────────────────────────────────────────────── */}
           {decidida && (
             relatorio !== undefined ? (
               <div className="cartao"><h3>Encerramento · {relatorio.decisao} <code>RN-604</code></h3><div className="corpo">
@@ -374,5 +398,176 @@ export function Faturacao(): ReactNode {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * VEREDITO em números, antes da tabela. Quem confere quer saber primeiro se bate
+ * certo e por quanto; o detalhe linha a linha serve para perceber ONDE — não é
+ * por onde se começa a ler.
+ */
+function Veredito({ fatura, conf }: { fatura: Fatura; conf: Conferencia }): ReactNode {
+  const nc = fatura.notaCredito;
+  const diferenca = conf.montanteLiquido - conf.montanteConferido;
+  const cor = conf.conforme ? 'var(--verde)' : 'var(--vermelho)';
+  return (
+    <div style={{ border: `1px solid ${cor}`, borderLeft: `3px solid ${cor}`, borderRadius: 9, padding: '11px 13px', marginBottom: 14, background: 'var(--superficie)' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22, alignItems: 'baseline' }}>
+        <Total rot="Faturado" v={fatura.montanteSemIva} />
+        {nc !== undefined && <Total rot={`Nota de crédito ${nc.numero}`} v={-nc.montante} />}
+        {nc !== undefined && <Total rot="Líquido" v={conf.montanteLiquido} forte />}
+        <Total rot="Apurado na conferência" v={conf.montanteConferido} forte />
+        <div style={{ marginLeft: 'auto', fontWeight: 700, fontSize: 13, color: cor }}>
+          {conf.conforme ? '✓ Confere' : `Diferença de ${formatarMoeda(Math.abs(diferenca))} ${diferenca > 0 ? 'a mais' : 'a menos'}`}
+        </div>
+      </div>
+      {!conf.conforme && conf.motivo !== undefined && (
+        <div className="sec" style={{ marginTop: 8, fontSize: 12.5 }}>{conf.motivo}</div>
+      )}
+    </div>
+  );
+}
+
+function Total({ rot, v, forte }: { rot: string; v: number; forte?: boolean }): ReactNode {
+  return (
+    <div>
+      <div className="sec" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.03em' }}>{rot}</div>
+      <div className="tabnum" style={{ fontSize: 15, fontWeight: forte === true ? 700 : 500 }}>{formatarMoeda(v)}</div>
+    </div>
+  );
+}
+
+/**
+ * DECISÃO. Quando confere, o caminho é um só e o motivo fica colapsado — pedir
+ * um motivo de invalidação a quem vai validar é ruído. Quando diverge, há três
+ * saídas, e a que interessa quase sempre é a do meio: a fatura está errada, mas
+ * vai ser corrigida por nota de crédito em vez de invalidada.
+ */
+function Decisao({ conforme, podeGerir, motivo, onMotivo, temNotaCredito, onValidar, onInvalidar, onAguardar }: {
+  conforme: boolean; podeGerir: boolean; motivo: string; onMotivo: (m: string) => void; temNotaCredito: boolean;
+  onValidar: () => void; onInvalidar: () => void; onAguardar: () => void;
+}): ReactNode {
+  const [abertoMotivo, setAbertoMotivo] = useState(!conforme);
+  return (
+    <div style={{ marginTop: 14, paddingTop: 13, borderTop: '1px solid var(--linha)' }}>
+      {conforme && !abertoMotivo && (
+        <button className="btn sm" style={{ marginBottom: 10 }} onClick={() => setAbertoMotivo(true)}>Invalidar mesmo assim…</button>
+      )}
+      {abertoMotivo && (
+        <div className="campo"><label>Motivo {conforme ? 'da invalidação' : '— redigido a partir da divergência; reveja antes de decidir'}</label>
+          <textarea rows={3} value={motivo} onChange={(e) => onMotivo(e.target.value)} placeholder="Motivo…" />
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className="btn pri" disabled={!conforme || !podeGerir} onClick={onValidar}>
+          {temNotaCredito ? 'Validar fatura e nota de crédito' : 'Validar'}
+        </button>
+        {!conforme && !temNotaCredito && (
+          <button className="btn" disabled={!podeGerir} onClick={onAguardar}>Aguardar nota de crédito</button>
+        )}
+        {abertoMotivo && (
+          <button className="btn" style={{ borderColor: 'var(--vermelho)', color: 'var(--vermelho)' }} disabled={motivo.trim() === '' || !podeGerir} onClick={onInvalidar}>Invalidar</button>
+        )}
+      </div>
+      {!conforme && !temNotaCredito && (
+        <div className="sec" style={{ marginTop: 9, fontSize: 12.5 }}>
+          A validação está bloqueada enquanto houver divergência. Se o fornecedor vai corrigir por nota de crédito,
+          ponha a fatura em espera: quando a nota chegar, decide-se tudo de uma vez <code>RN-612</code>.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * REGISTO DA NOTA DE CRÉDITO. A fatura ficou por conferir à espera dela; ao
+ * registá-la (com o PDF), a fatura volta à conferência para que ambas sejam
+ * decididas em simultâneo.
+ */
+function NotaCredito({ fatura, podeGerir, onErro, onFeito }: {
+  fatura: Fatura; podeGerir: boolean; onErro: (m?: string) => void; onFeito: (id: string) => void;
+}): ReactNode {
+  const esperado = fatura.notaCredito?.montante ?? 0;
+  const [f, setF] = useState({ numero: '', montante: String(esperado / 100), motivo: fatura.notaCredito?.motivo ?? '' });
+  const [pdf, setPdf] = useState<File>();
+
+  async function registar(): Promise<void> {
+    onErro();
+    if (f.numero.trim() === '') { onErro('Indique o número da nota de crédito.'); return; }
+    if (pdf === undefined) { onErro('Carregue o PDF da nota de crédito: sem ele a decisão não fica documentada (RN-612).'); return; }
+    try {
+      const u = app.utilizador();
+      await app.faturas.registarNotaCredito(fatura.id, {
+        numero: f.numero.trim(), montante: eurosParaCent(f.montante), motivo: f.motivo,
+        documento: {
+          tipo: 'NOTA_CREDITO', ficheiroRef: `arq://${fatura.numero}/NOTA_CREDITO`, nomeOriginal: pdf.name,
+          hashSha256: await sha256(pdf), tamanhoBytes: pdf.size,
+          recebidoEm: app.ctx.relogio.agora(), carregadoPor: u.utilizadorId,
+        },
+      }, u);
+      onFeito(fatura.id);
+    } catch (e) { onErro(mensagemErro(e)); }
+  }
+
+  return (
+    <div className="cartao"><h3>Nota de crédito <code>RN-612</code></h3><div className="corpo">
+      <div className="aviso" style={{ marginBottom: 12 }}>
+        Esta fatura está por conferir desde {fatura.notaCredito?.registadaEm ?? fatura.dataRececao}: {fatura.notaCredito?.motivo}
+        {' '}Registe a nota de crédito recebida — a fatura volta à conferência e ambas são decididas de uma só vez.
+      </div>
+      <div className="g3">
+        <div className="campo"><label>Nº da nota de crédito *</label><input value={f.numero} onChange={(e) => setF({ ...f, numero: e.target.value })} placeholder="NC-2026-004" /></div>
+        <div className="campo"><label>Montante (€) *</label><input type="number" step="0.01" value={f.montante} onChange={(e) => setF({ ...f, montante: e.target.value })} /></div>
+        <div className="campo"><label>Motivo</label><input value={f.motivo} onChange={(e) => setF({ ...f, motivo: e.target.value })} /></div>
+      </div>
+      <Dropzone id="NOTA_CREDITO" rot="Nota de crédito (PDF) *" ficheiro={pdf} ativo={podeGerir} onFicheiro={setPdf} />
+      <div className="sec" style={{ margin: '8px 0 12px', fontSize: 12.5 }}>
+        Esperada uma nota de {formatarMoeda(esperado)}, para que o líquido corresponda ao apurado na conferência.
+      </div>
+      <button className="btn pri" disabled={!podeGerir} onClick={() => void registar()}>Registar nota de crédito e conferir →</button>
+    </div></div>
+  );
+}
+
+/** Documentos da fatura, colapsados: só interessam quando se duvida do arquivo. */
+function Documentos({ fatura }: { fatura: Fatura }): ReactNode {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <div style={{ fontSize: 12.5, color: 'var(--texto-suave)' }}>
+      Montante s/ IVA {formatarMoeda(fatura.montanteSemIva)} · IVA {formatarMoeda(fatura.montanteIva)}
+      {fatura.notaCredito !== undefined && <> · nota de crédito {formatarMoeda(fatura.notaCredito.montante)}</>}
+      {' · '}
+      <button className="ligacao" onClick={() => setAberto(!aberto)}>{aberto ? '▾' : '▸'} {fatura.documentos.length} documento(s)</button>
+      {aberto && (
+        <table style={{ marginTop: 8 }}><tbody>
+          {fatura.documentos.map((d) => (
+            <tr key={d.tipo}>
+              <td className="prim">{d.nomeOriginal}<div className="sec">{d.tipo.toLowerCase().replace(/_/g, ' ')}</div></td>
+              <td className="sec tabnum" style={{ fontSize: 11 }}>sha256 {d.hashSha256.slice(0, 16)}…</td>
+              <td className="sec num">{Math.round(d.tamanhoBytes / 1024)} kB</td>
+            </tr>
+          ))}
+          {fatura.documentos.length === 0 && <tr><td className="vazio">Sem documentos.</td></tr>}
+        </tbody></table>
+      )}
+    </div>
+  );
+}
+
+/** Faturas já registadas no contrato — histórico, não fila de trabalho. */
+function HistoricoFaturas({ faturas, onAbrir }: { faturas: Fatura[]; onAbrir: (id: string) => void }): ReactNode {
+  const ordenadas = [...faturas].sort((a, b) => ((a.dataAprovacao ?? a.dataRececao) < (b.dataAprovacao ?? b.dataRececao) ? 1 : -1));
+  return (
+    <div className="cartao"><h3>Faturas do contrato</h3><table>
+      <tbody>
+        {ordenadas.map((f) => (
+          <tr key={f.id} className="click" onClick={() => onAbrir(f.id)}>
+            <td className="prim">{f.numero}<div className="sec">{ROT_TIPO[f.tipo]} · {formatarMoeda(f.montanteAprovado ?? f.montanteSemIva)}</div></td>
+            <td><Estado v={f.estado} /></td>
+          </tr>
+        ))}
+        {faturas.length === 0 && <tr><td colSpan={2} className="vazio">Sem faturas neste contrato.</td></tr>}
+      </tbody>
+    </table></div>
   );
 }

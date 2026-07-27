@@ -92,9 +92,15 @@ export const zPapelAplicacional = z.enum(PAPEIS_APLICACIONAIS);
 export const ESTADOS_FATURA = [
   'RECEBIDA',
   'EM_CONFERENCIA',
+  /**
+   * Fatura errada que fica por conferir à espera da nota de crédito do
+   * fornecedor. Não se invalida (a fatura existe e vai ser corrigida) nem se
+   * valida (o montante ainda não é o certo): fica em espera até que a nota de
+   * crédito chegue e ambas sejam decididas em simultâneo.
+   */
+  'AGUARDA_NOTA_CREDITO',
   'VALIDADA',
   'INVALIDADA',
-  'DEVOLVIDA',
 ] as const;
 export type EstadoFatura = (typeof ESTADOS_FATURA)[number];
 export const zEstadoFatura = z.enum(ESTADOS_FATURA);

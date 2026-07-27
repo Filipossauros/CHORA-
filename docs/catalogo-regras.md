@@ -2,7 +2,7 @@
 
 > Documento **gerado** a partir de `packages/domain/src/rules/` por `pnpm docs`. Não editar à mão.
 
-Total de regras: **58**.
+Total de regras: **59**.
 
 ## Contratos e procedimentos
 
@@ -87,6 +87,7 @@ Total de regras: **58**.
 | RN-609 | bloqueio | novo | não | O montante de uma fatura de entregável tem de corresponder exatamente ao valor do entregável. | No preço fixo não há faturação parcial nem por medição do entregável. |
 | RN-610 | bloqueio | novo | não | Um contrato de licenciamento admite uma única fatura de valor positivo, correspondente à totalidade do contrato. Notas de crédito não são abrangidas. | No licenciamento contrata-se um direito de uso por um período, faturado de uma só vez. |
 | RN-611 | bloqueio | novo | não | O montante da fatura de um contrato de licenciamento tem de corresponder à totalidade do preço contratual atual. | Faturação única: não há faturação parcial de um licenciamento. |
+| RN-612 | bloqueio | novo | não | A validação de uma fatura corrigida por nota de crédito exige que a nota de crédito esteja documentada em PDF e que o líquido (fatura menos nota de crédito) corresponda ao montante conferido. | A nota de crédito integra a evidência da decisão: valida-se o líquido, não o valor emitido a mais. |
 
 ## Recursos e habilitações
 

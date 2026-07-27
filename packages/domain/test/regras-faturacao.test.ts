@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, RN_610, RN_611,
+  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, RN_610, RN_611, RN_612,
   type LinhaConferencia,
 } from '../src/rules/faturacao.js';
 
@@ -90,4 +90,29 @@ describe('RN-611 a fatura do licenciamento vale o contrato todo', () => {
   it('positivo — montante igual ao preço contratual', () => expect(RN_611.avaliar({ tipoFaturacao: 'LICENCIAMENTO', montante: 50_000_00, precoContratualAtual: 50_000_00 }).ok).toBe(true));
   it('negativo — faturação parcial', () => expect(RN_611.avaliar({ tipoFaturacao: 'LICENCIAMENTO', montante: 25_000_00, precoContratualAtual: 50_000_00 }).ok).toBe(false));
   it('a nota de crédito não é medida por esta regra', () => expect(RN_611.avaliar({ tipoFaturacao: 'LICENCIAMENTO', montante: -5_000_00, precoContratualAtual: 50_000_00 }).ok).toBe(true));
+});
+
+describe('RN-612 validação com nota de crédito', () => {
+  const semNota = { temNotaCredito: false, documentoNotaCreditoPresente: false, montanteFatura: 50_000_00, montanteNotaCredito: 0, montanteConferido: 40_000_00 };
+  it('não se aplica quando não há nota de crédito', () => expect(RN_612.avaliar(semNota).ok).toBe(true));
+  it('positivo — nota documentada e líquido igual ao conferido', () => expect(RN_612.avaliar({
+    temNotaCredito: true, documentoNotaCreditoPresente: true,
+    montanteFatura: 50_000_00, montanteNotaCredito: 10_000_00, montanteConferido: 40_000_00,
+  }).ok).toBe(true));
+  it('negativo — falta o PDF da nota de crédito', () => expect(RN_612.avaliar({
+    temNotaCredito: true, documentoNotaCreditoPresente: false,
+    montanteFatura: 50_000_00, montanteNotaCredito: 10_000_00, montanteConferido: 40_000_00,
+  }).ok).toBe(false));
+  it('negativo — a nota não corrige o suficiente', () => {
+    const r = RN_612.avaliar({
+      temNotaCredito: true, documentoNotaCreditoPresente: true,
+      montanteFatura: 50_000_00, montanteNotaCredito: 5_000_00, montanteConferido: 40_000_00,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.dados?.diferenca).toBe(5_000_00);
+  });
+  it('negativo — a nota corrige a mais', () => expect(RN_612.avaliar({
+    temNotaCredito: true, documentoNotaCreditoPresente: true,
+    montanteFatura: 50_000_00, montanteNotaCredito: 15_000_00, montanteConferido: 40_000_00,
+  }).ok).toBe(false));
 });

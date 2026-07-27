@@ -581,6 +581,7 @@ function rotaDaAcao(acao: AcaoOpcao, contratoIdOmissao: string): string {
   }
   if (acao.destino === 'FICHA') return `/contratos/${id}?tab=Ficha`;
   if (acao.destino === 'REGISTOS') return `/registos?contrato=${id}`;
+  if (acao.destino === 'FATURACAO') return `/faturacao?contrato=${id}`;
   return `/contratos/${id}?tab=${encodeURIComponent('Afetações')}`;
 }
 
@@ -674,4 +675,5 @@ const DESTINO_ACAO: Record<string, { rot: string; destino: AcaoOpcao['destino'];
   'AL-SUSPENSAO-ABERTA': { rot: 'Rever suspensão', destino: 'MODIFICACOES', tipoModificacao: 'SUSPENSAO' },
   'AL-SUSPENSAO-VIGENCIA': { rot: 'Rever suspensão', destino: 'MODIFICACOES', tipoModificacao: 'SUSPENSAO' },
   'AL-VISTO-PENDENTE': { rot: 'Registar visto', destino: 'FICHA' },
+  'AL-NOTA-CREDITO-PENDENTE': { rot: 'Registar nota de crédito', destino: 'FATURACAO' },
 };

@@ -7,7 +7,7 @@ import { zCent, zDataISO, zInstanteISO } from '../tipos/primitivos.js';
  * `MODIFICACOES` transporta o tipo de modificação a pré-selecionar, para que o
  * formulário abra já no ato certo.
  */
-export const zDestinoAcao = z.enum(['AFETACOES', 'MODIFICACOES', 'FICHA', 'REGISTOS']);
+export const zDestinoAcao = z.enum(['AFETACOES', 'MODIFICACOES', 'FICHA', 'REGISTOS', 'FATURACAO']);
 export type DestinoAcao = z.infer<typeof zDestinoAcao>;
 
 export const zAcaoOpcao = z.object({
