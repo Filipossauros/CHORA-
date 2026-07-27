@@ -3,8 +3,31 @@ import { zEstadoAlerta, zSeveridadeAlerta } from '../enums/index.js';
 import { zCent, zDataISO, zInstanteISO } from '../tipos/primitivos.js';
 
 /**
+ * Onde se executa uma opção. A opção não descreve apenas o caminho: leva lá.
+ * `MODIFICACOES` transporta o tipo de modificação a pré-selecionar, para que o
+ * formulário abra já no ato certo.
+ */
+export const zDestinoAcao = z.enum(['AFETACOES', 'MODIFICACOES', 'FICHA', 'REGISTOS']);
+export type DestinoAcao = z.infer<typeof zDestinoAcao>;
+
+export const zAcaoOpcao = z.object({
+  destino: zDestinoAcao,
+  rotulo: z.string().min(1),
+  /** Contrato onde a ação se executa — pode não ser o do alerta (mobilização). */
+  contratoId: z.string().optional(),
+  /** Tipo de modificação a pré-selecionar quando `destino = MODIFICACOES`. */
+  tipoModificacao: z.string().optional(),
+});
+export type AcaoOpcao = z.infer<typeof zAcaoOpcao>;
+
+/**
  * Opção de atuação proposta com um alerta ("escada de opções"), ordenada por
  * atrito jurídico crescente. É sempre indicativa: quem decide é o gestor.
+ *
+ * Cada opção tem o SEU prazo: reafectar dentro do contrato pode fazer-se até ao
+ * dia em que as horas acabam, mas subcontratar ou reforçar exigem instrução
+ * prévia, e lançar um procedimento exige meses. O prazo do alerta é o mais curto
+ * destes — é a partir dele que se começa a perder alternativas.
  */
 export const zOpcaoAlerta = z.object({
   ordem: z.number().int().nonnegative(), // 1 = menor atrito
@@ -13,6 +36,12 @@ export const zOpcaoAlerta = z.object({
   viabilidade: z.enum(['VIAVEL', 'CONDICIONADA', 'INVIAVEL']),
   fundamento: z.string().optional(), // base legal / regra aplicável
   impactoValor: zCent.optional(), // diferencial de custo, quando quantificável
+  /** Data-limite própria desta opção; depois dela, a opção deixa de existir. */
+  dataLimite: zDataISO.optional(),
+  /** Dias até `dataLimite`; negativo se já passou. */
+  diasParaLimite: z.number().int().optional(),
+  /** Para onde levar o gestor que escolha esta opção. */
+  acao: zAcaoOpcao.optional(),
 });
 export type OpcaoAlerta = z.infer<typeof zOpcaoAlerta>;
 
@@ -60,8 +89,19 @@ export const zAlerta = z.object({
   impactoValor: zCent.optional(),
   /** Impacto em horas (minutos), quando aplicável. */
   impactoMinutos: z.number().int().optional(),
+  /**
+   * Dias ÚTEIS que restam até a capacidade se esgotar. É a leitura de gestão do
+   * impacto em horas: «restam 340 h» diz pouco, «restam 2 meses e 3 dias» diz
+   * se há tempo para instruir o ato.
+   */
+  diasUteisRestantes: z.number().int().optional(),
   /** Escada de opções de atuação. */
   opcoes: z.array(zOpcaoAlerta).optional(),
+  /**
+   * Reserva jurídica que acompanha as opções: o que nenhuma delas dispensa.
+   * A aplicação propõe caminhos de gestão, não substitui o parecer jurídico.
+   */
+  notaJuridica: z.string().optional(),
 });
 export type Alerta = z.infer<typeof zAlerta>;
 

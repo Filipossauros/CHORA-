@@ -3,10 +3,10 @@ import {
   calcularConsumoPerfil, valorPrevistoPerfil, mesesAteTermino, excedeLimiteVigencia,
   portariaExigeReprogramacao, anoFinalPortaria, montantePortariaAno, mesesGanhosComReprogramacao,
   terminoExecucaoAjustado, periodosSuspensao, mesesEntre, vigenciaLiquidaMeses, LIMITE_VIGENCIA_MESES,
-  preverPerfil, preverContrato, ritmoValorDia, escadaOpcoesPerfil,
-  janelaTransicaoAno, janelaReprogramacaoPortaria, janelaModificacao, janelaNovoProcedimento,
-  fimAnoEconomico, diaDeInstante, diasEntre, adicionarDias,
-  reconciliarAlertas, chaveAlerta,
+  preverPerfil, preverContrato, ritmoValorDia, escadaOpcoesPerfil, prazoMaisCurto, NOTA_JURIDICA_CAPACIDADE,
+  janelaTransicaoAno, janelaReprogramacaoPortaria, janelaModificacao, janelaNovoProcedimento, severidadePorJanela,
+  fimAnoEconomico, diaDeInstante, diasEntre, diasUteisEntre, adicionarDias,
+  reconciliarAlertas, chaveAlerta, definicaoAlerta,
   type Alerta, type AlertaCalculado, type OpcaoAlerta, type SeveridadeAlerta, type Contrato, type DataISO,
   type JanelaDecisao, type ResultadoReconciliacao,
 } from '@chora/domain';
@@ -39,7 +39,26 @@ interface Extras {
   janela?: JanelaDecisao;
   impactoValor?: number;
   impactoMinutos?: number;
+  diasUteisRestantes?: number;
   opcoes?: OpcaoAlerta[];
+  notaJuridica?: string;
+}
+
+/**
+ * Janela do alerta a partir da escada: a opção que se perde primeiro. O evento
+ * âncora deixa de ser o problema («o perfil esgota-se») e passa a ser a perda de
+ * uma alternativa concreta — que é o que o gestor precisa de saber a tempo.
+ */
+function janelaDaEscada(hoje: DataISO, opcoes: ReadonlyArray<OpcaoAlerta>): JanelaDecisao | undefined {
+  const primeira = prazoMaisCurto(opcoes);
+  if (primeira?.dataLimite === undefined) return undefined;
+  const diasParaLimite = diasEntre(hoje, primeira.dataLimite);
+  return {
+    dataLimiteAcao: primeira.dataLimite,
+    diasParaLimite,
+    eventoAncora: `prazo da opção «${primeira.titulo}», a primeira a perder-se`,
+    severidade: severidadePorJanela(diasParaLimite),
+  };
 }
 
 const eur = (c: number): string =>
@@ -56,7 +75,7 @@ export class JobAlertas {
     contratoId: string, codigo: string, severidade: SeveridadeAlerta,
     titulo: string, detalhe: string, destinatarioId: string, extras: Extras = {},
   ): AlertaCalculado {
-    const { referencia, janela, impactoValor, impactoMinutos, opcoes } = extras;
+    const { referencia, janela, impactoValor, impactoMinutos, diasUteisRestantes, opcoes, notaJuridica } = extras;
     return {
       contratoId, codigo, chave: chaveAlerta(contratoId, codigo, referencia),
       // Quando há janela de decisão, a severidade escala com a proximidade do
@@ -70,7 +89,13 @@ export class JobAlertas {
       } : {}),
       ...(impactoValor !== undefined ? { impactoValor } : {}),
       ...(impactoMinutos !== undefined ? { impactoMinutos } : {}),
+      ...(diasUteisRestantes !== undefined ? { diasUteisRestantes } : {}),
       ...(opcoes !== undefined && opcoes.length > 0 ? { opcoes } : {}),
+      // A reserva jurídica vem do catálogo, salvo quando o alerta traz uma
+      // própria (a escada de opções tem a sua, que cobre as várias vias).
+      ...(notaJuridica ?? definicaoAlerta(codigo)?.notaJuridica) !== undefined
+        ? { notaJuridica: notaJuridica ?? definicaoAlerta(codigo)!.notaJuridica! }
+        : {},
     };
   }
 
@@ -79,9 +104,19 @@ export class JobAlertas {
     return p?.utilizadorId ?? 'sem-gestor';
   }
 
-  /** Sufixo com a data-limite, para o detalhe do alerta. */
+  /**
+   * Sufixo com a data-limite, para o detalhe do alerta. Diz sempre a que prazo
+   * se refere: um prazo esgotado sem dizer o que se perdeu não é acionável — e
+   * quando há escada, o que se perde é uma opção concreta, não tudo.
+   */
   private prazo(j: JanelaDecisao): string {
-    if (j.diasParaLimite < 0) return ` O prazo para agir terminou em ${j.dataLimiteAcao} (há ${-j.diasParaLimite} dias).`;
+    // Quando a âncora é uma opção, o prazo esgotado significa que se perdeu ESSA
+    // opção — as outras continuam com os seus prazos, mostrados na escada.
+    const daEscada = j.eventoAncora.includes('perder-se');
+    if (j.diasParaLimite < 0) {
+      return ` O prazo para agir terminou em ${j.dataLimiteAcao} (há ${-j.diasParaLimite} dias) — ${j.eventoAncora}.`
+        + (daEscada ? ' As restantes opções mantêm-se, cada uma com o seu prazo.' : '');
+    }
     return ` Tem de agir até ${j.dataLimiteAcao} (faltam ${j.diasParaLimite} dias), por causa do ${j.eventoAncora}.`;
   }
 
@@ -266,15 +301,21 @@ export class JobAlertas {
       // AL-PERFIL-ESGOTA-ANTES-TERMINO — preditivo, com escada de opções.
       const prev = preverPerfil(p, aprovados, contrato, hoje);
       if (prev.esgotaAntesDoTermino === true && prev.dataEsgotamento !== null) {
-        const j = janelaModificacao(hoje, prev.dataEsgotamento);
         const opcoes = escadaOpcoesPerfil({
           perfilEmRisco: p, contrato, contratos: todosContratos, perfis: todosPerfis,
-          alteracoes, aprovados, recursos, hoje,
+          alteracoes, aprovados, recursos, hoje, dataEsgotamento: prev.dataEsgotamento,
         });
+        // O prazo do alerta é o da opção que se perde primeiro, e não o do
+        // problema: é essa a data a partir da qual a decisão se estreita.
+        const j = janelaDaEscada(hoje, opcoes) ?? janelaModificacao(hoje, prev.dataEsgotamento);
         out.push(this.novoAlerta(contrato.id, 'AL-PERFIL-ESGOTA-ANTES-TERMINO', 'AVISO',
           `Perfil ${p.nome} esgota-se antes do término`,
           `Ao ritmo recente, as horas do perfil «${p.nome}» esgotam-se a ${prev.dataEsgotamento}, antes do término da vigência (${contrato.dataTerminoContratual}). Restam ${horas(prev.minutosRestantes)}.` + this.prazo(j),
-          destinatario, { referencia: p.id, janela: j, impactoMinutos: prev.minutosRestantes, opcoes }));
+          destinatario, {
+            referencia: p.id, janela: j, impactoMinutos: prev.minutosRestantes, opcoes,
+            diasUteisRestantes: diasUteisEntre(hoje, prev.dataEsgotamento),
+            notaJuridica: NOTA_JURIDICA_CAPACIDADE,
+          }));
       }
 
       // AL-PERFIL-80 / -90 (RN-505 consultiva)
@@ -300,7 +341,11 @@ export class JobAlertas {
         out.push(this.novoAlerta(contrato.id, 'AL-CAPACIDADE-INSUFICIENTE', 'CRITICO',
           'Capacidade insuficiente até ao término',
           `Ao ritmo recente seriam necessárias ${horas(necessarios)} até ao término, mas só restam ${horas(minutosRestantes)} em todos os perfis: faltam ${horas(necessarios - minutosRestantes)}.`,
-          destinatario, { impactoMinutos: Math.round(necessarios - minutosRestantes) }));
+          // As horas que restam, ao ritmo atual, dão para tantos dias úteis.
+          destinatario, {
+            impactoMinutos: Math.round(necessarios - minutosRestantes),
+            diasUteisRestantes: ritmoTotal > 0 ? diasUteisEntre(hoje, adicionarDias(hoje, Math.round(minutosRestantes / ritmoTotal))) : 0,
+          }));
       }
     }
 

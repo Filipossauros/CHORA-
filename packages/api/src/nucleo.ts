@@ -19,7 +19,6 @@ export { ServicoEstrutura } from './servicos/estrutura.js';
 export { ServicoAfetacoes, type NovaAfetacao } from './servicos/afetacoes.js';
 export { ServicoFaturas, gerarFraseEvidencia } from './servicos/faturas.js';
 export { ServicoRecursos, ServicoAcessos } from './servicos/recursos-acessos.js';
-export { ServicoRecomendacoes } from './servicos/recomendacoes.js';
 export { ServicoAlertas, ATO_RESOLVE } from './servicos/alertas.js';
 export { ServicoEntregaveis } from './servicos/entregaveis.js';
 export type { Acesso, RelatorioEvidencia } from './repositorios/memoria/index.js';

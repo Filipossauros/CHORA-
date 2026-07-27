@@ -19,7 +19,7 @@ export function Regras(): ReactNode {
     .sort((a, b) => (a.codigo < b.codigo ? -1 : 1)), [t]);
 
   const alertas = useMemo(() => CATALOGO_ALERTAS
-    .filter((a) => t === '' || `${a.codigo} ${a.titulo} ${a.descricao} ${a.familia} ${a.regraRelacionada ?? ''} ${a.base ?? ''}`.toLowerCase().includes(t)), [t]);
+    .filter((a) => t === '' || `${a.codigo} ${a.titulo} ${a.descricao} ${a.familia} ${a.regraRelacionada ?? ''} ${a.base ?? ''} ${a.notaJuridica ?? ''}`.toLowerCase().includes(t)), [t]);
 
   const comJanela = alertas.filter((a) => a.temJanelaDecisao === true).length;
 
@@ -63,7 +63,7 @@ export function Regras(): ReactNode {
               <div className="cartao" key={fam} style={{ marginBottom: 16 }}>
                 <h3>{fam}</h3>
                 <table>
-                  <thead><tr><th>Código</th><th>Alerta</th><th>Condição</th><th>Severidade base</th><th>Janela de decisão</th><th>Regra ligada</th><th>Base legal</th></tr></thead>
+                  <thead><tr><th>Código</th><th>Alerta</th><th>Condição</th><th>Severidade base</th><th>Janela de decisão</th><th>Regra ligada</th><th>Base legal</th><th>Nota jurídica das ações</th></tr></thead>
                   <tbody>{daFamilia.map((a) => (
                     <tr key={a.codigo}>
                       <td className="prim"><code>{a.codigo}</code></td>
@@ -73,6 +73,7 @@ export function Regras(): ReactNode {
                       <td className="sec">{a.temJanelaDecisao === true ? <span className="pill p-ambar" title={a.eventoAncora}>{a.eventoAncora ?? 'sim'}</span> : '—'}</td>
                       <td className="sec">{a.regraRelacionada !== undefined ? <code>{a.regraRelacionada}</code> : '—'}</td>
                       <td className="sec">{a.base ?? '—'}</td>
+                      <td className="sec">{a.notaJuridica ?? '—'}</td>
                     </tr>
                   ))}</tbody>
                 </table>

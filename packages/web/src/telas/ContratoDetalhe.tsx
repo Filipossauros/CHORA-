@@ -41,6 +41,9 @@ export function ContratoDetalhe(): ReactNode {
   const { id = '' } = useParams();
   const [params] = useSearchParams();
   const tabPedido = params.get('tab');
+  // Uma decisão que remeta para uma modificação traz o tipo de ato no URL: o
+  // formulário abre já nesse tipo, em vez de o obrigar a procurar na lista.
+  const tipoPedido = params.get('modificacao') ?? undefined;
   const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Execução');
   const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
   // O ciclo de vida do contrato (estado) é competência do gestor de contrato (RN-501).
@@ -144,7 +147,7 @@ export function ContratoDetalhe(): ReactNode {
 
       {tabAtiva === 'Modificações' && (
         <>
-          {ehGestorContrato && <GestaoAlteracoes contrato={c} resumo={dados.resumo} alteracoes={dados.alteracoes} onMudou={() => base.recarregar()} onErro={setErro} />}
+          {ehGestorContrato && <GestaoAlteracoes contrato={c} resumo={dados.resumo} alteracoes={dados.alteracoes} tipoInicial={tipoPedido} onMudou={() => base.recarregar()} onErro={setErro} />}
           <div className="cartao" style={{ marginBottom: 16 }}><h3>Registo de modificações (auditoria do contrato)</h3><table>
             <thead><tr><th>Quando</th><th>Operação</th><th>Detalhe</th><th>Autor</th></tr></thead>
             <tbody>{dados.eventos.map((e) => <tr key={e.id}><td className="tabnum">{e.ocorridoEm.replace('T', ' ').slice(0, 16)}</td><td>{rotularOperacao(e.operacao)}</td><td className="sec">{resumirEvento(e)}</td><td>{nomeAzure(e.utilizadorId)}</td></tr>)}
@@ -361,8 +364,13 @@ const ALT_INICIAL = {
 };
 
 /** Registo de modificações contratuais formais, alinhado com os tipos do CCP. */
-function GestaoAlteracoes({ contrato, resumo, alteracoes, onMudou, onErro }: { contrato: Contrato; resumo: ResumoExec; alteracoes: Alteracao[]; onMudou: () => void; onErro: (m?: string) => void }): ReactNode {
-  const [a, setA] = useState({ ...ALT_INICIAL, dataEfeitos: hoje() });
+function GestaoAlteracoes({ contrato, resumo, alteracoes, tipoInicial, onMudou, onErro }: { contrato: Contrato; resumo: ResumoExec; alteracoes: Alteracao[]; tipoInicial?: string; onMudou: () => void; onErro: (m?: string) => void }): ReactNode {
+  const tipoPedido = TIPOS_ALT.find((x) => x.v === tipoInicial)?.v;
+  const [a, setA] = useState({ ...ALT_INICIAL, tipo: tipoPedido ?? ALT_INICIAL.tipo, dataEfeitos: hoje() });
+  // Chegar de outra decisão com um tipo diferente no URL repõe a seleção.
+  useEffect(() => {
+    if (tipoPedido !== undefined) setA((prev) => ({ ...prev, tipo: tipoPedido }));
+  }, [tipoPedido]);
   const tipoSel = TIPOS_ALT.find((x) => x.v === a.tipo)!;
   const temPortaria = contrato.numeroPortariaExtensaoEncargos !== undefined || contrato.portariaExtensaoEncargos !== undefined;
   const limiteTransicao = Math.floor(contrato.precoContratualInicial * 0.5);

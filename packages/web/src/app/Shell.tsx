@@ -8,9 +8,10 @@ import { useMudancas } from '../comum.js';
  * Navegação orientada ao TRABALHO, não à arquitetura.
  *
  * Passou de 13 destinos para 5: «Hoje» colapsa Alertas, Previsões e
- * Recomendações — eram a mesma pergunta separada por quem a produzia. O que é
+ * recomendações — eram a mesma pergunta separada por quem a produzia: as opções
+ * de atuação vivem hoje dentro da própria decisão, com prazo e destino. O que é
  * documentação (Regras e alertas), administração (Auditoria, Acessos) ou
- * consulta (Recursos, Previsões, Recomendações) vive numa gaveta, acessível mas
+ * consulta (Recursos, Previsões) vive numa gaveta, acessível mas
  * fora do caminho do trabalho diário.
  */
 const NAV = [
@@ -27,7 +28,6 @@ const NAV = [
 const GAVETA = [
   { to: '/regras', rot: 'Regras e alertas' },
   { to: '/previsoes', rot: 'Previsões' },
-  { to: '/recomendacoes', rot: 'Recomendações' },
   { to: '/recursos', rot: 'Recursos' },
   { to: '/auditoria', rot: 'Auditoria' },
   { to: '/acessos', rot: 'Acessos' },

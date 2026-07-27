@@ -52,6 +52,9 @@ function gerarCatalogoAlertas(): string {
     'para trás a partir do evento-âncora com o prazo de instrução do ato (parametrizado',
     'na base legal versionada). Nesses, a severidade escala à medida que a janela se fecha.',
     '',
+    'A **nota jurídica** acompanha as ações propostas na aplicação: enuncia o que a',
+    'facilidade de praticar o ato **não dispensa**.',
+    '',
     `Total de alertas: **${CATALOGO_ALERTAS.length}**.`,
     '',
   ];
@@ -59,10 +62,10 @@ function gerarCatalogoAlertas(): string {
     const daFamilia = CATALOGO_ALERTAS.filter((a) => a.familia === familia);
     if (daFamilia.length === 0) continue;
     linhas.push(`## ${familia}`, '');
-    linhas.push('| Código | Alerta | Condição | Severidade base | Janela de decisão | Regra ligada | Base legal / nota |');
-    linhas.push('|---|---|---|---|---|---|---|');
+    linhas.push('| Código | Alerta | Condição | Severidade base | Janela de decisão | Regra ligada | Base legal / nota | Nota jurídica das ações |');
+    linhas.push('|---|---|---|---|---|---|---|---|');
     for (const a of daFamilia) {
-      linhas.push(`| ${a.codigo} | ${a.titulo} | ${a.descricao} | ${a.severidadeBase} | ${a.temJanelaDecisao === true ? a.eventoAncora ?? 'sim' : '—'} | ${a.regraRelacionada ?? '—'} | ${a.base ?? '—'} |`);
+      linhas.push(`| ${a.codigo} | ${a.titulo} | ${a.descricao} | ${a.severidadeBase} | ${a.temJanelaDecisao === true ? a.eventoAncora ?? 'sim' : '—'} | ${a.regraRelacionada ?? '—'} | ${a.base ?? '—'} | ${a.notaJuridica ?? '—'} |`);
     }
     linhas.push('');
   }

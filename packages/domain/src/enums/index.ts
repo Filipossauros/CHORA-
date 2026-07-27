@@ -134,7 +134,7 @@ export const zTipoFaturacao = z.enum(TIPOS_FATURACAO);
  * Ciclo de vida de um alerta (decisão). Evita a fadiga: a reconciliação do job
  * respeita o estado em vez de regerar tudo de raiz.
  * - ABERTA: a condição verifica-se e não houve ato.
- * - EM_CURSO: o gestor abriu uma opção ou guardou recomendação.
+ * - EM_CURSO: o gestor abriu uma das opções de atuação.
  * - RESOLVIDA: o ato foi registado (ou a condição deixou de se verificar).
  * - DISPENSADA: dispensada com motivo, por um período.
  */
@@ -142,10 +142,3 @@ export const ESTADOS_ALERTA = ['ABERTA', 'EM_CURSO', 'RESOLVIDA', 'DISPENSADA'] 
 export type EstadoAlerta = (typeof ESTADOS_ALERTA)[number];
 export const zEstadoAlerta = z.enum(ESTADOS_ALERTA);
 
-export const ESTADOS_RECOMENDACAO = ['PROPOSTA', 'ACEITE', 'REJEITADA'] as const;
-export type EstadoRecomendacao = (typeof ESTADOS_RECOMENDACAO)[number];
-export const zEstadoRecomendacao = z.enum(ESTADOS_RECOMENDACAO);
-
-export const ORIGENS_RECOMENDACAO = ['ALERTA', 'PREVISAO', 'AGENTE_CCP'] as const;
-export type OrigemRecomendacao = (typeof ORIGENS_RECOMENDACAO)[number];
-export const zOrigemRecomendacao = z.enum(ORIGENS_RECOMENDACAO);

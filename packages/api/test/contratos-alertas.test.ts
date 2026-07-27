@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { CATALOGO_ALERTAS } from '@chora/domain';
+import { ServicoAlertas } from '../src/servicos/alertas.js';
 import { montarApp, comoGestor, comoRecurso } from './helpers.js';
 
 let fechar: (() => Promise<void>) | undefined;
@@ -106,6 +107,52 @@ describe('alertas e auditoria', () => {
     await ctx.repos.alertas.guardar({ ...aindaDispensada!, severidade: 'INFO' });
     await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
     expect((await ctx.repos.alertas.obter(alvo.id))?.estado).toBe('ABERTA');
+  });
+
+  it('a lista de dispensadas mostra as vivas e esquece as de contratos findos', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    const abertas = (await app.inject({ method: 'GET', url: '/api/v1/decisoes', headers: comoGestor() })).json() as { dados: Array<{ id: string; contratoId: string; severidade: string }> };
+    const alvo = abertas.dados.find((a) => a.severidade !== 'CRITICO')!;
+    await app.inject({ method: 'POST', url: `/api/v1/alertas/${alvo.id}/dispensar`, headers: comoGestor(), payload: { motivo: 'tratado fora', dias: 30 } });
+
+    const servico = new ServicoAlertas(ctx);
+    expect((await servico.dispensadas()).map((a) => a.id)).toContain(alvo.id);
+
+    // Terminada a vigência, a dispensa deixa de ser decisão adiada: sai da
+    // lista e fica só no registo de auditoria.
+    const contrato = (await ctx.repos.contratos.obter(alvo.contratoId))!;
+    await ctx.repos.contratos.guardar({ ...contrato, estado: 'TERMINADO' });
+    expect((await servico.dispensadas()).map((a) => a.id)).not.toContain(alvo.id);
+
+    // O rasto da dispensa permanece em auditoria.
+    const eventos = await ctx.repos.eventosAuditoria.todos((e) => e.entidadeId === alvo.id);
+    expect(eventos.some((e) => e.operacao === 'ALERTA:DISPENSAR')).toBe(true);
+  });
+
+  it('a decisão com escada traz prazo por opção, destino e nota jurídica', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    await app.inject({ method: 'POST', url: '/api/v1/jobs/alertas:executar', headers: comoGestor() });
+    const comEscada = (await ctx.repos.alertas.todos((a) => a.codigo === 'AL-PERFIL-ESGOTA-ANTES-TERMINO'))[0]!;
+
+    expect(comEscada.opcoes!.length).toBeGreaterThan(1);
+    // Toda a opção viável tem prazo próprio e um sítio onde se pratica o ato.
+    for (const o of comEscada.opcoes!.filter((x) => x.viabilidade !== 'INVIAVEL')) {
+      expect(o.dataLimite, o.titulo).toBeDefined();
+      expect(o.acao, o.titulo).toBeDefined();
+    }
+    // O prazo do alerta é o mais curto das opções — a primeira a perder-se.
+    const maisCurta = comEscada.opcoes!
+      .filter((o) => o.dataLimite !== undefined && o.viabilidade !== 'INVIAVEL')
+      .map((o) => o.dataLimite!)
+      .sort()[0];
+    expect(comEscada.dataLimiteAcao).toBe(maisCurta);
+    expect(comEscada.eventoAncora).toContain('primeira a perder-se');
+    // Impacto legível em dias úteis, e reserva jurídica das opções.
+    expect(comEscada.diasUteisRestantes).toBeGreaterThan(0);
+    expect(comEscada.notaJuridica).toContain('não dispensa');
   });
 
   it('dispensar sem motivo falha; o elemento não pode dispensar', async () => {

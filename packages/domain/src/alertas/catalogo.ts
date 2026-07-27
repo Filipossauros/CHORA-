@@ -32,6 +32,12 @@ export interface DefinicaoAlerta {
   regraRelacionada?: string;
   /** Base legal / requisito de origem. */
   base?: string;
+  /**
+   * Reserva jurídica das ações propostas: o que elas NÃO dispensam. Aparece a
+   * seguir às ações, para que a facilidade de executar o ato na aplicação não
+   * se confunda com dispensa das formalidades que o ato exige.
+   */
+  notaJuridica?: string;
 }
 
 export type FamiliaAlerta =
@@ -53,6 +59,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     temJanelaDecisao: true,
     eventoAncora: 'término da vigência (prazo de instrução de uma modificação)',
     base: 'Cruzamento da projeção de execução com o término da vigência.',
+    notaJuridica:
+      'Executar o saldo dentro do prazo não dispensa: a prorrogação ser admissível face ao objeto e ao limite de vigência (RN-202); haver cobertura orçamental para o período acrescido; e a modificação ser fundamentada e registada. Acelerar o ritmo de execução não legitima registar trabalho não prestado.',
   },
   {
     codigo: 'AL-FIM-ANO-ECONOMICO',
@@ -64,6 +72,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     temJanelaDecisao: true,
     eventoAncora: 'fecho do ano económico (31/12)',
     base: 'LCPA (Lei n.º 8/2012) e DL n.º 127/2012 — transição de encargos.',
+    notaJuridica:
+      'A transição de saldo não dispensa: a autorização da entidade competente; o cabimento no orçamento do ano seguinte; e a observância do limite legal de transição. O saldo transitado continua sujeito à vigência do contrato — transitar dinheiro não prorroga o prazo.',
   },
   {
     codigo: 'AL-EXECUCAO-EXCEDE-ANO',
@@ -73,6 +83,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     familia: 'Tempo × dinheiro',
     severidadeBase: 'CRITICO',
     base: 'LCPA / DL n.º 127/2012 — a execução não pode exceder a dotação repartida.',
+    notaJuridica:
+      'Conter ou reprogramar não dispensa a proibição de assumir despesa sem cabimento e compromisso prévios (LCPA). A execução acima da dotação repartida não se regulariza a posteriori pelo simples registo.',
   },
   {
     codigo: 'AL-VALOR-DISPONIVEL',
@@ -81,6 +93,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     familia: 'Tempo × dinheiro',
     severidadeBase: 'AVISO',
     base: 'Ponderar trabalhos complementares (secção 11).',
+    notaJuridica:
+      'O reforço por trabalhos complementares não dispensa: o limite de 50% do preço inicial (RN-301); a verificação dos pressupostos de circunstância imprevista e de não separabilidade técnica ou económica; e a fundamentação escrita da modificação.',
   },
 
   // ─── B · Cobertura orçamental plurianual ───────────────────────────────────
@@ -95,6 +109,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     eventoAncora: 'início do ano económico a cobrir',
     regraRelacionada: 'RN-202',
     base: 'LCPA / DL n.º 127/2012 — repartição plurianual de encargos.',
+    notaJuridica:
+      'A reprogramação da portaria não dispensa: a autorização dos membros do Governo competentes; a demonstração da cobertura em cada ano abrangido; e a compatibilidade com o limite de vigência do contrato.',
   },
   {
     codigo: 'AL-PORTARIA-REPROGRAMAR',
@@ -106,6 +122,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     temJanelaDecisao: true,
     eventoAncora: 'início do ano económico a cobrir',
     base: 'LCPA (Lei n.º 8/2012) e DL n.º 127/2012 — repartição plurianual de encargos.',
+    notaJuridica:
+      'A reprogramação da portaria não dispensa: a autorização dos membros do Governo competentes; a demonstração da cobertura em cada ano abrangido; e a compatibilidade com o limite de vigência do contrato. Sem cobertura, a execução no período não coberto é despesa sem compromisso.',
   },
   {
     codigo: 'AL-PORTARIA-ANO-INSUFICIENTE',
@@ -156,6 +174,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     familia: 'Capacidade e perfis',
     severidadeBase: 'CRITICO',
     base: 'Projeção agregada de capacidade (camada de previsões).',
+    notaJuridica:
+      'Reforçar a capacidade não dispensa: a observância do objeto do contrato e dos perfis contratados; a habilitação do executante; a autorização prévia de subcontratação ou cessão; e o cabimento e compromisso da despesa acrescida.',
   },
   {
     codigo: 'AL-COMPLEMENTARES-40',
@@ -187,6 +207,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     temJanelaDecisao: true,
     eventoAncora: 'término da vigência do contrato',
     base: 'CCP — planeamento da contratação; LOPTC quanto à fiscalização prévia.',
+    notaJuridica:
+      'Lançar novo procedimento não dispensa: a fundamentação da escolha do tipo de procedimento e do preço base; a decisão de contratar da entidade competente; e o cumprimento dos prazos de fiscalização prévia, quando aplicável. A urgência não é, por si, fundamento de ajuste direto.',
   },
   {
     codigo: 'AL-TERMINO-6M',
@@ -234,6 +256,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     severidadeBase: 'AVISO',
     regraRelacionada: 'RN-205',
     base: 'CCP, art. 297.º-298.º — a suspensão deve ser temporária e delimitada.',
+    notaJuridica:
+      'Delimitar ou levantar a suspensão não dispensa: o registo fundamentado do facto que a determinou; o acordo ou notificação ao cocontratante; e a reprogramação dos prazos e encargos que dela resultem.',
   },
   {
     codigo: 'AL-EXECUCAO-FORA-VIGENCIA',
@@ -244,6 +268,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     severidadeBase: 'CRITICO',
     regraRelacionada: 'RN-208',
     base: 'Não há execução válida fora da vigência nem durante a suspensão.',
+    notaJuridica:
+      'Corrigir os registos não dispensa apurar se houve prestação efetiva fora da vigência ou em período suspenso. A correção do registo não sana a execução indevida nem legitima o pagamento correspondente.',
   },
   {
     codigo: 'AL-VISTO-PENDENTE',
@@ -252,6 +278,8 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
     familia: 'Higiene e risco de auditoria',
     severidadeBase: 'CRITICO',
     base: 'LOPTC (Lei n.º 98/97) — fiscalização prévia.',
+    notaJuridica:
+      'Regularizar o visto não dispensa: a remessa do contrato ao Tribunal de Contas nos termos e prazos legais; e a proibição de produzir efeitos financeiros antes do visto, salvo nos casos legalmente admitidos. Os atos praticados antes do visto ficam sujeitos ao respetivo regime.',
   },
   {
     codigo: 'AL-FATURA-PRAZO',

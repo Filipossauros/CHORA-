@@ -1,10 +1,10 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { JobAlertas, ServicoAlertas } from '@chora/api/nucleo';
-import { saudeContrato, type Alerta, type Contrato, type OpcaoAlerta, type SeveridadeAlerta } from '@chora/domain';
+import { diasUteisDeMinutos, formatarDiasUteis, saudeContrato, type AcaoOpcao, type Alerta, type Contrato, type OpcaoAlerta, type SeveridadeAlerta } from '@chora/domain';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Severidade, eurosParaCent, formatarHoras, formatarMoeda, hoje, mensagemErro, notificarMudanca, useAsync } from '../comum.js';
+import { Severidade, eurosParaCent, formatarMoeda, hoje, mensagemErro, notificarMudanca, useAsync } from '../comum.js';
 import { Perguntar } from '../componentes/Perguntar.js';
 import { gerarMapaProjecaoXlsx } from '../projecoes.js';
 
@@ -35,9 +35,10 @@ export function Hoje(): ReactNode {
   const base = useAsync(async () => {
     const servico = new ServicoAlertas(app.ctx);
     const pendentes = await servico.pendentes();
+    const dispensadas = await servico.dispensadas();
     const contratos = await app.ctx.repos.contratos.todos();
     const todosAlertas = await app.ctx.repos.alertas.todos();
-    return { pendentes, contratos, todosAlertas };
+    return { pendentes, dispensadas, contratos, todosAlertas };
   }, []);
   const [erro, setErro] = useState<string>();
   const [aberta, setAberta] = useState<string>();
@@ -120,7 +121,62 @@ export function Hoje(): ReactNode {
           </div>
         </>
       )}
+
+      <Dispensadas
+        alertas={base.dados?.dispensadas ?? []}
+        contratos={contratos}
+        podeGerir={podeGerir}
+        onMudou={() => { base.recarregar(); notificarMudanca(); }}
+        onErro={setErro}
+      />
     </>
+  );
+}
+
+/**
+ * Decisões postas de lado, no fim da fila e fechadas por omissão: continuam a
+ * existir, mas não competem com o que é preciso decidir hoje. Terminada a
+ * vigência do contrato saem daqui — ficam só na auditoria.
+ */
+function Dispensadas({ alertas, contratos, podeGerir, onMudou, onErro }: {
+  alertas: Alerta[]; contratos: Contrato[]; podeGerir: boolean; onMudou: () => void; onErro: (m?: string) => void;
+}): ReactNode {
+  if (alertas.length === 0) return null;
+
+  async function reabrir(id: string): Promise<void> {
+    onErro();
+    try { await new ServicoAlertas(app.ctx).reabrir(id, app.utilizador()); onMudou(); }
+    catch (e) { onErro(mensagemErro(e)); }
+  }
+
+  return (
+    <details style={{ marginTop: 22 }}>
+      <summary style={{ cursor: 'pointer', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--texto-fraco)', fontWeight: 700, padding: '6px 0' }}>
+        Decisões dispensadas ({alertas.length})
+      </summary>
+      <div className="cartao" style={{ marginTop: 10 }}>
+        <div className="aviso" style={{ margin: 12 }}>
+          Dispensadas por decisão do gestor. Reaparecem quando o período terminar ou se a situação agravar; terminada a vigência do contrato, deixam de constar aqui e ficam apenas no registo de auditoria.
+        </div>
+        <table>
+          <thead><tr><th>Contrato</th><th>Decisão</th><th>Motivo</th><th>Até</th>{podeGerir && <th></th>}</tr></thead>
+          <tbody>
+            {alertas.map((a) => {
+              const c = contratos.find((x) => x.id === a.contratoId);
+              return (
+                <tr key={a.id}>
+                  <td className="prim">{c?.numero ?? a.contratoId}<div className="sec">{c?.objeto ?? ''}</div></td>
+                  <td>{a.titulo}<div className="sec"><code style={{ fontSize: 10.5 }}>{a.codigo}</code></div></td>
+                  <td className="sec">{a.motivoDispensa ?? '—'}</td>
+                  <td className="tabnum">{a.dispensadaAte ?? '—'}</td>
+                  {podeGerir && <td style={{ whiteSpace: 'nowrap' }}><button className="btn sm" onClick={() => void reabrir(a.id)}>Reabrir</button></td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }
 
@@ -241,40 +297,117 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
         )}
 
         {aberta && (alerta.opcoes?.length ?? 0) > 0 && (
-          <Escada opcoes={alerta.opcoes!} />
+          <Escada opcoes={alerta.opcoes!} contratoId={contrato.id} onEmCurso={marcarEmCurso} />
         )}
+        {podeGerir && alerta.notaJuridica !== undefined && <NotaJuridica texto={alerta.notaJuridica} />}
       </div>
 
-      <div style={{ flex: '0 0 auto', textAlign: 'right', paddingTop: 2 }}>
-        <div className="tabnum" style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-.2px' }}>
-          {alerta.impactoValor !== undefined ? formatarMoeda(alerta.impactoValor) : alerta.impactoMinutos !== undefined ? formatarHoras(alerta.impactoMinutos) : '—'}
-        </div>
-        {(alerta.impactoValor !== undefined || alerta.impactoMinutos !== undefined) && (
-          <div style={{ fontSize: 10, color: 'var(--texto-fraco)', textTransform: 'uppercase', letterSpacing: '.6px', marginTop: 2 }}>impacto</div>
-        )}
+      <Impacto alerta={alerta} />
+    </div>
+  );
+}
+
+/**
+ * IMPACTO — o tempo mede-se em DIAS ÚTEIS, não em horas. «Restam 340 h» obriga a
+ * fazer contas; «restam 2 meses e 3 dias» diz de imediato se há tempo para
+ * instruir o ato antes de a capacidade acabar.
+ */
+function Impacto({ alerta }: { alerta: Alerta }): ReactNode {
+  const dias = alerta.diasUteisRestantes ?? (alerta.impactoMinutos !== undefined ? diasUteisDeMinutos(alerta.impactoMinutos) : undefined);
+  const temValor = alerta.impactoValor !== undefined;
+  if (!temValor && dias === undefined) {
+    return <div style={{ flex: '0 0 auto' }} />;
+  }
+  return (
+    <div style={{ flex: '0 0 auto', textAlign: 'right', paddingTop: 2, minWidth: 96 }}>
+      <div className="tabnum" style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-.2px' }}>
+        {temValor ? formatarMoeda(alerta.impactoValor!) : formatarDiasUteis(dias!)}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--texto-fraco)', textTransform: 'uppercase', letterSpacing: '.6px', marginTop: 2 }}>
+        {temValor ? 'impacto' : 'dias úteis restantes'}
       </div>
     </div>
   );
 }
 
-function Escada({ opcoes }: { opcoes: OpcaoAlerta[] }): ReactNode {
+/** Reserva jurídica: a aplicação facilita o ato, não dispensa o que ele exige. */
+function NotaJuridica({ texto }: { texto: string }): ReactNode {
+  return (
+    <div style={{ display: 'flex', gap: 8, marginTop: 10, padding: '9px 11px', borderLeft: '3px solid var(--linha-forte)', background: 'var(--superficie-2)', borderRadius: '0 7px 7px 0' }}>
+      <span style={{ fontSize: 12, color: 'var(--texto-fraco)', fontWeight: 700, lineHeight: 1.5 }}>§</span>
+      <div style={{ fontSize: 11.5, color: 'var(--texto-suave)', lineHeight: 1.5 }}>
+        <b>Nota jurídica.</b> {texto}
+      </div>
+    </div>
+  );
+}
+
+/** Prazo próprio de uma opção — depois dele, deixa de estar disponível. */
+function PrazoOpcao({ o }: { o: OpcaoAlerta }): ReactNode {
+  if (o.dataLimite === undefined) return null;
+  const d = o.diasParaLimite ?? 0;
+  const perdida = d < 0;
+  return (
+    <span
+      className={`pill ${perdida ? 'p-verm' : d <= 30 ? 'p-ambar' : 'p-ard'}`}
+      title={perdida ? 'O prazo desta opção terminou' : 'Prazo próprio desta opção'}
+    >{perdida ? `prazo terminou em ${o.dataLimite}` : `até ${o.dataLimite} · ${d} dias`}</span>
+  );
+}
+
+/**
+ * ESCADA DE OPÇÕES — cada degrau tem o SEU prazo e o SEU destino. O botão leva
+ * ao sítio onde o ato se pratica, já no contrato certo e, nas modificações, com
+ * o tipo pré-selecionado: a opção deixa de ser um conselho e passa a ser um
+ * caminho.
+ */
+function Escada({ opcoes, contratoId, onEmCurso }: {
+  opcoes: OpcaoAlerta[]; contratoId: string; onEmCurso: () => void;
+}): ReactNode {
+  const navegar = useNavigate();
+
+  function seguir(acao: AcaoOpcao): void {
+    onEmCurso();
+    navegar(rotaDaAcao(acao, contratoId));
+  }
+
   return (
     <ol style={{ margin: '11px 0 0', padding: 0, listStyle: 'none', border: '1px solid var(--linha)', borderRadius: 8, overflow: 'hidden' }}>
       {opcoes.map((o) => (
         <li key={o.ordem} style={{ display: 'flex', gap: 11, padding: '10px 12px', borderBottom: '1px solid var(--linha)', alignItems: 'flex-start', background: 'var(--superficie)' }}>
           <div style={{ flex: '0 0 20px', height: 20, borderRadius: '50%', background: 'var(--superficie-2)', border: '1px solid var(--linha-forte)', display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 700, color: 'var(--texto-suave)' }}>{o.ordem}</div>
-          <div>
-            <div style={{ fontSize: 12.5, fontWeight: 650 }}>
-              {o.titulo}{' '}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 650, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+              {o.titulo}
               <span className={`pill ${o.viabilidade === 'VIAVEL' ? 'p-verde' : o.viabilidade === 'CONDICIONADA' ? 'p-ambar' : 'p-verm'}`}>{ROT_VIAB[o.viabilidade] ?? o.viabilidade}</span>
+              <PrazoOpcao o={o} />
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--texto-suave)', marginTop: 3, lineHeight: 1.45 }}>{o.detalhe}</div>
             {o.fundamento !== undefined && <div style={{ fontSize: 10.5, color: 'var(--texto-fraco)', marginTop: 4, fontFamily: 'ui-monospace,Menlo,monospace' }}>{o.fundamento}</div>}
+            {o.acao !== undefined && (
+              <button className="btn sm" style={{ marginTop: 8 }} onClick={() => seguir(o.acao!)}>{o.acao.rotulo} →</button>
+            )}
           </div>
         </li>
       ))}
     </ol>
   );
+}
+
+/**
+ * Rota do destino de uma ação. As afetações vivem no separador Execução do
+ * contrato; as modificações no separador Modificações, que aceita o tipo a
+ * pré-selecionar.
+ */
+function rotaDaAcao(acao: AcaoOpcao, contratoIdOmissao: string): string {
+  const id = acao.contratoId ?? contratoIdOmissao;
+  if (acao.destino === 'MODIFICACOES') {
+    const tipo = acao.tipoModificacao !== undefined ? `&modificacao=${encodeURIComponent(acao.tipoModificacao)}` : '';
+    return `/contratos/${id}?tab=${encodeURIComponent('Modificações')}${tipo}`;
+  }
+  if (acao.destino === 'FICHA') return `/contratos/${id}?tab=Ficha`;
+  if (acao.destino === 'REGISTOS') return `/registos?contrato=${id}`;
+  return `/contratos/${id}?tab=${encodeURIComponent('Execução')}`;
 }
 
 /**
@@ -327,24 +460,42 @@ function AcaoPrincipal({ alerta, contrato, onFeito, onErro, onEmCurso }: {
     );
   }
 
-  // Restantes: encaminham para o separador certo, já aberto.
-  const DESTINO: Record<string, { rot: string; tab: string }> = {
-    'AL-FOLGA-SEM-TEMPO': { rot: 'Prorrogar vigência', tab: 'Modificações' },
-    'AL-PORTARIA-LIMITA-VIGENCIA': { rot: 'Preparar pedido', tab: 'Modificações' },
-    'AL-PORTARIA-REPROGRAMAR': { rot: 'Preparar pedido', tab: 'Modificações' },
-    'AL-PERFIL-ESGOTA-ANTES-TERMINO': { rot: 'Gerir afetações', tab: 'Execução' },
-    'AL-CAPACIDADE-INSUFICIENTE': { rot: 'Gerir afetações', tab: 'Execução' },
-    'AL-PERFIL-80': { rot: 'Gerir afetações', tab: 'Execução' },
-    'AL-PERFIL-90': { rot: 'Gerir afetações', tab: 'Execução' },
-    'AL-VALOR-DISPONIVEL': { rot: 'Registar complementares', tab: 'Modificações' },
-    'AL-NOVO-PROCEDIMENTO': { rot: 'Ver contrato', tab: 'Ficha' },
-    'AL-EXECUCAO-FORA-VIGENCIA': { rot: 'Rever registos', tab: 'Execução' },
-    'AL-SUSPENSAO-ABERTA': { rot: 'Rever suspensão', tab: 'Modificações' },
-    'AL-VISTO-PENDENTE': { rot: 'Registar visto', tab: 'Ficha' },
-  };
-  const d = DESTINO[alerta.codigo];
+  // Restantes: encaminham para o separador certo, já aberto e — nas
+  // modificações — com o tipo de ato pré-selecionado.
+  const d = DESTINO_ACAO[alerta.codigo];
   if (d === undefined) return null;
   return (
-    <button className="btn sm pri" onClick={() => { onEmCurso(); navegar(`/contratos/${contrato.id}?tab=${encodeURIComponent(d.tab)}`); }}>{d.rot}</button>
+    <button
+      className="btn sm pri"
+      onClick={() => { onEmCurso(); navegar(rotaDaAcao({ destino: d.destino, rotulo: d.rot, ...(d.tipoModificacao !== undefined ? { tipoModificacao: d.tipoModificacao } : {}) }, contrato.id)); }}
+    >{d.rot}</button>
   );
 }
+
+/**
+ * Destino da ação principal de cada decisão. Onde há um ato de modificação
+ * concreto, leva o tipo — o formulário abre já nesse tipo, sem obrigar a
+ * procurá-lo na lista.
+ */
+const DESTINO_ACAO: Record<string, { rot: string; destino: AcaoOpcao['destino']; tipoModificacao?: string }> = {
+  'AL-FOLGA-SEM-TEMPO': { rot: 'Prorrogar vigência', destino: 'MODIFICACOES', tipoModificacao: 'PRORROGACAO' },
+  'AL-PORTARIA-LIMITA-VIGENCIA': { rot: 'Prorrogar vigência', destino: 'MODIFICACOES', tipoModificacao: 'PRORROGACAO' },
+  'AL-PORTARIA-REPROGRAMAR': { rot: 'Prorrogar vigência', destino: 'MODIFICACOES', tipoModificacao: 'PRORROGACAO' },
+  'AL-EXECUCAO-EXCEDE-ANO': { rot: 'Registar transição', destino: 'MODIFICACOES', tipoModificacao: 'TRANSICAO_ANO_ECONOMICO' },
+  'AL-PORTARIA-ANO-INSUFICIENTE': { rot: 'Registar transição', destino: 'MODIFICACOES', tipoModificacao: 'TRANSICAO_ANO_ECONOMICO' },
+  'AL-PERFIL-ESGOTA-ANTES-TERMINO': { rot: 'Gerir afetações', destino: 'AFETACOES' },
+  'AL-CAPACIDADE-INSUFICIENTE': { rot: 'Gerir afetações', destino: 'AFETACOES' },
+  'AL-PERFIL-80': { rot: 'Gerir afetações', destino: 'AFETACOES' },
+  'AL-PERFIL-90': { rot: 'Gerir afetações', destino: 'AFETACOES' },
+  'AL-VALOR-DISPONIVEL': { rot: 'Registar complementares', destino: 'MODIFICACOES', tipoModificacao: 'SERVICOS_COMPLEMENTARES' },
+  'AL-COMPLEMENTARES-40': { rot: 'Ver modificações', destino: 'MODIFICACOES', tipoModificacao: 'SERVICOS_COMPLEMENTARES' },
+  'AL-COMPLEMENTARES-45': { rot: 'Ver modificações', destino: 'MODIFICACOES', tipoModificacao: 'SERVICOS_COMPLEMENTARES' },
+  'AL-NOVO-PROCEDIMENTO': { rot: 'Ver contrato', destino: 'FICHA' },
+  'AL-TERMINO-3M': { rot: 'Prorrogar vigência', destino: 'MODIFICACOES', tipoModificacao: 'PRORROGACAO' },
+  'AL-TERMINO-6M': { rot: 'Prorrogar vigência', destino: 'MODIFICACOES', tipoModificacao: 'PRORROGACAO' },
+  'AL-EXECUCAO-FORA-VIGENCIA': { rot: 'Rever registos', destino: 'AFETACOES' },
+  'AL-SUSPENSAO-ABERTA': { rot: 'Rever suspensão', destino: 'MODIFICACOES', tipoModificacao: 'SUSPENSAO' },
+  'AL-SUSPENSAO-VIGENCIA': { rot: 'Rever suspensão', destino: 'MODIFICACOES', tipoModificacao: 'SUSPENSAO' },
+  'AL-VISTO-PENDENTE': { rot: 'Registar visto', destino: 'FICHA' },
+  'AL-VIGENCIA-36M': { rot: 'Ver contrato', destino: 'FICHA' },
+};

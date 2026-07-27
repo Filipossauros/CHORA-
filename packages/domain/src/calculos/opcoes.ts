@@ -4,6 +4,8 @@ import type { Recurso } from '../entidades/recursos.js';
 import type { RegistoTempo } from '../entidades/registo-tempo.js';
 import type { OpcaoAlerta } from '../entidades/auditoria-alerta.js';
 import type { Cent, DataISO } from '../tipos/primitivos.js';
+import { diasEntre } from '../tipos/tempo.js';
+import { janelaModificacao, janelaNovoProcedimento } from './janela-decisao.js';
 import { calcularConsumoPerfil } from './consumo.js';
 import { valorPrevistoPerfil, complementaresAcumulados } from './financeira.js';
 import { valorHoraVigente } from './preco-perfil.js';
@@ -137,6 +139,26 @@ export interface EntradaEscada {
   aprovados: ReadonlyArray<RegistoTempo>;
   recursos: ReadonlyArray<Recurso>;
   hoje: DataISO;
+  /**
+   * Data em que a capacidade se esgota — o momento a partir do qual já não há
+   * horas. É a âncora dos prazos das opções: as que não exigem instrução podem
+   * ir até lá, as restantes têm de recuar o respetivo prazo.
+   */
+  dataEsgotamento: DataISO;
+}
+
+/**
+ * Reserva jurídica das opções de capacidade. A escada resolve o problema de
+ * gestão — quem executa continua obrigado ao que a lei e o contrato impõem.
+ */
+export const NOTA_JURIDICA_CAPACIDADE =
+  'Estas opções não dispensam: a observância do objeto do contrato e do perfil contratado (não se reafeta para tarefa alheia ao objeto); ' +
+  'a verificação da habilitação e da idoneidade do executante; a autorização prévia da subcontratação ou da cessão da posição contratual; ' +
+  'a fundamentação e o registo da modificação contratual, quando exista; e o cabimento e compromisso prévios da despesa que resulte de qualquer delas.';
+
+/** Prazo de uma opção, a partir da data em que a alternativa deixa de existir. */
+function prazo(hoje: DataISO, dataLimite: DataISO): { dataLimite: DataISO; diasParaLimite: number } {
+  return { dataLimite, diasParaLimite: diasEntre(hoje, dataLimite) };
 }
 
 /**
@@ -146,6 +168,10 @@ export interface EntradaEscada {
 export function escadaOpcoesPerfil(e: EntradaEscada): OpcaoAlerta[] {
   const opcoes: OpcaoAlerta[] = [];
   let ordem = 1;
+  // Atos sem instrução prévia valem até ao dia em que as horas acabam; os que
+  // exigem instrução recuam o prazo de instrução da modificação.
+  const semInstrucao = prazo(e.hoje, e.dataEsgotamento);
+  const comInstrucao = prazo(e.hoje, janelaModificacao(e.hoje, e.dataEsgotamento).dataLimiteAcao);
 
   // 1 — reafectar dentro do contrato
   const interna = folgaInterna(e.perfilEmRisco, e.perfis, e.aprovados);
@@ -155,6 +181,8 @@ export function escadaOpcoesPerfil(e: EntradaEscada): OpcaoAlerta[] {
       ordem: ordem++, titulo: 'Reafectar dentro do contrato',
       detalhe: `Há ${h(total)} disponíveis noutros perfis deste contrato (${interna.map((p) => `${p.perfilNome}: ${h(p.minutosDisponiveis)}`).join('; ')}). Reafectação interna, sem formalidade contratual.`,
       viabilidade: 'VIAVEL',
+      ...semInstrucao,
+      acao: { destino: 'AFETACOES', rotulo: 'Gerir afetações', contratoId: e.contrato.id },
     });
   }
 
@@ -169,6 +197,9 @@ export function escadaOpcoesPerfil(e: EntradaEscada): OpcaoAlerta[] {
       detalhe: `O contrato ${a.contratoNumero} tem o perfil «${a.perfilNome}»${a.semelhanca < 0.999 ? ` (papel equivalente, ${Math.round(a.semelhanca * 100)}% de correspondência)` : ''} com ${h(a.minutosDisponiveis)} e ${eur(a.valorDisponivel)} disponíveis, da mesma entidade executante. A substituição/afetação é direta.`,
       viabilidade: 'VIAVEL',
       fundamento: 'RN-701 — perfil e entidade executante coincidem.',
+      ...semInstrucao,
+      // A afetação faz-se no contrato que TEM as horas, não no que as perdeu.
+      acao: { destino: 'AFETACOES', rotulo: `Afetações de ${a.contratoNumero}`, contratoId: a.contratoId },
     });
   }
 
@@ -187,6 +218,8 @@ export function escadaOpcoesPerfil(e: EntradaEscada): OpcaoAlerta[] {
       viabilidade: 'CONDICIONADA',
       fundamento: 'RN-702 e CCP, art. 316.º e ss. — subcontratação/cessão carece de autorização e de habilitação do executante.',
       ...(custoDesvio > 0 ? { impactoValor: custoDesvio } : {}),
+      ...comInstrucao,
+      acao: { destino: 'MODIFICACOES', rotulo: 'Registar cessão de posição', contratoId: e.contrato.id, tipoModificacao: 'CESSAO_POSICAO_CONTRATUAL' },
     });
   }
 
@@ -203,15 +236,38 @@ export function escadaOpcoesPerfil(e: EntradaEscada): OpcaoAlerta[] {
     viabilidade: folgaTeto > 0 ? 'CONDICIONADA' : 'INVIAVEL',
     fundamento: 'RN-301 — limite de 50% do preço contratual inicial (CCP, art. 370.º n.º 4).',
     ...(folgaTeto > 0 ? { impactoValor: folgaTeto } : {}),
+    ...comInstrucao,
+    ...(folgaTeto > 0
+      ? { acao: { destino: 'MODIFICACOES' as const, rotulo: 'Registar complementares', contratoId: e.contrato.id, tipoModificacao: 'SERVICOS_COMPLEMENTARES' } }
+      : {}),
   });
 
-  // 5 — último degrau: preparar novo procedimento
+  // 5 — último degrau: preparar novo procedimento. É a opção com o prazo mais
+  // longo de todas — meses, e mais ainda com visto prévio —, pelo que costuma
+  // ser a primeira a perder-se.
+  const jProc = janelaNovoProcedimento(e.hoje, e.contrato.dataTerminoContratual, e.contrato.vistoTribunalContasNecessario);
   opcoes.push({
     ordem: ordem++, titulo: 'Preparar novo procedimento',
-    detalhe: 'Não havendo capacidade mobilizável nem margem de reforço suficiente, deve iniciar-se a preparação de novo procedimento em tempo útil (ver a janela de decisão do alerta de fim de ciclo).',
+    detalhe: 'Não havendo capacidade mobilizável nem margem de reforço suficiente, deve iniciar-se a preparação de novo procedimento em tempo útil.'
+      + (jProc.diasParaLimite < 0
+        ? ` O prazo para o lançar com folga terminou há ${-jProc.diasParaLimite} dias: mantendo-se a necessidade, haverá descontinuidade do serviço ou recurso a ajuste direto fundamentado.`
+        : ` Contando ${e.contrato.vistoTribunalContasNecessario ? 'a duração do procedimento e o visto prévio do Tribunal de Contas' : 'a duração do procedimento'}, tem de arrancar até ${jProc.dataLimiteAcao}.`),
     viabilidade: alternativas.length === 0 && interna.length === 0 ? 'VIAVEL' : 'CONDICIONADA',
     fundamento: 'CCP — planeamento da contratação.',
+    ...prazo(e.hoje, jProc.dataLimiteAcao),
+    acao: { destino: 'FICHA', rotulo: 'Ver contrato', contratoId: e.contrato.id },
   });
 
   return opcoes;
+}
+
+/**
+ * Prazo do alerta a partir das suas opções: o MAIS CURTO. Depois dessa data
+ * deixa de haver uma alternativa — é aí que a decisão se estreita, e não quando
+ * o problema se materializa.
+ */
+export function prazoMaisCurto(opcoes: ReadonlyArray<OpcaoAlerta>): OpcaoAlerta | undefined {
+  return opcoes
+    .filter((o) => o.dataLimite !== undefined && o.viabilidade !== 'INVIAVEL')
+    .sort((a, b) => (a.dataLimite! < b.dataLimite! ? -1 : 1))[0];
 }

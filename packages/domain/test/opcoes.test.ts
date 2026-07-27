@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Contrato } from '../src/entidades/contrato.js';
 import type { PerfilContratual } from '../src/entidades/estrutura.js';
 import type { RegistoTempo } from '../src/entidades/registo-tempo.js';
-import { alternativasParaPerfil, folgaInterna, escadaOpcoesPerfil } from '../src/calculos/opcoes.js';
+import { alternativasParaPerfil, folgaInterna, escadaOpcoesPerfil, prazoMaisCurto } from '../src/calculos/opcoes.js';
 
 const audit = { criadoEm: '2026-01-01T00:00:00.000Z', criadoPor: 'u', atualizadoEm: '2026-01-01T00:00:00.000Z', atualizadoPor: 'u' };
 
@@ -26,6 +26,8 @@ function perfil(id: string, contratoId: string, nome: string, minutos: number, v
 }
 
 const HOJE = '2026-06-01';
+/** Data em que as horas do perfil se esgotam — âncora dos prazos das opções. */
+const ESGOTAMENTO = '2026-09-01';
 const semRegistos: RegistoTempo[] = [];
 
 describe('alternativas para um perfil', () => {
@@ -75,7 +77,7 @@ describe('escada de opções', () => {
       perfilEmRisco: pRisco, contrato: cA,
       contratos: [cA, cMesma, cOutra],
       perfis: [pRisco, perfil('p0', 'c1', 'Analista', 3000, 40_00), perfil('p2', 'c2', 'Programador Sénior', 12000, 45_00), perfil('p3', 'c3', 'Programador Sénior', 12000, 70_00)],
-      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE,
+      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE, dataEsgotamento: ESGOTAMENTO,
     });
     const titulos = opcoes.map((o) => o.titulo);
     expect(titulos[0]).toContain('Reafectar dentro do contrato');
@@ -91,7 +93,7 @@ describe('escada de opções', () => {
     const opcoes = escadaOpcoesPerfil({
       perfilEmRisco: pRisco, contrato: cA, contratos: [cA, cOutra],
       perfis: [pRisco, perfil('p3', 'c3', 'Programador Sénior', 6000, 70_00)],
-      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE,
+      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE, dataEsgotamento: ESGOTAMENTO,
     });
     const subcontrato = opcoes.find((o) => o.titulo.includes('C-3'))!;
     expect(subcontrato.viabilidade).toBe('CONDICIONADA');
@@ -104,7 +106,7 @@ describe('escada de opções', () => {
   it('sem alternativas nem folga, o novo procedimento passa a VIAVEL', () => {
     const opcoes = escadaOpcoesPerfil({
       perfilEmRisco: pRisco, contrato: cA, contratos: [cA], perfis: [pRisco],
-      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE,
+      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE, dataEsgotamento: ESGOTAMENTO,
     });
     const ultimo = opcoes[opcoes.length - 1]!;
     expect(ultimo.titulo).toBe('Preparar novo procedimento');
@@ -119,10 +121,77 @@ describe('escada de opções', () => {
         descricao: 'x', fundamentacao: 'y', valorAcrescido: 50_000_00,
         registadoEm: '2026-03-01T00:00:00.000Z', registadoPor: 'u', atualizadoEm: '2026-03-01T00:00:00.000Z', atualizadoPor: 'u',
       }],
-      aprovados: semRegistos, recursos: [], hoje: HOJE,
+      aprovados: semRegistos, recursos: [], hoje: HOJE, dataEsgotamento: ESGOTAMENTO,
     });
     const compl = opcoes.find((o) => o.titulo.includes('Reforçar'))!;
     expect(compl.viabilidade).toBe('INVIAVEL');
     expect(compl.fundamento).toContain('RN-301');
+  });
+
+  it('cada opção tem o seu prazo: as que não exigem instrução valem até ao esgotamento', () => {
+    const cMesma = contrato('c2', 'C-2', '500000001');
+    const opcoes = escadaOpcoesPerfil({
+      perfilEmRisco: pRisco, contrato: cA, contratos: [cA, cMesma],
+      perfis: [pRisco, perfil('p0', 'c1', 'Analista', 3000, 40_00), perfil('p2', 'c2', 'Programador Sénior', 12000, 45_00)],
+      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE, dataEsgotamento: ESGOTAMENTO,
+    });
+    const reafectar = opcoes.find((o) => o.titulo.includes('Reafectar'))!;
+    const mobilizar = opcoes.find((o) => o.titulo.includes('C-2'))!;
+    const reforcar = opcoes.find((o) => o.titulo.includes('Reforçar'))!;
+    // Atos sem instrução prévia podem ir até ao dia em que as horas acabam.
+    expect(reafectar.dataLimite).toBe(ESGOTAMENTO);
+    expect(mobilizar.dataLimite).toBe(ESGOTAMENTO);
+    // Uma modificação recua o prazo de instrução (30 dias).
+    expect(reforcar.dataLimite).toBe('2026-08-02');
+    expect(reforcar.diasParaLimite).toBe(62);
+  });
+
+  it('o prazo do alerta é o da opção que se perde primeiro', () => {
+    const opcoes = escadaOpcoesPerfil({
+      perfilEmRisco: pRisco, contrato: cA, contratos: [cA], perfis: [pRisco],
+      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE, dataEsgotamento: ESGOTAMENTO,
+    });
+    const primeira = prazoMaisCurto(opcoes)!;
+    // Com o término ainda longe, o que se perde primeiro é a possibilidade de
+    // reforçar: exige instrução, e a instrução recua o prazo.
+    expect(primeira.titulo).toContain('Reforçar');
+    expect(primeira.dataLimite! < ESGOTAMENTO).toBe(true);
+    for (const o of opcoes) {
+      if (o.dataLimite !== undefined && o.viabilidade !== 'INVIAVEL') {
+        expect(o.dataLimite >= primeira.dataLimite!).toBe(true);
+      }
+    }
+  });
+
+  it('com o término próximo, o novo procedimento é a primeira opção a perder-se', () => {
+    // Contrato a acabar dentro de 3 meses e com visto prévio: o procedimento
+    // teria de ter arrancado há muito. É o caso que torna confuso um prazo
+    // único — cada opção tem de mostrar o seu.
+    const aAcabar = { ...contrato('c9', 'C-9', '500000001'), dataTerminoContratual: '2026-09-01', vistoTribunalContasNecessario: true };
+    const opcoes = escadaOpcoesPerfil({
+      perfilEmRisco: perfil('p9', 'c9', 'Gestor de Projeto', 6000, 60_00), contrato: aAcabar,
+      contratos: [aAcabar], perfis: [perfil('p9', 'c9', 'Gestor de Projeto', 6000, 60_00)],
+      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE, dataEsgotamento: '2026-08-01',
+    });
+    const procedimento = opcoes.find((o) => o.titulo === 'Preparar novo procedimento')!;
+    expect(prazoMaisCurto(opcoes)!.titulo).toBe('Preparar novo procedimento');
+    // O prazo já passou, mas as restantes opções continuam a ter o seu.
+    expect(procedimento.diasParaLimite!).toBeLessThan(0);
+    expect(procedimento.detalhe).toContain('terminou há');
+    expect(opcoes.find((o) => o.titulo.includes('Reforçar'))!.diasParaLimite!).toBeGreaterThan(0);
+  });
+
+  it('cada opção leva ao sítio onde o ato se pratica', () => {
+    const cMesma = contrato('c2', 'C-2', '500000001');
+    const opcoes = escadaOpcoesPerfil({
+      perfilEmRisco: pRisco, contrato: cA, contratos: [cA, cMesma],
+      perfis: [pRisco, perfil('p0', 'c1', 'Analista', 3000, 40_00), perfil('p2', 'c2', 'Programador Sénior', 12000, 45_00)],
+      alteracoes: [], aprovados: semRegistos, recursos: [], hoje: HOJE, dataEsgotamento: ESGOTAMENTO,
+    });
+    // Reafectar e mobilizar são afetações; mobilizar aponta ao contrato que TEM as horas.
+    expect(opcoes.find((o) => o.titulo.includes('Reafectar'))!.acao).toEqual({ destino: 'AFETACOES', rotulo: 'Gerir afetações', contratoId: 'c1' });
+    expect(opcoes.find((o) => o.titulo.includes('C-2'))!.acao).toMatchObject({ destino: 'AFETACOES', contratoId: 'c2' });
+    // Reforçar é uma modificação, e leva o tipo a pré-selecionar.
+    expect(opcoes.find((o) => o.titulo.includes('Reforçar'))!.acao).toMatchObject({ destino: 'MODIFICACOES', tipoModificacao: 'SERVICOS_COMPLEMENTARES' });
   });
 });

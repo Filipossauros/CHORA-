@@ -7,9 +7,12 @@ import {
   dentroDoIntervalo,
   diaDeInstante,
   diasEntre,
+  diasUteisDeMinutos,
+  diasUteisEntre,
   ehDiaUtil,
   ehFeriado,
   ehFimDeSemana,
+  formatarDiasUteis,
   mesDeData,
   mesesEntre,
   relogioFixo,
@@ -75,5 +78,39 @@ describe('tempo — convenções temporais (secção 5.3.1)', () => {
 
   it('relógio de sistema devolve um instante válido em UTC', () => {
     expect(relogioSistema.agora()).toMatch(/Z$/);
+  });
+});
+
+describe('dias úteis', () => {
+  it('conta apenas dias úteis no intervalo', () => {
+    // 2026-06-01 é segunda; até sexta 2026-06-05 vão 4 dias úteis.
+    expect(diasUteisEntre('2026-06-01', '2026-06-05')).toBe(4);
+    // Uma semana completa acrescenta 5, não 7.
+    expect(diasUteisEntre('2026-06-01', '2026-06-08')).toBe(5);
+  });
+  it('exclui feriados fixos', () => {
+    // 10 de junho é feriado; a semana de 8 a 12 tem 4 dias úteis.
+    expect(diasUteisEntre('2026-06-07', '2026-06-12')).toBe(4);
+  });
+  it('é 0 quando o fim não é posterior ao início', () => {
+    expect(diasUteisEntre('2026-06-05', '2026-06-05')).toBe(0);
+    expect(diasUteisEntre('2026-06-05', '2026-06-01')).toBe(0);
+  });
+
+  it('converte minutos de trabalho em dias úteis a 8 h/dia', () => {
+    expect(diasUteisDeMinutos(8 * 60)).toBe(1);
+    expect(diasUteisDeMinutos(340 * 60)).toBe(43);
+    expect(diasUteisDeMinutos(0)).toBe(0);
+  });
+
+  it('exprime prazos curtos em dias e longos em meses e dias', () => {
+    expect(formatarDiasUteis(0)).toBe('0 dias');
+    expect(formatarDiasUteis(1)).toBe('1 dia');
+    expect(formatarDiasUteis(12)).toBe('12 dias');
+    // 22 dias úteis = 1 mês.
+    expect(formatarDiasUteis(22)).toBe('1 mês');
+    expect(formatarDiasUteis(25)).toBe('1 mês e 3 dias');
+    expect(formatarDiasUteis(45)).toBe('2 meses e 1 dia');
+    expect(formatarDiasUteis(44)).toBe('2 meses');
   });
 });

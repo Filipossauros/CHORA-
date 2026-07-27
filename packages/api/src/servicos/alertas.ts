@@ -26,12 +26,30 @@ export class ServicoAlertas {
     return decisoesPendentes(todos);
   }
 
+  /**
+   * Decisões DISPENSADAS que ainda fazem sentido mostrar. Terminada a vigência
+   * do contrato, a dispensa deixa de ser uma decisão adiada — passa a ser
+   * história, e vive apenas no registo de auditoria.
+   */
+  async dispensadas(): Promise<Alerta[]> {
+    const hoje = diaDeInstante(this.ctx.relogio.agora());
+    const dispensadas = await this.ctx.repos.alertas.todos((a) => a.estado === 'DISPENSADA');
+    const vivas: Alerta[] = [];
+    for (const a of dispensadas) {
+      const c = await this.ctx.repos.contratos.obter(a.contratoId);
+      if (c === null) continue;
+      const emVigor = c.estado === 'EM_VIGOR' || c.estado === 'SUSPENSO';
+      if (emVigor && c.dataTerminoContratual >= hoje) vivas.push(a);
+    }
+    return vivas.sort((x, y) => (x.dispensadaAte ?? '') < (y.dispensadaAte ?? '') ? -1 : 1);
+  }
+
   /** Saúde agregada de um contrato a partir das decisões pendentes. */
   async saude(contratoId: string): Promise<SeveridadeAlerta | null> {
     return saudeContrato(await this.ctx.repos.alertas.todos((a) => a.contratoId === contratoId));
   }
 
-  /** Marca a decisão como em curso (o gestor abriu uma opção ou guardou recomendação). */
+  /** Marca a decisão como em curso (o gestor seguiu uma das opções de atuação). */
   async marcarEmCurso(id: string, u: ContextoUtilizador): Promise<Alerta> {
     const atual = await this.obter(id);
     if (atual.estado === 'RESOLVIDA') throw new ErroValidacao('A decisão já está resolvida.');

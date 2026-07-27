@@ -1,7 +1,7 @@
 import {
   criarContexto, semear, resumoSeed, JobAlertas, FakeTokenValidator, UTILIZADORES_DEV,
   ServicoContratos, ServicoRegistosTempo, ServicoProcedimentos, ServicoEstrutura,
-  ServicoAfetacoes, ServicoFaturas, ServicoRecursos, ServicoAcessos, ServicoRecomendacoes, ServicoEntregaveis,
+  ServicoAfetacoes, ServicoFaturas, ServicoRecursos, ServicoAcessos, ServicoEntregaveis,
   type Contexto, type Repositorios, type ContextoUtilizador,
 } from '@chora/api/nucleo';
 import { relogioSistema, type PapelAplicacional } from '@chora/domain';
@@ -40,7 +40,6 @@ function criarReposLocais(): Repositorios {
     compromissos: r('compromissos'), faturas: r('faturas'), documentosHabilitacao: r('documentosHabilitacao'),
     alertas: r('alertas'), eventosAuditoria: r('eventosAuditoria'), contratoProjetos: r('contratoProjetos'),
     acessos: r('acessos'), relatoriosEvidencia: r('relatoriosEvidencia'),
-    recomendacoes: r('recomendacoes'),
   };
 }
 
@@ -55,7 +54,6 @@ export class AplicacaoLocal {
   readonly faturas: ServicoFaturas;
   readonly recursos: ServicoRecursos;
   readonly acessos: ServicoAcessos;
-  readonly recomendacoes: ServicoRecomendacoes;
   readonly entregaveis: ServicoEntregaveis;
   private utilizadorId = 'oid-gestor-contrato';
 
@@ -70,7 +68,6 @@ export class AplicacaoLocal {
     this.faturas = new ServicoFaturas(this.ctx);
     this.recursos = new ServicoRecursos(this.ctx);
     this.acessos = new ServicoAcessos(this.ctx);
-    this.recomendacoes = new ServicoRecomendacoes(this.ctx);
     this.entregaveis = new ServicoEntregaveis(this.ctx);
   }
 

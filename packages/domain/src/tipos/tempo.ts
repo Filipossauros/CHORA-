@@ -142,6 +142,44 @@ export function diasEntre(inicio: DataISO, fim: DataISO): number {
   return Math.round(dataParaDateTime(fim).diff(dataParaDateTime(inicio), 'days').days);
 }
 
+/**
+ * Dias úteis no intervalo `]inicio, fim]` — o que resta de tempo de trabalho, e
+ * não de calendário. Devolve 0 se `fim` não for posterior a `inicio`.
+ */
+export function diasUteisEntre(inicio: DataISO, fim: DataISO, feriadosMoveis: ReadonlyArray<DataISO> = []): number {
+  if (fim <= inicio) return 0;
+  let dias = 0;
+  let d = adicionarDias(inicio, 1);
+  while (d <= fim) {
+    if (ehDiaUtil(d, feriadosMoveis)) dias += 1;
+    d = adicionarDias(d, 1);
+  }
+  return dias;
+}
+
+/** Horas de trabalho por dia útil — a mesma base do dashboard de capacidade. */
+export const HORAS_DIA_UTIL = 8;
+/** Dias úteis por mês (261 dias úteis/ano ÷ 12), para exprimir prazos longos. */
+export const DIAS_UTEIS_MES = 22;
+
+/** Converte minutos de trabalho em dias úteis equivalentes (8 h = 1 dia). */
+export function diasUteisDeMinutos(minutos: number): number {
+  return Math.round(minutos / (60 * HORAS_DIA_UTIL));
+}
+
+/**
+ * Exprime dias úteis em linguagem de gestão: abaixo de um mês conta-se em dias;
+ * a partir daí em meses e dias, porque «94 dias úteis» não se lê de imediato.
+ */
+export function formatarDiasUteis(diasUteis: number): string {
+  const d = Math.max(0, Math.round(diasUteis));
+  if (d < DIAS_UTEIS_MES) return `${d} ${d === 1 ? 'dia' : 'dias'}`;
+  const meses = Math.floor(d / DIAS_UTEIS_MES);
+  const resto = d % DIAS_UTEIS_MES;
+  const parteMeses = `${meses} ${meses === 1 ? 'mês' : 'meses'}`;
+  return resto === 0 ? parteMeses : `${parteMeses} e ${resto} ${resto === 1 ? 'dia' : 'dias'}`;
+}
+
 /** Comparação de DataISO: negativo se a<b, 0 se igual, positivo se a>b. */
 export function compararDatas(a: DataISO, b: DataISO): number {
   return a < b ? -1 : a > b ? 1 : 0;
