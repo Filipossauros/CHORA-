@@ -141,8 +141,6 @@ export function Hoje(): ReactNode {
 function Dispensadas({ alertas, contratos, podeGerir, onMudou, onErro }: {
   alertas: Alerta[]; contratos: Contrato[]; podeGerir: boolean; onMudou: () => void; onErro: (m?: string) => void;
 }): ReactNode {
-  if (alertas.length === 0) return null;
-
   async function reabrir(id: string): Promise<void> {
     onErro();
     try { await new ServicoAlertas(app.ctx).reabrir(id, app.utilizador()); onMudou(); }
@@ -173,6 +171,7 @@ function Dispensadas({ alertas, contratos, podeGerir, onMudou, onErro }: {
                 </tr>
               );
             })}
+            {alertas.length === 0 && <tr><td colSpan={podeGerir ? 5 : 4} className="vazio">Nenhuma decisão dispensada.</td></tr>}
           </tbody>
         </table>
       </div>

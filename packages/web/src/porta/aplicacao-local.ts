@@ -31,6 +31,15 @@ export const AZURE_USERS: Array<{ id: string; nome: string; prestador?: string }
 export const nomeAzure = (id: string): string => AZURE_USERS.find((u) => u.id === id)?.nome ?? id;
 export const prestadorAzure = (id: string): string | undefined => AZURE_USERS.find((u) => u.id === id)?.prestador;
 
+/**
+ * Versão do formato dos dados guardados no browser. Bastam dados novos no seed
+ * ou campos novos nas entidades para a memória antiga ficar desatualizada — e o
+ * utilizador não tem como saber que o que vê é de uma versão anterior. Subir
+ * este número repõe a demonstração no arranque seguinte.
+ */
+const VERSAO_DADOS = '2026-07-27.entregaveis-decisoes';
+const CHAVE_VERSAO = 'chora:versao';
+
 function criarReposLocais(): Repositorios {
   const r = <T extends { id: string }>(nome: string) => new RepositorioLocalStorage<T>(nome);
   return {
@@ -71,20 +80,36 @@ export class AplicacaoLocal {
     this.entregaveis = new ServicoEntregaveis(this.ctx);
   }
 
-  /** Semeia se estiver vazio (primeiro arranque) e gera os alertas. */
+  /**
+   * Semeia no primeiro arranque, repõe quando o formato dos dados mudou, e
+   * reavalia SEMPRE as decisões.
+   *
+   * As decisões guardadas trazem prazos e opções calculados no dia em que foram
+   * geradas: sem reavaliar, a fila envelhece silenciosamente e — pior — dados
+   * gravados por uma versão anterior nunca ganham os campos novos. A
+   * reconciliação preserva o que o gestor decidiu (em curso, dispensada), pelo
+   * que reavaliar em cada arranque não custa nada ao utilizador.
+   */
   async inicializar(): Promise<void> {
     const vazio = (await this.ctx.repos.procedimentos.todos()).length === 0;
-    if (vazio) {
+    if (vazio || localStorage.getItem(CHAVE_VERSAO) !== VERSAO_DADOS) {
+      this.limpar();
       await semear(this.ctx);
-      await new JobAlertas(this.ctx).executar();
+      localStorage.setItem(CHAVE_VERSAO, VERSAO_DADOS);
+    }
+    await new JobAlertas(this.ctx).executar();
+  }
+
+  /** Apaga tudo o que é da aplicação, sem recarregar. */
+  private limpar(): void {
+    for (const chave of Object.keys(localStorage)) {
+      if (chave.startsWith('chora:')) localStorage.removeItem(chave);
     }
   }
 
   /** Repõe os dados de demonstração (limpa localStorage e semeia de novo). */
   async reporSeed(): Promise<void> {
-    for (const chave of Object.keys(localStorage)) {
-      if (chave.startsWith('chora:')) localStorage.removeItem(chave);
-    }
+    this.limpar();
     location.reload();
   }
 
