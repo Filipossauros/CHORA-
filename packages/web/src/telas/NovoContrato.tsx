@@ -37,6 +37,7 @@ export function NovoContrato(): ReactNode {
     dataAssinatura: hoje(), dataInicio: hoje(), dataTermino: '',
     visto: false, dataVisto: '', numeroPortaria: '',
     gestor: 'oid-gestor-contrato', tipologia: 'BOLSA_HORAS' as TipologiaContrato,
+    licencaDe: '', licencaAte: '',
   });
   const [perfis, setPerfis] = useState<PerfilForm[]>([{ nome: '', horas: '', valorHora: '' }]);
   const [entregaveis, setEntregaveis] = useState<EntregavelForm[]>([{ ...ENTREGAVEL_VAZIO }]);
@@ -58,6 +59,10 @@ export function NovoContrato(): ReactNode {
   // a bolsa de horas é uma reserva opcional para trabalhos não previstos, cujo
   // único elemento obrigatório é o valor. Ambos têm de caber no preço (RN-112).
   const chaveNaMao = f.tipologia === 'CHAVE_NA_MAO';
+  // O licenciamento não tem execução a acompanhar: tem valor, período de licença
+  // e uma fatura. O que é obrigatório é a vigência da licença (RN-113/RN-114).
+  const licenciamento = f.tipologia === 'LICENCIAMENTO';
+  const licencaOk = !licenciamento || (f.licencaDe !== '' && f.licencaAte !== '' && f.licencaAte > f.licencaDe);
   const entregaveisPreenchidos = entregaveis.filter((e) => e.designacao.trim() !== '');
   const totalEntregaveis = entregaveisPreenchidos.reduce((s, e) => s + valorEntregavel(e, precoCent), 0);
   const bolsaCent = eurosParaCent(bolsaHoras);
@@ -68,6 +73,7 @@ export function NovoContrato(): ReactNode {
   async function gravar(): Promise<void> {
     setErro(undefined);
     if (precoCent <= 0) { setErro('Indique o preço contratual total (€ > 0).'); return; }
+    if (licenciamento && !licencaOk) { setErro('Indique o período de vigência do licenciamento, com fim posterior ao início (RN-113).'); return; }
     if (chaveNaMao) {
       if (entregaveisPreenchidos.length === 0) { setErro('Um contrato chave-na-mão tem de ter pelo menos um entregável identificado (RN-111).'); return; }
       if (entregaveisSemValor > 0) { setErro('Cada entregável tem de ter valor: indique-o em euros ou em percentagem do contrato (RN-111).'); return; }
@@ -87,6 +93,7 @@ export function NovoContrato(): ReactNode {
       vistoTribunalContasNecessario: f.visto,
       ...(f.dataVisto !== '' ? { dataVistoTribunalContas: f.dataVisto } : {}),
       ...(f.numeroPortaria !== '' ? { numeroPortariaExtensaoEncargos: f.numeroPortaria } : {}),
+      ...(licenciamento && f.licencaDe !== '' && f.licencaAte !== '' ? { vigenciaLicenciamento: { de: f.licencaDe, ate: f.licencaAte } } : {}),
       gestores: [{ utilizadorId: f.gestor, principal: true }],
       excecoes: [], criadoEm: agora, criadoPor: u.utilizadorId, atualizadoEm: agora, atualizadoPor: u.utilizadorId,
     };
@@ -116,7 +123,7 @@ export function NovoContrato(): ReactNode {
 
   return (
     <>
-      <Cabecalho titulo="Novo contrato" sub="Registo de um contrato assinado (fase de execução)" acoes={<><button className="btn" onClick={() => navegar('/contratos')}>Cancelar</button><button className="btn pri" onClick={() => void gravar()} disabled={f.numero === '' || f.objeto === '' || f.dataTermino === '' || !estruturaOk}>Gravar contrato</button></>} />
+      <Cabecalho titulo="Novo contrato" sub="Registo de um contrato assinado (fase de execução)" acoes={<><button className="btn" onClick={() => navegar('/contratos')}>Cancelar</button><button className="btn pri" onClick={() => void gravar()} disabled={f.numero === '' || f.objeto === '' || f.dataTermino === '' || !estruturaOk || !licencaOk}>Gravar contrato</button></>} />
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
       {alertaVisto && (
         <div className="aviso" style={{ marginBottom: 12, borderColor: 'var(--ambar)' }}>
@@ -151,7 +158,7 @@ export function NovoContrato(): ReactNode {
         </div>
         <div className="g2">
           <div className="campo"><label>14 · Gestor do contrato (utilizador Azure)</label><select value={f.gestor} onChange={(e) => upd('gestor', e.target.value)}>{AZURE_USERS.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
-          <div className="campo"><label>15 · Tipologia do contrato</label><select value={f.tipologia} onChange={(e) => upd('tipologia', e.target.value)}><option value="BOLSA_HORAS">Bolsa de horas</option><option value="CHAVE_NA_MAO">Chave-na-mão</option></select></div>
+          <div className="campo"><label>15 · Tipologia do contrato</label><select value={f.tipologia} onChange={(e) => upd('tipologia', e.target.value)}><option value="BOLSA_HORAS">Bolsa de horas</option><option value="CHAVE_NA_MAO">Chave-na-mão</option><option value="LICENCIAMENTO">Licenciamento</option></select></div>
         </div>
         {f.visto && !vistoOk && <div className="aviso" style={{ marginTop: 2 }}>Visto necessário e ainda sem data de obtenção: o contrato será criado no estado <b>Aguarda visto TdC</b> (não pode entrar em vigor sem visto obtido ou tácito).</div>}
 
@@ -171,6 +178,24 @@ export function NovoContrato(): ReactNode {
             ))}
           </div>
         )}
+        {licenciamento && (
+          <div style={{ border: '1px solid var(--linha)', borderRadius: 8, padding: 12, marginTop: 10 }}>
+            <div style={{ marginBottom: 4 }}><b style={{ fontSize: 13 }}>Vigência do licenciamento (obrigatório)</b></div>
+            <div className="sec" style={{ marginBottom: 8 }}>
+              O período coberto pelas licenças, que pode ser mais curto do que o contrato — é ele que determina quando é
+              preciso renovar. Tem de caber na vigência do contrato <code>RN-114</code>.
+            </div>
+            <div className="g2">
+              <div className="campo"><label>Licenças de *</label><input type="date" value={f.licencaDe} onChange={(e) => upd('licencaDe', e.target.value)} /></div>
+              <div className="campo"><label>Licenças até *</label><input type="date" value={f.licencaAte} onChange={(e) => upd('licencaAte', e.target.value)} /></div>
+            </div>
+            <div className="aviso" style={{ marginBottom: 0 }}>
+              Um contrato de licenciamento não tem perfis nem entregáveis, e admite uma <b>única fatura</b> pela totalidade
+              do valor <code>RN-610</code> <code>RN-611</code>.
+            </div>
+          </div>
+        )}
+
         {chaveNaMao && (
           <div style={{ border: '1px solid var(--linha)', borderRadius: 8, padding: 12, marginTop: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}><b style={{ fontSize: 13 }}>Entregáveis (obrigatório)</b><button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setEntregaveis([...entregaveis, { ...ENTREGAVEL_VAZIO }])}>+ Entregável</button></div>

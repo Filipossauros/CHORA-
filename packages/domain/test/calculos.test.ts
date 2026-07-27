@@ -149,14 +149,16 @@ describe('execução financeira (RN-105/301/607)', () => {
     expect(valorPrevistoPerfil(perfil([]))).toBe(0);
   });
 
-  it('total faturado só conta faturas validadas/pagas e desconta deduções', () => {
+  it('total faturado só conta as faturas validadas', () => {
+    // O pagamento não é modelado: o que a aplicação sabe é o que aprovou.
     const base = { ...audit };
     const faturas = [
-      { estado: 'VALIDADA', montanteAprovado: 10000, deducoes: [{ motivo: 'm', montante: 1000 }], ...base },
-      { estado: 'PAGA', montanteAprovado: 5000, ...base },
+      { estado: 'VALIDADA', montanteAprovado: 10000, ...base },
+      { estado: 'VALIDADA', montanteAprovado: 5000, ...base },
+      { estado: 'INVALIDADA', montanteAprovado: 7000, ...base },
       { estado: 'RECEBIDA', montanteAprovado: 99999, ...base },
     ] as never[];
-    expect(totalFaturado(faturas)).toBe(9000 + 5000);
+    expect(totalFaturado(faturas)).toBe(15000);
   });
 });
 

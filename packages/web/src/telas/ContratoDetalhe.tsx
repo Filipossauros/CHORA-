@@ -10,6 +10,10 @@ import { Entregaveis } from './Entregaveis.js';
 import { DecisoesDoContrato } from './Hoje.js';
 
 const RECURSOS_AZURE = AZURE_USERS.filter((u) => u.prestador !== undefined);
+function rotularTipologia(t: string | undefined): string {
+  const m: Record<string, string> = { BOLSA_HORAS: 'Bolsa de horas', CHAVE_NA_MAO: 'Chave-na-mão', LICENCIAMENTO: 'Licenciamento' };
+  return m[t ?? 'BOLSA_HORAS'] ?? 'Bolsa de horas';
+}
 function rotularOperacao(op: string): string {
   if (op.startsWith('ALTERAR_ESTADO')) return 'Alteração de estado';
   if (op.startsWith('ESTADO:')) return 'Transição de estado';
@@ -42,6 +46,8 @@ type Tab = (typeof TABS)[number];
 function tabsDe(c: Contrato, decisoes: number): readonly Tab[] {
   return TABS.filter((t) => {
     if (t === 'Entregáveis') return c.tipologia === 'CHAVE_NA_MAO';
+    // O licenciamento não tem execução por perfis: não há quem afetar.
+    if (t === 'Afetações') return c.tipologia !== 'LICENCIAMENTO';
     if (t === 'Ações') return decisoes > 0;
     return true;
   });
@@ -112,11 +118,12 @@ export function ContratoDetalhe(): ReactNode {
           <div className="cartao" style={{ marginBottom: 16 }}>
             {podeGerir && <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}><button className="btn" onClick={() => { setEditar(true); setErro(undefined); }}>Alterar dados</button></div>}
             <div className="corpo g3">
-            <Campo k="Prestador" v={c.prestador.nome} /><Campo k="NIPC" v={c.prestador.nipc} /><Campo k="Tipologia" v={c.tipologia === 'CHAVE_NA_MAO' ? 'Chave-na-mão' : 'Bolsa de horas'} />
+            <Campo k="Prestador" v={c.prestador.nome} /><Campo k="NIPC" v={c.prestador.nipc} /><Campo k="Tipologia" v={rotularTipologia(c.tipologia)} />
             <Campo k="Nº procedimento de origem" v={c.numeroProcedimento ?? '—'} /><Campo k="Tipo de procedimento" v={(c.tipoProcedimento ?? '—').replace(/_/g, ' ').toLowerCase()} /><Campo k="Nº do lote" v={c.numeroLote !== undefined ? String(c.numeroLote) : '—'} />
             <Campo k="Valor inicial do contrato" v={formatarMoeda(c.precoContratualInicial)} /><Campo k="Valor atual do contrato" v={formatarMoeda(c.precoContratualAtual)} /><Campo k="Vigência" v={`${c.dataInicioVigencia} – ${c.dataTerminoContratual}`} />
             <Campo k="Visto prévio do TdC necessário" v={c.vistoTribunalContasNecessario ? 'Sim' : 'Não'} /><Campo k="Data de obtenção do visto do TdC" v={c.dataVistoTribunalContas ?? '—'} /><Campo k="Nº portaria de extensão de encargos" v={c.numeroPortariaExtensaoEncargos ?? c.portariaExtensaoEncargos?.numero ?? '—'} />
             <Campo k="Gestor do contrato" v={c.gestores.map((g) => nomeAzure(g.utilizadorId)).join(', ')} />
+            {c.vigenciaLicenciamento !== undefined && <Campo k="Vigência do licenciamento" v={`${c.vigenciaLicenciamento.de} – ${c.vigenciaLicenciamento.ate}`} />}
             {c.motivoInativacao !== undefined && <Campo k="Motivo de inativação" v={c.motivoInativacao} />}
             {c.notaAlteracaoEstado !== undefined && <Campo k="Nota da última alteração de estado" v={c.notaAlteracaoEstado} />}
           </div></div>

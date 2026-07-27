@@ -40,18 +40,26 @@ export const RN_602: Regra<{
 }> = {
   codigo: 'RN-602',
   descricao:
-    'A conferência só pode iniciar-se estando presentes os dois documentos obrigatórios em PDF: a fatura e, consoante o tipo de faturação, o relatório de horas do fornecedor (bolsa de horas) ou o auto de entrega (entregável).',
+    'A conferência só pode iniciar-se com a evidência documental em PDF: a fatura e, consoante o tipo de faturação, o relatório de horas do fornecedor (bolsa de horas) ou o auto de entrega (entregável). A fatura e o relatório podem vir no mesmo ficheiro. O licenciamento basta-se com a fatura.',
   requisito: 'RF26, RF31',
   base: 'O circuito de validação técnica funciona sobre PDF. Ver secção 5.3.2.',
   excecaoFundamentavel: false,
   avaliar({ tiposDocumentosPresentes, tipoFaturacao }) {
+    // Um ficheiro único que contenha fatura e relatório satisfaz ambos: o que a
+    // regra exige é a EVIDÊNCIA, não a contagem de ficheiros.
+    const combinado = tiposDocumentosPresentes.includes('FATURA_COM_RELATORIO');
+    const temFatura = combinado || tiposDocumentosPresentes.includes('FATURA');
+    if (tipoFaturacao === 'LICENCIAMENTO') {
+      // A licença titula-se pela fatura; não há horas nem entrega a comprovar.
+      if (!temFatura) return violada('Falta o documento obrigatório: a fatura.', { temFatura });
+      return conforme;
+    }
     const entregavel = tipoFaturacao === 'ENTREGAVEL';
     const suporte: TipoDocumentoFatura = entregavel ? 'AUTO_ENTREGA' : 'RELATORIO_HORAS_FORNECEDOR';
-    const temFatura = tiposDocumentosPresentes.includes('FATURA');
-    const temSuporte = tiposDocumentosPresentes.includes(suporte);
+    const temSuporte = tiposDocumentosPresentes.includes(suporte) || (!entregavel && combinado);
     if (!temFatura || !temSuporte) {
       return violada(
-        `Faltam documentos obrigatórios: são necessários a fatura e ${entregavel ? 'o auto de entrega' : 'o relatório de horas do fornecedor'}.`,
+        `Faltam documentos obrigatórios: são necessários a fatura e ${entregavel ? 'o auto de entrega' : 'o relatório de horas do fornecedor'}${entregavel ? '' : ' — que podem vir no mesmo ficheiro'}.`,
         { temFatura, temSuporte, suporte },
       );
     }
@@ -133,45 +141,6 @@ export const RN_604: Regra<{ temRelatorioEvidencia: boolean }> = {
   },
 };
 
-/** RN-605 — registar dataLimitePagamento e sinalizar aproximação/incumprimento (aviso). */
-export const RN_605: Regra<{ dataLimitePagamento: string | undefined; hoje: string }> = {
-  codigo: 'RN-605',
-  descricao: 'Registar dataLimitePagamento e sinalizar aproximação e incumprimento do prazo.',
-  requisito: 'novo',
-  base: 'Indicador de desempenho da própria entidade.',
-  excecaoFundamentavel: false,
-  bloqueia: false,
-  avaliar({ dataLimitePagamento, hoje }) {
-    if (dataLimitePagamento !== undefined && dataLimitePagamento < hoje) {
-      return violada('Prazo de pagamento da fatura ultrapassado.', { dataLimitePagamento, hoje });
-    }
-    return conforme;
-  },
-};
-
-/** RN-606 — suportar deduções e notas de crédito no montante aprovado (invariante de consistência). */
-export const RN_606: Regra<{
-  montanteAprovado: Cent;
-  deducoes: Cent;
-  montanteLiquido: Cent;
-}> = {
-  codigo: 'RN-606',
-  descricao: 'Suportar deduções e notas de crédito, refletidas no montante aprovado.',
-  requisito: 'novo',
-  base: 'Penalidades contratuais (CCP, art. 329.º) e correções.',
-  excecaoFundamentavel: false,
-  avaliar({ montanteAprovado, deducoes, montanteLiquido }) {
-    if (montanteAprovado - deducoes !== montanteLiquido) {
-      return violada('O montante líquido não reflete corretamente as deduções.', {
-        montanteAprovado,
-        deducoes,
-        montanteLiquido,
-      });
-    }
-    return conforme;
-  },
-};
-
 /** RN-607 — somatório de montantes aprovados ≤ precoContratualAtual. */
 export const RN_607: Regra<{ totalFaturado: Cent; novoMontante: Cent; precoContratualAtual: Cent }> = {
   codigo: 'RN-607',
@@ -238,15 +207,62 @@ export const RN_609: Regra<{ tipoFaturacao: string; montanteFatura: Cent; valorE
   },
 };
 
+/**
+ * RN-610 — o contrato de licenciamento admite UMA só fatura.
+ *
+ * Não há execução a medir: contrata-se um direito de uso por um período e
+ * fatura-se de uma vez. Uma segunda fatura de valor positivo indicia duplicação
+ * ou período mal delimitado. As notas de crédito não contam: corrigem a fatura
+ * emitida, não acrescentam faturação.
+ */
+export const RN_610: Regra<{ tipoFaturacao: string; faturasPositivasExistentes: number; montante: Cent }> = {
+  codigo: 'RN-610',
+  descricao:
+    'Um contrato de licenciamento admite uma única fatura de valor positivo, correspondente à totalidade do contrato. Notas de crédito não são abrangidas.',
+  requisito: 'novo',
+  base: 'No licenciamento contrata-se um direito de uso por um período, faturado de uma só vez.',
+  excecaoFundamentavel: false,
+  avaliar({ tipoFaturacao, faturasPositivasExistentes, montante }) {
+    if (tipoFaturacao !== 'LICENCIAMENTO') return conforme;
+    if (montante > 0 && faturasPositivasExistentes > 0) {
+      return violada(
+        'O contrato de licenciamento já tem uma fatura emitida. Para corrigir o montante, emita nota de crédito.',
+        { faturasPositivasExistentes },
+      );
+    }
+    return conforme;
+  },
+};
+
+/** RN-611 — a fatura de licenciamento corresponde à totalidade do contrato. */
+export const RN_611: Regra<{ tipoFaturacao: string; montante: Cent; precoContratualAtual: Cent }> = {
+  codigo: 'RN-611',
+  descricao:
+    'O montante da fatura de um contrato de licenciamento tem de corresponder à totalidade do preço contratual atual.',
+  requisito: 'novo',
+  base: 'Faturação única: não há faturação parcial de um licenciamento.',
+  excecaoFundamentavel: false,
+  avaliar({ tipoFaturacao, montante, precoContratualAtual }) {
+    if (tipoFaturacao !== 'LICENCIAMENTO') return conforme;
+    if (montante > 0 && montante !== precoContratualAtual) {
+      return violada(
+        'O montante da fatura não corresponde ao preço contratual do licenciamento.',
+        { montante, precoContratualAtual, diferenca: montante - precoContratualAtual },
+      );
+    }
+    return conforme;
+  },
+};
+
 export const REGRAS_FATURACAO = [
   RN_601,
   RN_602,
   RN_602_A,
   RN_603,
   RN_604,
-  RN_605,
-  RN_606,
   RN_607,
   RN_608,
   RN_609,
+  RN_610,
+  RN_611,
 ] as const;

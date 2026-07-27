@@ -19,6 +19,10 @@ const zNovaFatura = z.object({
 });
 const zDoc = z.object({ tipo: zTipoDocumentoFatura, ficheiroRef: z.string().min(1), nomeOriginal: z.string().min(1), hashSha256: z.string().regex(/^[a-f0-9]{64}$/i), tamanhoBytes: z.number().int().nonnegative() });
 const zLinha = z.object({ perfilId: z.string().optional(), recursoId: z.string().optional(), quantidade: zMinutos, valorHora: zCent, montante: zCent, origem: z.enum(['MANUAL', 'EXTRAIDA']) });
+const zReceberEConferir = zNovaFatura.extend({
+  documentos: z.array(zDoc).optional(),
+  linhas: z.array(zLinha).optional(),
+});
 const zDecidir = z.object({ decisao: z.enum(['VALIDADA', 'INVALIDADA']), motivo: z.string().optional() });
 
 function parse<T>(s: z.ZodType<T>, corpo: unknown): T { const r = s.safeParse(corpo); if (!r.success) throw new ErroValidacao('Corpo inválido.', r.error.issues); return r.data; }
@@ -52,6 +56,15 @@ export function rotasFaturas(app: FastifyInstance, ctx: Contexto): void {
     const u = exigirUtilizador(req); exigirGestorFaturas(u.papeis);
     const { id } = req.params as { id: string };
     await reply.status(201).send(await servico.criarFatura(id, parse(zNovaFatura, req.body), u));
+  });
+  /** Receção + extração + conferência numa transição (não há decisão pelo meio). */
+  app.post('/api/v1/contratos/:id/faturas:receber-e-conferir', async (req, reply) => {
+    const u = exigirUtilizador(req); exigirGestorFaturas(u.papeis);
+    const { id } = req.params as { id: string };
+    const d = parse(zReceberEConferir, req.body);
+    const documentos = (d.documentos ?? []).map((doc) => ({ ...doc, recebidoEm: ctx.relogio.agora(), carregadoPor: u.utilizadorId }));
+    const { documentos: _, ...fatura } = d;
+    await reply.status(201).send(await servico.receberEConferir(id, { ...fatura, documentos }, u));
   });
 
   app.get('/api/v1/faturas/:id', async (req) => {

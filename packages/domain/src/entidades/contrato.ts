@@ -86,6 +86,13 @@ export const zContrato = zAuditavel.extend({
   portariaExtensaoEncargos: zPortariaExtensaoEncargos.optional(),
   numeroPortariaExtensaoEncargos: z.string().optional(),
 
+  /**
+   * Período coberto pelas licenças (tipologia LICENCIAMENTO). É obrigatório
+   * nessa tipologia (RN-113) e tem de caber na vigência do contrato (RN-114):
+   * não se licencia para lá do prazo em que o contrato existe.
+   */
+  vigenciaLicenciamento: z.object({ de: zDataISO, ate: zDataISO }).optional(),
+
   // Gestão
   gestores: z.array(zGestorContrato),
 

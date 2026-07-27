@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Dotacao, PerfilContratual, Alteracao } from '../src/entidades/estrutura.js';
 import type { Contrato } from '../src/entidades/contrato.js';
-import { totalDotacoes, totalPrevistoPerfis, montanteLiquidoFatura } from '../src/calculos/financeira.js';
+import { totalDotacoes, totalPrevistoPerfis } from '../src/calculos/financeira.js';
 import { anoFinalPortaria, portariaExigeReprogramacao, reprogramarPortaria, vigenciaLiquidaMeses } from '../src/calculos/prazos.js';
 import {
   periodosSuspensao,
@@ -37,10 +37,6 @@ describe('financeira — somatórios', () => {
     expect(totalPrevistoPerfis(perfis)).toBe(Math.round((6000 * 6000) / 60));
   });
 
-  it('montanteLiquidoFatura desconta deduções e trata ausência', () => {
-    expect(montanteLiquidoFatura({ montanteAprovado: 1000, deducoes: [{ motivo: 'm', montante: 200 }] } as never)).toBe(800);
-    expect(montanteLiquidoFatura({} as never)).toBe(0);
-  });
 });
 
 describe('prazos — utilitários', () => {

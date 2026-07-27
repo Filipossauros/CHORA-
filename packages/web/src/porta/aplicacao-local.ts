@@ -37,7 +37,7 @@ export const prestadorAzure = (id: string): string | undefined => AZURE_USERS.fi
  * utilizador não tem como saber que o que vê é de uma versão anterior. Subir
  * este número repõe a demonstração no arranque seguinte.
  */
-const VERSAO_DADOS = '2026-07-27.suspensao-estado';
+const VERSAO_DADOS = '2026-07-27.licenciamento-faturacao';
 const CHAVE_VERSAO = 'chora:versao';
 
 function criarReposLocais(): Repositorios {

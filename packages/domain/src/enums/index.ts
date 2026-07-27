@@ -25,9 +25,12 @@ export const zTipoProcedimento = z.enum(TIPOS_PROCEDIMENTO);
  * Tipologia do contrato quanto ao modo de execução:
  * - BOLSA_HORAS: exige a identificação dos perfis contratuais (horas e
  *   valor/hora); as horas são consumidas contra esses perfis.
- * - CHAVE_NA_MAO: empreitada de preço fixo paga pelo resultado; sem perfis.
+ * - CHAVE_NA_MAO: preço fixo pago pelo resultado, repartido por entregáveis,
+ *   com bolsa de horas facultativa para trabalhos não previstos.
+ * - LICENCIAMENTO: aquisição de licenças por um período. Não tem execução a
+ *   acompanhar — tem um valor, uma vigência de licença e uma única fatura.
  */
-export const TIPOLOGIAS_CONTRATO = ['BOLSA_HORAS', 'CHAVE_NA_MAO'] as const;
+export const TIPOLOGIAS_CONTRATO = ['BOLSA_HORAS', 'CHAVE_NA_MAO', 'LICENCIAMENTO'] as const;
 export type TipologiaContrato = (typeof TIPOLOGIAS_CONTRATO)[number];
 export const zTipologiaContrato = z.enum(TIPOLOGIAS_CONTRATO);
 
@@ -80,13 +83,18 @@ export const PAPEIS_APLICACIONAIS = [
 export type PapelAplicacional = (typeof PAPEIS_APLICACIONAIS)[number];
 export const zPapelAplicacional = z.enum(PAPEIS_APLICACIONAIS);
 
+/**
+ * Ciclo de vida da fatura. Termina na DECISÃO — validada ou invalidada. O
+ * pagamento não é modelado: acontece no sistema financeiro da empresa, sobre o
+ * qual a aplicação não tem visibilidade. O que ela produz é a frase e o
+ * relatório de evidência que habilitam esse sistema a pagar.
+ */
 export const ESTADOS_FATURA = [
   'RECEBIDA',
   'EM_CONFERENCIA',
   'VALIDADA',
   'INVALIDADA',
   'DEVOLVIDA',
-  'PAGA',
 ] as const;
 export type EstadoFatura = (typeof ESTADOS_FATURA)[number];
 export const zEstadoFatura = z.enum(ESTADOS_FATURA);
@@ -94,6 +102,8 @@ export const zEstadoFatura = z.enum(ESTADOS_FATURA);
 export const TIPOS_DOCUMENTO_FATURA = [
   'FATURA',
   'RELATORIO_HORAS_FORNECEDOR',
+  /** Fatura e relatório de horas no MESMO ficheiro — é como muitos chegam. */
+  'FATURA_COM_RELATORIO',
   /** Auto/termo de entrega — o documento que titula a entrega de um entregável. */
   'AUTO_ENTREGA',
   'NOTA_CREDITO',
@@ -122,11 +132,11 @@ export type SeveridadeAlerta = (typeof SEVERIDADES_ALERTA)[number];
 export const zSeveridadeAlerta = z.enum(SEVERIDADES_ALERTA);
 
 /**
- * O que a fatura liquida. Num contrato chave-na-mão convivem os dois: os
- * entregáveis (preço fixo por resultado) e a bolsa de horas para trabalhos não
- * previstos, que funciona como em qualquer contrato de bolsa.
+ * O que a fatura liquida. Num contrato chave-na-mão convivem os dois primeiros:
+ * os entregáveis (preço fixo por resultado) e a bolsa de horas para trabalhos
+ * não previstos. O licenciamento tem um só tipo, porque tem uma só fatura.
  */
-export const TIPOS_FATURACAO = ['ENTREGAVEL', 'BOLSA_HORAS'] as const;
+export const TIPOS_FATURACAO = ['ENTREGAVEL', 'BOLSA_HORAS', 'LICENCIAMENTO'] as const;
 export type TipoFaturacao = (typeof TIPOS_FATURACAO)[number];
 export const zTipoFaturacao = z.enum(TIPOS_FATURACAO);
 

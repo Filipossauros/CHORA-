@@ -11,7 +11,6 @@ export const TRANSICOES_FATURA: ReadonlyArray<Transicao<EstadoFatura, AtorFatura
   { de: 'EM_CONFERENCIA', para: 'INVALIDADA', atores: ['GESTOR_CONTRATO'], regras: ['RN-604'] },
   { de: 'EM_CONFERENCIA', para: 'DEVOLVIDA', atores: ['GESTOR_CONTRATO'] },
   { de: 'DEVOLVIDA', para: 'RECEBIDA', atores: ['GESTOR_CONTRATO'] },
-  { de: 'VALIDADA', para: 'PAGA', atores: ['GESTOR_CONTRATO'] },
 ];
 
 export const maquinaFatura = criarMaquina(TRANSICOES_FATURA);

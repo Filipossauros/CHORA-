@@ -226,6 +226,54 @@ export const RN_112: Regra<{
   },
 };
 
+/**
+ * RN-113 — o contrato de licenciamento tem de indicar a vigência da licença.
+ *
+ * Sem ela não se sabe o que foi comprado: um licenciamento é um direito de uso
+ * por um PERÍODO, e é esse período que determina quando é preciso renovar.
+ */
+export const RN_113: Regra<{ tipologia: string; temVigenciaLicenciamento: boolean }> = {
+  codigo: 'RN-113',
+  descricao: 'Um contrato de licenciamento tem de indicar o período de vigência das licenças.',
+  requisito: 'novo',
+  base: 'O licenciamento é um direito de uso por um período determinado.',
+  excecaoFundamentavel: false,
+  avaliar({ tipologia, temVigenciaLicenciamento }) {
+    if (tipologia !== 'LICENCIAMENTO') return conforme;
+    if (!temVigenciaLicenciamento) {
+      return violada('Indique o período de vigência do licenciamento (início e fim).');
+    }
+    return conforme;
+  },
+};
+
+/** RN-114 — a vigência da licença cabe dentro da vigência do contrato. */
+export const RN_114: Regra<{
+  tipologia: string;
+  licencaDe?: DataISO; licencaAte?: DataISO;
+  contratoDe: DataISO; contratoAte: DataISO;
+}> = {
+  codigo: 'RN-114',
+  descricao:
+    'O período de vigência das licenças tem de estar contido na vigência do contrato e ter fim posterior ao início.',
+  requisito: 'novo',
+  base: 'Não se licencia para lá do prazo em que o contrato que titula a aquisição existe.',
+  excecaoFundamentavel: false,
+  avaliar({ tipologia, licencaDe, licencaAte, contratoDe, contratoAte }) {
+    if (tipologia !== 'LICENCIAMENTO' || licencaDe === undefined || licencaAte === undefined) return conforme;
+    if (licencaAte <= licencaDe) {
+      return violada('O fim da vigência do licenciamento tem de ser posterior ao início.', { licencaDe, licencaAte });
+    }
+    if (licencaDe < contratoDe || licencaAte > contratoAte) {
+      return violada(
+        'O período de licenciamento tem de estar contido na vigência do contrato.',
+        { licencaDe, licencaAte, contratoDe, contratoAte },
+      );
+    }
+    return conforme;
+  },
+};
+
 export const REGRAS_CONTRATOS = [
   RN_101,
   RN_102,
@@ -237,4 +285,6 @@ export const REGRAS_CONTRATOS = [
   RN_110,
   RN_111,
   RN_112,
+  RN_113,
+  RN_114,
 ] as const;

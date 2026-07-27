@@ -2,7 +2,7 @@
 
 > Documento **gerado** a partir de `packages/domain/src/rules/` por `pnpm docs`. Não editar à mão.
 
-Total de regras: **56**.
+Total de regras: **58**.
 
 ## Contratos e procedimentos
 
@@ -18,6 +18,8 @@ Total de regras: **56**.
 | RN-110 | bloqueio | RF36 | não | Todas as alterações contratuais são registadas em histórico imutável, incluindo o histórico de alterações da data de término. | — |
 | RN-111 | bloqueio | novo | não | Um contrato chave-na-mão tem de ter pelo menos um entregável identificado, e todos os entregáveis têm de ter valor associado. | No preço fixo paga-se o resultado: a faturação é por entregável, pelo que estes têm de estar definidos. |
 | RN-112 | bloqueio | novo | não | A soma do valor dos entregáveis com o valor da bolsa de horas não pode exceder o preço contratual atual. | O preço contratual é o teto da despesa: as componentes em que se reparte não o podem ultrapassar. |
+| RN-113 | bloqueio | novo | não | Um contrato de licenciamento tem de indicar o período de vigência das licenças. | O licenciamento é um direito de uso por um período determinado. |
+| RN-114 | bloqueio | novo | não | O período de vigência das licenças tem de estar contido na vigência do contrato e ter fim posterior ao início. | Não se licencia para lá do prazo em que o contrato que titula a aquisição existe. |
 
 ## Prazos e vigência
 
@@ -76,15 +78,15 @@ Total de regras: **56**.
 | Código | Tipo | Req. | Exceção fundamentável | Descrição | Base legal / nota |
 |---|---|---|---|---|---|
 | RN-601 | bloqueio | RF32 | não | Uma fatura tem de estar associada a contrato e a compromisso válido, com saldo suficiente. | Lei dos Compromissos e Pagamentos em Atraso (Lei n.º 8/2012). |
-| RN-602 | bloqueio | RF26, RF31 | não | A conferência só pode iniciar-se estando presentes os dois documentos obrigatórios em PDF: a fatura e, consoante o tipo de faturação, o relatório de horas do fornecedor (bolsa de horas) ou o auto de entrega (entregável). | O circuito de validação técnica funciona sobre PDF. Ver secção 5.3.2. |
+| RN-602 | bloqueio | RF26, RF31 | não | A conferência só pode iniciar-se com a evidência documental em PDF: a fatura e, consoante o tipo de faturação, o relatório de horas do fornecedor (bolsa de horas) ou o auto de entrega (entregável). A fatura e o relatório podem vir no mesmo ficheiro. O licenciamento basta-se com a fatura. | O circuito de validação técnica funciona sobre PDF. Ver secção 5.3.2. |
 | RN-602-A | bloqueio | novo | não | O hash de um documento associado a uma fatura já decidida (VALIDADA ou INVALIDADA) não pode ser alterado. Substituir obriga a reabrir a conferência. | Garante que o relatório de evidência se refere sempre ao documento efetivamente conferido. |
 | RN-603 | bloqueio | RF26 (parte determinística) | não | A conferência compara as linhas da fatura com os registos aprovados do período, por perfil e por recurso. Divergência em quantidade ou valor bloqueia a validação. | Esta é a conferência que não precisa de IA: comparam-se números, não documentos. |
 | RN-604 | bloqueio | RF27, RF28 | não | Toda a validação (ou invalidação) gera RelatorioEvidencia arquivado e imutável. | — |
-| RN-605 | aviso | novo | não | Registar dataLimitePagamento e sinalizar aproximação e incumprimento do prazo. | Indicador de desempenho da própria entidade. |
-| RN-606 | bloqueio | novo | não | Suportar deduções e notas de crédito, refletidas no montante aprovado. | Penalidades contratuais (CCP, art. 329.º) e correções. |
 | RN-607 | bloqueio | novo | não | O somatório de montantes aprovados não pode exceder precoContratualAtual. | — |
 | RN-608 | bloqueio | novo | não | A faturação de um entregável exige que este esteja identificado na fatura e assinalado como entregue. | Nos contratos de preço fixo o facto gerador da faturação é a entrega e aceitação do resultado. |
 | RN-609 | bloqueio | novo | não | O montante de uma fatura de entregável tem de corresponder exatamente ao valor do entregável. | No preço fixo não há faturação parcial nem por medição do entregável. |
+| RN-610 | bloqueio | novo | não | Um contrato de licenciamento admite uma única fatura de valor positivo, correspondente à totalidade do contrato. Notas de crédito não são abrangidas. | No licenciamento contrata-se um direito de uso por um período, faturado de uma só vez. |
+| RN-611 | bloqueio | novo | não | O montante da fatura de um contrato de licenciamento tem de corresponder à totalidade do preço contratual atual. | Faturação única: não há faturação parcial de um licenciamento. |
 
 ## Recursos e habilitações
 

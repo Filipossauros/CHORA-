@@ -41,11 +41,6 @@ const zLinhaFatura = z.object({
 });
 export type LinhaFatura = z.infer<typeof zLinhaFatura>;
 
-const zDeducao = z.object({
-  motivo: z.string().min(1),
-  montante: zCent,
-});
-
 export const zFatura = zAuditavel.extend({
   id: z.string().min(1),
   contratoId: z.string().min(1),
@@ -68,10 +63,9 @@ export const zFatura = zAuditavel.extend({
   montanteIva: zCent,
   linhas: z.array(zLinhaFatura),
   estado: zEstadoFatura,
-  dataLimitePagamento: zDataISO.optional(),
+  /** Data da DECISÃO (validação ou invalidação). Não há data de pagamento. */
   dataAprovacao: zDataISO.optional(),
   montanteAprovado: zCent.optional(),
-  deducoes: z.array(zDeducao).optional(),
   relatorioEvidenciaId: z.string().optional(),
 });
 export type Fatura = z.infer<typeof zFatura>;

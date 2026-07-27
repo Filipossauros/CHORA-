@@ -4,7 +4,7 @@ import {
   portariaExigeReprogramacao, anoFinalPortaria, montantePortariaAno, mesesGanhosComReprogramacao,
   terminoExecucaoAjustado, periodosSuspensao, mesesEntre, vigenciaLiquidaMeses, LIMITE_VIGENCIA_MESES,
   preverPerfil, preverContrato, ritmoValorDia, escadaOpcoesPerfil, prazoMaisCurto,
-  janelaTransicaoAno, janelaReprogramacaoPortaria, janelaModificacao, janelaNovoProcedimento, severidadePorJanela,
+  janelaTransicaoAno, janelaReprogramacaoPortaria, janelaModificacao, janelaNovoProcedimento, janelaRenovacaoLicenca, severidadePorJanela,
   fimAnoEconomico, diaDeInstante, diasEntre, diasUteisEntre, adicionarDias,
   reconciliarAlertas, chaveAlerta, definicaoAlerta,
   type Alerta, type AlertaCalculado, type OpcaoAlerta, type SeveridadeAlerta, type Contrato, type DataISO,
@@ -152,18 +152,6 @@ export class JobAlertas {
         ...this.fimDeCiclo(contrato, hoje, meses, destinatario),
         ...this.higiene(contrato, hoje, alteracoes, aprovados, destinatario),
       );
-    }
-
-    // AL-FATURA-PRAZO (transversal às faturas por pagar)
-    const faturas = await this.ctx.repos.faturas.todos((f) => f.dataLimitePagamento !== undefined && f.estado !== 'PAGA');
-    for (const f of faturas) {
-      const limite = f.dataLimitePagamento;
-      if (limite !== undefined) {
-        const sev: SeveridadeAlerta = limite < hoje ? 'CRITICO' : 'AVISO';
-        const contrato = await this.ctx.repos.contratos.obter(f.contratoId);
-        const destinatario = contrato !== null ? this.gestorPrincipal(contrato.gestores) : 'sem-gestor';
-        calculados.push(this.novoAlerta(f.contratoId, 'AL-FATURA-PRAZO', sev, 'Prazo de pagamento de fatura', `Fatura ${f.numero} com prazo ${limite}.`, destinatario, { referencia: f.id }));
-      }
     }
 
     // RECONCILIAÇÃO — em vez de regerar tudo, cruza as decisões calculadas com
@@ -359,6 +347,19 @@ export class JobAlertas {
   // ─── D · Fim de ciclo ────────────────────────────────────────────────────
   private fimDeCiclo(contrato: Contrato, hoje: DataISO, meses: number, destinatario: string): AlertaCalculado[] {
     const out: AlertaCalculado[] = [];
+
+    // AL-LICENCA-A-EXPIRAR — renovar uma licença é adquirir de novo, e isso leva
+    // tempo: a janela conta a duração do procedimento a partir do fim da licença.
+    const licenca = contrato.vigenciaLicenciamento;
+    if (licenca !== undefined) {
+      const j = janelaRenovacaoLicenca(hoje, licenca.ate);
+      if (j.diasParaLimite <= 180) {
+        out.push(this.novoAlerta(contrato.id, 'AL-LICENCA-A-EXPIRAR', 'AVISO',
+          'Licenciamento a expirar',
+          `As licenças cobrem até ${licenca.ate}. Sem renovação, o direito de uso cessa nessa data.` + this.prazo(j),
+          destinatario, { janela: j }));
+      }
+    }
 
     // AL-NOVO-PROCEDIMENTO — trabalha para trás a partir do término.
     const exigeVisto = contrato.vistoTribunalContasNecessario;

@@ -678,7 +678,6 @@ components:
         - VALIDADA
         - INVALIDADA
         - DEVOLVIDA
-        - PAGA
     TipoDotacao:
       type: string
       enum:

@@ -76,6 +76,16 @@ export function janelaModificacao(hoje: DataISO, dataEfeitos: DataISO): JanelaDe
 }
 
 /**
+ * Janela para renovar (ou substituir) um licenciamento antes de a licença
+ * expirar. Conta com o tempo de instrução de um procedimento, porque renovar
+ * uma licença é adquirir de novo — não é um ato interno.
+ */
+export function janelaRenovacaoLicenca(hoje: DataISO, fimLicenca: DataISO): JanelaDecisao {
+  const meses = valorLegal('INSTRUCAO_PROCEDIMENTO_MESES', 5);
+  return janelaDecisao(hoje, fimLicenca, Math.round(meses * 30.436875), 'fim da vigência do licenciamento');
+}
+
+/**
  * Janela para lançar um novo procedimento a tempo de haver contrato quando o
  * atual terminar. Soma a duração do procedimento e, se houver fiscalização
  * prévia, o acréscimo do visto do Tribunal de Contas.

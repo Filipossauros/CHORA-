@@ -1,5 +1,5 @@
 import {
-  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, exigir, ViolacaoRegra,
+  RN_601, RN_602, RN_602_A, RN_603, RN_604, RN_607, RN_608, RN_609, RN_610, RN_611, exigir, ViolacaoRegra,
   totalFaturado, dentroDoIntervalo, maquinaFatura,
   type Fatura, type Compromisso, type DataISO, type Cent, type AnoCivil,
   type LinhaConferencia, type TipoFaturacao,
@@ -20,6 +20,9 @@ export interface ResultadoConferencia {
   linhas: LinhaConferencia[];
   conforme: boolean;
   entregavel?: { designacao: string; valor: Cent; entregue: boolean; entregueEm?: DataISO };
+  /** Contexto da licença, quando o que se confere é um licenciamento. */
+  licenciamento?: { precoContratual: Cent; vigencia?: { de: DataISO; ate: DataISO } };
+  /** Motivo da não conformidade, já redigido — evita obrigar a escrevê-lo. */
   motivo?: string;
 }
 
@@ -46,9 +49,18 @@ export class ServicoFaturas {
     u: ContextoUtilizador,
   ): Promise<Fatura> {
     const agora = this.ctx.relogio.agora();
-    // Por omissão a fatura liquida tempo prestado: é o comportamento de todos os
-    // contratos, exceto os entregáveis dos chave-na-mão.
-    const tipo: TipoFaturacao = dados.tipo ?? 'BOLSA_HORAS';
+    const contrato = await this.ctx.repos.contratos.obter(contratoId);
+    if (contrato === null) throw new ErroNaoEncontrado(`Contrato ${contratoId} inexistente.`);
+    // O tipo vem do contrato quando não é indicado: é o contrato que determina o
+    // que se pode faturar, e obrigar a escolhê-lo à mão só convida ao engano.
+    const tipo: TipoFaturacao = dados.tipo ?? (contrato.tipologia === 'LICENCIAMENTO' ? 'LICENCIAMENTO' : 'BOLSA_HORAS');
+
+    // RN-610/RN-611 — o licenciamento tem UMA fatura, pela totalidade.
+    if (tipo === 'LICENCIAMENTO') {
+      const existentes = await this.ctx.repos.faturas.todos((f) => f.contratoId === contratoId && f.montanteSemIva > 0 && f.estado !== 'INVALIDADA');
+      exigir(RN_610, { tipoFaturacao: tipo, faturasPositivasExistentes: existentes.length, montante: dados.montanteSemIva });
+      exigir(RN_611, { tipoFaturacao: tipo, montante: dados.montanteSemIva, precoContratualAtual: contrato.precoContratualAtual });
+    }
 
     // RN-608/RN-609 — uma fatura de entregável exige entregável identificado,
     // assinalado como entregue, e montante igual ao valor do entregável.
@@ -128,6 +140,19 @@ export class ServicoFaturas {
   async conferir(faturaId: string): Promise<ResultadoConferencia> {
     const fatura = await this.carregar(faturaId);
 
+    if (fatura.tipo === 'LICENCIAMENTO') {
+      const contrato = await this.ctx.repos.contratos.obter(fatura.contratoId);
+      const r611 = RN_611.avaliar({ tipoFaturacao: 'LICENCIAMENTO', montante: fatura.montanteSemIva, precoContratualAtual: contrato?.precoContratualAtual ?? 0 });
+      return {
+        linhas: [], conforme: r611.ok,
+        licenciamento: {
+          precoContratual: contrato?.precoContratualAtual ?? 0,
+          vigencia: contrato?.vigenciaLicenciamento,
+        },
+        ...(!r611.ok ? { motivo: r611.mensagem } : {}),
+      };
+    }
+
     if (fatura.tipo === 'ENTREGAVEL') {
       const e = fatura.entregavelId !== undefined ? await this.ctx.repos.entregaveis.obter(fatura.entregavelId) : null;
       const r608 = RN_608.avaliar({ tipoFaturacao: 'ENTREGAVEL', entregavelIdentificado: e !== null, entregue: e?.entregue ?? false });
@@ -153,7 +178,53 @@ export class ServicoFaturas {
       };
     });
     const resultado = RN_603.avaliar({ linhas });
-    return { linhas, conforme: resultado.ok };
+    return {
+      linhas, conforme: resultado.ok,
+      ...(resultado.ok ? {} : { motivo: motivoDivergencia(linhas) }),
+    };
+  }
+
+  /**
+   * RECEBER E CONFERIR numa só operação. A receção, a passagem a conferência e a
+   * conferência determinística não têm decisão pelo meio: separá-las em três
+   * cliques só adiava o único ecrã que interessa — o do resultado.
+   */
+  async receberEConferir(
+    contratoId: string,
+    dados: Parameters<ServicoFaturas['criarFatura']>[1] & { documentos?: DocFatura[]; linhas?: LinhaFatura[] },
+    u: ContextoUtilizador,
+  ): Promise<{ fatura: Fatura; conferencia: ResultadoConferencia }> {
+    const { documentos = [], linhas, ...resto } = dados;
+    const criada = await this.criarFatura(contratoId, resto, u);
+    for (const doc of documentos) await this.anexarDocumento(criada.id, doc, u);
+    // As linhas vêm da extração; quando não vêm, derivam-se dos registos
+    // aprovados do período, que é a base contra a qual a fatura é conferida.
+    const aExtrair = linhas ?? await this.linhasSugeridas(criada);
+    if (aExtrair.length > 0) await this.definirLinhas(criada.id, aExtrair, u);
+    const emConferencia = await this.iniciarConferencia(criada.id, u);
+    return { fatura: emConferencia, conferencia: await this.conferir(criada.id) };
+  }
+
+  /**
+   * Linhas propostas a partir dos registos aprovados do período — o resultado da
+   * extração no protótipo (o OCR real entra por `IFaturaValidator`, secção 14).
+   */
+  async linhasSugeridas(fatura: Fatura): Promise<LinhaFatura[]> {
+    if (fatura.tipo !== 'BOLSA_HORAS') return [];
+    const aprovados = await this.ctx.repos.registosTempo.todos(
+      (r) => r.contratoId === fatura.contratoId && r.estado === 'APROVADO' && dentroDoIntervalo(r.data, fatura.periodoDe, fatura.periodoAte),
+    );
+    const grupos = new Map<string, LinhaFatura>();
+    for (const r of aprovados) {
+      const chave = `${r.perfilId}|${r.recursoId}`;
+      const atual = grupos.get(chave);
+      if (atual === undefined) {
+        grupos.set(chave, { perfilId: r.perfilId, recursoId: r.recursoId, quantidade: r.duracao, valorHora: r.valorHoraAplicado, montante: r.valorImputado, origem: 'EXTRAIDA' });
+      } else {
+        grupos.set(chave, { ...atual, quantidade: atual.quantidade + r.duracao, montante: atual.montante + r.valorImputado });
+      }
+    }
+    return [...grupos.values()];
   }
 
   /**
@@ -205,7 +276,7 @@ export class ServicoFaturas {
   }
 
   private async saldoCompromisso(compromisso: Compromisso, faturaAtualId: string): Promise<Cent> {
-    const faturas = await this.ctx.repos.faturas.todos((f) => f.compromissoId === compromisso.id && f.id !== faturaAtualId && (f.estado === 'VALIDADA' || f.estado === 'PAGA'));
+    const faturas = await this.ctx.repos.faturas.todos((f) => f.compromissoId === compromisso.id && f.id !== faturaAtualId && f.estado === 'VALIDADA');
     const usado = faturas.reduce((s, f) => s + (f.montanteAprovado ?? 0), 0);
     return compromisso.montante - usado;
   }
@@ -254,4 +325,25 @@ export function gerarFraseEvidencia(dados: { decisao: 'VALIDADA' | 'INVALIDADA';
     `verifica-se não conformidade que obsta à validação, pelo seguinte motivo: ${motivo}. ` +
     `A presente informação reporta exclusivamente a não conformidade verificada, não constituindo reconhecimento sobre a realização dos trabalhos nem qualquer outra vinculação.`
   );
+}
+
+/**
+ * Descreve a divergência entre a fatura e os registos aprovados, em linguagem
+ * de ofício. É gerada dos próprios números: quem confere não deve ter de
+ * redigir o que a aplicação já sabe — só de rever e assinar.
+ */
+export function motivoDivergencia(linhas: ReadonlyArray<LinhaConferencia>): string {
+  const div = linhas.filter((l) => l.quantidadeFatura !== l.quantidadeAprovada || l.valorFatura !== l.valorAprovado);
+  if (div.length === 0) {
+    return 'Fatura não conforme com os elementos de execução aprovados no período.';
+  }
+  const h = (min: number): string => `${Math.round(min / 60)} h`;
+  const eur = (c: number): string => `${(c / 100).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+  const partes = div.map((l) => {
+    const bits: string[] = [];
+    if (l.quantidadeFatura !== l.quantidadeAprovada) bits.push(`quantidade faturada de ${h(l.quantidadeFatura)} contra ${h(l.quantidadeAprovada)} aprovadas`);
+    if (l.valorFatura !== l.valorAprovado) bits.push(`valor faturado de ${eur(l.valorFatura)} contra ${eur(l.valorAprovado)} aprovado`);
+    return `${l.perfilId ?? 'perfil não identificado'}${l.recursoId !== undefined ? ` / ${l.recursoId}` : ''}: ${bits.join('; ')}`;
+  });
+  return `Divergência entre as linhas da fatura e os registos de tempo aprovados do período — ${partes.join(' · ')}.`;
 }

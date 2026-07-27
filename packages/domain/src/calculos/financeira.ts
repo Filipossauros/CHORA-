@@ -103,16 +103,10 @@ export function percentagemDoValor(precoContratual: Cent, valor: Cent): number {
   return precoContratual > 0 ? valor / precoContratual : 0;
 }
 
-/** Montante líquido aprovado de uma fatura (montanteAprovado menos deduções). */
-export function montanteLiquidoFatura(fatura: Fatura): Cent {
-  const bruto = fatura.montanteAprovado ?? 0;
-  const deducoes = (fatura.deducoes ?? []).reduce((s, d) => s + d.montante, 0);
-  return bruto - deducoes;
-}
 
 /** Somatório dos montantes aprovados de um conjunto de faturas (RN-607). */
 export function totalFaturado(faturas: ReadonlyArray<Fatura>): Cent {
   return faturas
-    .filter((f) => f.estado === 'VALIDADA' || f.estado === 'PAGA')
-    .reduce((s, f) => s + montanteLiquidoFatura(f), 0);
+    .filter((f) => f.estado === 'VALIDADA')
+    .reduce((s, f) => s + (f.montanteAprovado ?? f.montanteSemIva), 0);
 }

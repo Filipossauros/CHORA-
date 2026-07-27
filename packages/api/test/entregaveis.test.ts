@@ -196,3 +196,128 @@ describe('faturação de entregáveis (RN-608 e RN-609)', () => {
     expect(relatorio.frase).not.toContain('registos de tempo aprovados');
   });
 });
+
+describe('licenciamento — uma fatura, pela totalidade', () => {
+  async function licenciamento(ctx: Contexto, numero: string): Promise<{ id: string; preco: number }> {
+    const c = (await ctx.repos.contratos.todos((x) => x.numero === numero))[0]!;
+    return { id: c.id, preco: c.precoContratualAtual };
+  }
+  const fat = (over: Record<string, unknown>) => ({
+    numero: 'FT-LIC-NOVA', dataEmissao: '2026-07-01', dataRececao: '2026-07-01',
+    periodoDe: '2026-07-01', periodoAte: '2027-06-30', montanteIva: 0, ...over,
+  });
+
+  it('fatura o contrato de licenciamento pela totalidade', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const { id, preco } = await licenciamento(ctx, 'C-2026-LIC2');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ montanteSemIva: preco }) });
+    expect(r.statusCode).toBe(201);
+    // O tipo é derivado do contrato, sem ter de ser indicado.
+    expect((r.json() as { tipo: string }).tipo).toBe('LICENCIAMENTO');
+  });
+
+  it('recusa faturação parcial de um licenciamento (RN-611)', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const { id, preco } = await licenciamento(ctx, 'C-2026-LIC2');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ montanteSemIva: Math.floor(preco / 2) }) });
+    expect(r.statusCode).toBe(422);
+    expect((r.json() as { regra?: string }).regra).toBe('RN-611');
+  });
+
+  it('recusa a segunda fatura de um licenciamento (RN-610)', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    // O C-2026-LIC1 já vem faturado no seed.
+    const { id, preco } = await licenciamento(ctx, 'C-2026-LIC1');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ montanteSemIva: preco }) });
+    expect(r.statusCode).toBe(422);
+    expect((r.json() as { regra?: string }).regra).toBe('RN-610');
+  });
+
+  it('a nota de crédito passa, porque corrige em vez de acrescentar', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const { id } = await licenciamento(ctx, 'C-2026-LIC1');
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${id}/faturas`, headers: comoGestor(), payload: fat({ numero: 'NC-2026/1', montanteSemIva: -5_000_00 }) });
+    expect(r.statusCode).toBe(201);
+  });
+
+  it('recusa criar licenciamento sem vigência da licença (RN-113)', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const r = await app.inject({ method: 'POST', url: '/api/v1/contratos', headers: comoGestor(), payload: {
+      numero: 'C-2026-LICX', objeto: 'Licenças', tipologia: 'LICENCIAMENTO', estado: 'EM_VIGOR',
+      precoContratualInicial: 10_000_00, precoContratualAtual: 10_000_00,
+      prestador: { nome: 'X', nipc: '500000001' },
+      dataAssinaturaCA: '2026-01-01', dataInicioVigencia: '2026-01-01', dataTerminoContratual: '2027-01-01',
+      vistoTribunalContasNecessario: false, gestores: [{ utilizadorId: 'oid-gestor-contrato', principal: true }], excecoes: [],
+    } });
+    expect(r.statusCode).toBe(422);
+    expect((r.json() as { regra?: string }).regra).toBe('RN-113');
+  });
+
+  it('recusa licença que ultrapassa a vigência do contrato (RN-114)', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const r = await app.inject({ method: 'POST', url: '/api/v1/contratos', headers: comoGestor(), payload: {
+      numero: 'C-2026-LICY', objeto: 'Licenças', tipologia: 'LICENCIAMENTO', estado: 'EM_VIGOR',
+      precoContratualInicial: 10_000_00, precoContratualAtual: 10_000_00,
+      prestador: { nome: 'X', nipc: '500000001' },
+      dataAssinaturaCA: '2026-01-01', dataInicioVigencia: '2026-01-01', dataTerminoContratual: '2027-01-01',
+      vigenciaLicenciamento: { de: '2026-01-01', ate: '2028-01-01' },
+      vistoTribunalContasNecessario: false, gestores: [{ utilizadorId: 'oid-gestor-contrato', principal: true }], excecoes: [],
+    } });
+    expect(r.statusCode).toBe(422);
+    expect((r.json() as { regra?: string }).regra).toBe('RN-114');
+  });
+});
+
+describe('receber e conferir numa transição', () => {
+  it('recebe, extrai as linhas dos registos aprovados e devolve a conferência', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const contrato = (await ctx.repos.contratos.todos((c) => c.numero === 'C-2026-001'))[0]!;
+    const aprovados = await ctx.repos.registosTempo.todos((r) => r.contratoId === contrato.id && r.estado === 'APROVADO');
+    const total = aprovados.reduce((s, r) => s + r.valorImputado, 0);
+    const compromisso = await app.inject({ method: 'POST', url: `/api/v1/contratos/${contrato.id}/compromissos`, headers: comoGestor(), payload: { numero: 'CMP-RC', montante: 100_000_00, ano: 2026, emitidoEm: '2026-01-01' } });
+
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${contrato.id}/faturas:receber-e-conferir`, headers: comoGestor(), payload: {
+      compromissoId: (compromisso.json() as { id: string }).id, numero: 'FT-RC-001',
+      dataEmissao: '2026-07-01', dataRececao: '2026-07-01',
+      periodoDe: aprovados[0]!.data, periodoAte: aprovados[0]!.data,
+      montanteSemIva: total, montanteIva: 0,
+      // Um único ficheiro com fatura e relatório (RN-602).
+      documentos: [{ tipo: 'FATURA_COM_RELATORIO', ficheiroRef: 'a', nomeOriginal: 'f.pdf', hashSha256: h('a'), tamanhoBytes: 1 }],
+    } });
+    expect(r.statusCode).toBe(201);
+    const { fatura, conferencia } = r.json() as { fatura: { estado: string; linhas: unknown[] }; conferencia: { conforme: boolean; linhas: unknown[] } };
+    // Uma só chamada deixa a fatura em conferência, com linhas e resultado.
+    expect(fatura.estado).toBe('EM_CONFERENCIA');
+    expect(fatura.linhas.length).toBeGreaterThan(0);
+    expect(conferencia.conforme).toBe(true);
+    expect(conferencia.linhas.length).toBeGreaterThan(0);
+  });
+
+  it('divergência traz o motivo já redigido', async () => {
+    const { app, ctx } = await montarApp();
+    fechar = () => app.close();
+    const contrato = (await ctx.repos.contratos.todos((c) => c.numero === 'C-2026-001'))[0]!;
+    const aprovado = (await ctx.repos.registosTempo.todos((r) => r.contratoId === contrato.id && r.estado === 'APROVADO'))[0]!;
+    const compromisso = await app.inject({ method: 'POST', url: `/api/v1/contratos/${contrato.id}/compromissos`, headers: comoGestor(), payload: { numero: 'CMP-RC2', montante: 100_000_00, ano: 2026, emitidoEm: '2026-01-01' } });
+
+    const r = await app.inject({ method: 'POST', url: `/api/v1/contratos/${contrato.id}/faturas:receber-e-conferir`, headers: comoGestor(), payload: {
+      compromissoId: (compromisso.json() as { id: string }).id, numero: 'FT-RC-002',
+      dataEmissao: '2026-07-01', dataRececao: '2026-07-01', periodoDe: aprovado.data, periodoAte: aprovado.data,
+      montanteSemIva: 99_00, montanteIva: 0,
+      documentos: [{ tipo: 'FATURA_COM_RELATORIO', ficheiroRef: 'a', nomeOriginal: 'f.pdf', hashSha256: h('a'), tamanhoBytes: 1 }],
+      // Linhas com o dobro das horas efetivamente aprovadas.
+      linhas: [{ perfilId: aprovado.perfilId, recursoId: aprovado.recursoId, quantidade: aprovado.duracao * 2, valorHora: aprovado.valorHoraAplicado, montante: aprovado.valorImputado * 2, origem: 'EXTRAIDA' }],
+    } });
+    const { conferencia } = r.json() as { conferencia: { conforme: boolean; motivo?: string } };
+    expect(conferencia.conforme).toBe(false);
+    expect(conferencia.motivo).toContain('Divergência');
+    expect(conferencia.motivo).toContain('quantidade faturada');
+  });
+});

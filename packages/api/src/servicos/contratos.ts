@@ -1,5 +1,5 @@
 import {
-  RN_101, RN_201, RN_202, exigir,
+  RN_101, RN_113, RN_114, RN_201, RN_202, exigir,
   maquinaContrato, complementaresAcumulados, percentagemComplementares,
   calcularConsumoPerfil, valorPrevistoPerfil, vistoAssegurado, AgenteCCPStub,
   type Contrato, type EstadoContrato, type Alteracao, type Cent, type DataISO,
@@ -28,6 +28,18 @@ export class ServicoContratos {
       dataInicioVigencia: contrato.dataInicioVigencia,
       dataTerminoContratual: contrato.dataTerminoContratual,
       temExcecao: contrato.excecoes.some((e) => e.regra === 'RN-202'),
+    });
+    // LICENCIAMENTO: a vigência da licença é obrigatória e cabe na do contrato.
+    exigir(RN_113, {
+      tipologia: contrato.tipologia ?? 'BOLSA_HORAS',
+      temVigenciaLicenciamento: contrato.vigenciaLicenciamento !== undefined,
+    });
+    exigir(RN_114, {
+      tipologia: contrato.tipologia ?? 'BOLSA_HORAS',
+      licencaDe: contrato.vigenciaLicenciamento?.de,
+      licencaAte: contrato.vigenciaLicenciamento?.ate,
+      contratoDe: contrato.dataInicioVigencia,
+      contratoAte: contrato.dataTerminoContratual,
     });
     if (contrato.gestores.length === 0) {
       throw new ErroValidacao('O contrato tem de ter um gestor designado.');

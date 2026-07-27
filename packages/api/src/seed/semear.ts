@@ -268,7 +268,9 @@ export async function semear(ctx: Contexto): Promise<void> {
   const docRelatorio = { tipo: 'RELATORIO_HORAS_FORNECEDOR' as const, ficheiroRef: 'arq://r1', nomeOriginal: 'horas.pdf', hashSha256: 'b'.repeat(64), tamanhoBytes: 2048, recebidoEm: agora, carregadoPor: 'oid-gestor-contrato' };
   const docAuto = { tipo: 'AUTO_ENTREGA' as const, ficheiroRef: 'arq://a1', nomeOriginal: 'auto-entrega.pdf', hashSha256: 'c'.repeat(64), tamanhoBytes: 1536, recebidoEm: agora, carregadoPor: 'oid-gestor-contrato' };
 
-  // Fatura 1 — completa e conforme.
+  const docCombinado = { tipo: 'FATURA_COM_RELATORIO' as const, ficheiroRef: 'arq://fc1', nomeOriginal: 'fatura-e-horas.pdf', hashSha256: 'e'.repeat(64), tamanhoBytes: 3072, recebidoEm: agora, carregadoPor: 'oid-gestor-contrato' };
+
+  // Fatura 1 — bolsa de horas conforme, com fatura e relatório em separado.
   await repos.faturas.guardar(fatura({ id: ids.novo('fat'), numero: 'FT-001', documentos: [docFatura, docRelatorio],
     linhas: [{ perfilId: perfilSenior.id, recursoId: 'oid-recurso-01', quantidade: 480, valorHora: 5000, montante: 40000, origem: 'MANUAL' }] }));
   // Fatura 2 — sem relatório de horas (aciona RN-602).
@@ -276,6 +278,14 @@ export async function semear(ctx: Contexto): Promise<void> {
   // Fatura 3 — divergência de quantidade (aciona RN-603).
   await repos.faturas.guardar(fatura({ id: ids.novo('fat'), numero: 'FT-003', documentos: [docFatura, docRelatorio],
     linhas: [{ perfilId: perfilSenior.id, recursoId: 'oid-recurso-01', quantidade: 600, valorHora: 5000, montante: 50000, origem: 'MANUAL' }] }));
+  // Fatura 4 — bolsa de horas com a fatura e o relatório NO MESMO ficheiro, já
+  // decidida: dá história ao relatório de faturação aprovada.
+  await repos.faturas.guardar(fatura({
+    id: ids.novo('fat'), numero: 'FT-004', documentos: [docCombinado],
+    linhas: [{ perfilId: perfilSenior.id, recursoId: 'oid-recurso-01', quantidade: 240, valorHora: 5000, montante: 20000, origem: 'EXTRAIDA' }],
+    dataEmissao: '2026-04-01', dataRececao: '2026-04-02', periodoDe: '2026-03-01', periodoAte: '2026-03-31',
+    montanteSemIva: 20000, montanteIva: 4600, estado: 'VALIDADA', montanteAprovado: 20000, dataAprovacao: '2026-04-05',
+  }));
 
   // Faturação do contrato chave-na-mão: o E1 (entregue) já foi liquidado por
   // uma fatura do tipo ENTREGAVEL, pelo montante exato do entregável (RN-609).
@@ -290,7 +300,7 @@ export async function semear(ctx: Contexto): Promise<void> {
       tipo: 'ENTREGAVEL', entregavelId: idE1,
       documentos: [docFatura, docAuto], linhas: [],
       dataEmissao: isoMeses(-6), dataRececao: isoMeses(-6), periodoDe: isoMeses(-8), periodoAte: isoMeses(-6),
-      montanteSemIva: 30_000_00, montanteIva: 6_900_00, estado: 'PAGA',
+      montanteSemIva: 30_000_00, montanteIva: 6_900_00, estado: 'VALIDADA',
       montanteAprovado: 30_000_00, ...audit,
     });
     const e1 = await repos.entregaveis.obter(idE1);
@@ -497,24 +507,40 @@ async function semearCenariosDeAlerta(ctx: Contexto, c: ContextoCenarios): Promi
   await repos.contratos.guardar(pSemVisto);
   await comExecucao(pSemVisto, 'Consultor Funcional', 3000, 4000, 200, isoMeses(-1));
 
-  // ── Q · Fatura com prazo de pagamento ultrapassado ────────────────────────
-  const qFatura = base({
-    id: ids.novo('ctr'), numero: 'C-2026-FT1',
-    objeto: 'Contrato com fatura por pagar fora de prazo',
-    dataInicioVigencia: isoMeses(-7), dataTerminoContratual: isoMeses(17), dataTerminoOriginal: isoMeses(17),
+  // ── Q · LICENCIAMENTO com a licença a expirar ─────────────────────────────
+  // Uma licença anual a três meses do fim: o procedimento de renovação demora
+  // mais do que isso, pelo que o prazo já vai apertado (AL-LICENCA-A-EXPIRAR).
+  const qLicenca = base({
+    id: ids.novo('ctr'), numero: 'C-2026-LIC1', tipologia: 'LICENCIAMENTO',
+    objeto: 'Licenciamento anual de software de gestão documental',
+    precoContratualInicial: 48_000_00, precoContratualAtual: 48_000_00,
+    dataInicioVigencia: isoMeses(-9), dataTerminoContratual: isoMeses(15), dataTerminoOriginal: isoMeses(15),
+    vigenciaLicenciamento: { de: isoMeses(-9), ate: isoMeses(3) },
   });
-  await repos.contratos.guardar(qFatura);
-  await comExecucao(qFatura, 'Programador Full-stack', 1100, 3500, 250, isoMeses(-1));
-  const cmpQ: Compromisso = { id: ids.novo('cmp'), contratoId: qFatura.id, numero: 'CMP-2026-9', montante: 60_000_00, ano: anoAtual, emitidoEm: isoMeses(-7), ...audit };
+  await repos.contratos.guardar(qLicenca);
+  const cmpQ: Compromisso = { id: ids.novo('cmp'), contratoId: qLicenca.id, numero: 'CMP-2026-9', montante: 48_000_00, ano: anoAtual, emitidoEm: isoMeses(-9), ...audit };
   await repos.compromissos.guardar(cmpQ);
+  // Já faturada pela totalidade: é assim que um licenciamento se fatura (RN-611).
   await repos.faturas.guardar({
-    id: ids.novo('fat'), contratoId: qFatura.id, compromissoId: cmpQ.id, numero: 'FT-2026/0910',
-    documentos: [], linhas: [], dataEmissao: isoMeses(-3), dataRececao: isoMeses(-3),
-    periodoDe: isoMeses(-4), periodoAte: isoMeses(-3),
-    montanteSemIva: 12_000_00, montanteIva: 2_760_00,
-    dataLimitePagamento: isoMeses(-1), // prazo já ultrapassado
-    estado: 'VALIDADA', tipo: 'BOLSA_HORAS', ...audit,
+    id: ids.novo('fat'), contratoId: qLicenca.id, compromissoId: cmpQ.id, numero: 'FT-2026/0910',
+    documentos: [{ tipo: 'FATURA' as const, ficheiroRef: 'arq://lic1', nomeOriginal: 'fatura-licenca.pdf', hashSha256: 'd'.repeat(64), tamanhoBytes: 1024, recebidoEm: agora, carregadoPor: 'oid-gestor-contrato' }],
+    linhas: [], dataEmissao: isoMeses(-9), dataRececao: isoMeses(-9),
+    periodoDe: isoMeses(-9), periodoAte: isoMeses(3),
+    montanteSemIva: 48_000_00, montanteIva: 11_040_00,
+    dataAprovacao: isoMeses(-8), montanteAprovado: 48_000_00,
+    estado: 'VALIDADA', tipo: 'LICENCIAMENTO', ...audit,
   });
+
+  // ── R · LICENCIAMENTO por faturar, para exercitar o fluxo de faturação ─────
+  const rLicenca = base({
+    id: ids.novo('ctr'), numero: 'C-2026-LIC2', tipologia: 'LICENCIAMENTO',
+    objeto: 'Licenciamento trienal de plataforma de assinatura digital',
+    precoContratualInicial: 90_000_00, precoContratualAtual: 90_000_00,
+    dataInicioVigencia: isoMeses(-1), dataTerminoContratual: isoMeses(35), dataTerminoOriginal: isoMeses(35),
+    vigenciaLicenciamento: { de: isoMeses(-1), ate: isoMeses(35) },
+  });
+  await repos.contratos.guardar(rLicenca);
+  await repos.compromissos.guardar({ id: ids.novo('cmp'), contratoId: rLicenca.id, numero: 'CMP-2026-10', montante: 90_000_00, ano: anoAtual, emitidoEm: isoMeses(-1), ...audit });
 }
 
 /** Resumo textual do seed, para o comando `pnpm seed`. */

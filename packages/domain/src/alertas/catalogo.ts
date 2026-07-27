@@ -284,12 +284,18 @@ export const CATALOGO_ALERTAS: ReadonlyArray<DefinicaoAlerta> = [
       'Regularizar o visto não dispensa: a remessa do contrato ao Tribunal de Contas nos termos e prazos legais; e a proibição de produzir efeitos financeiros antes do visto, salvo nos casos legalmente admitidos. Os atos praticados antes do visto ficam sujeitos ao respetivo regime.',
   },
   {
-    codigo: 'AL-FATURA-PRAZO',
-    titulo: 'Prazo de pagamento de fatura',
-    descricao: 'Fatura por pagar com data-limite próxima ou ultrapassada.',
-    familia: 'Higiene e risco de auditoria',
+    codigo: 'AL-LICENCA-A-EXPIRAR',
+    titulo: 'Licenciamento a expirar',
+    descricao:
+      'A vigência das licenças aproxima-se do fim. Sem renovação, o direito de uso cessa na data indicada.',
+    familia: 'Fim de ciclo',
     severidadeBase: 'AVISO',
-    base: 'Prazos de pagamento a fornecedores.',
+    temJanelaDecisao: true,
+    eventoAncora: 'fim da vigência do licenciamento',
+    regraRelacionada: 'RN-113',
+    base: 'O licenciamento é um direito de uso por período determinado.',
+    notaJuridica:
+      'Renovar ou substituir o licenciamento não dispensa: a verificação de que a necessidade se mantém; a escolha do procedimento adequado ao valor e ao objeto, sem fracionamento da despesa; e o cabimento e compromisso prévios. A continuação de uso sem título válido não se regulariza a posteriori.',
   },
 ];
 

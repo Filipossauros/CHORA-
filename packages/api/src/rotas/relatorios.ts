@@ -51,7 +51,7 @@ export function rotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
     const aprovados = await ctx.repos.registosTempo.todos((r) => r.contratoId === contratoId && r.estado === 'APROVADO');
     const valorImputado = aprovados.reduce((s, r) => s + r.valorImputado, 0);
     const faturas = await ctx.repos.faturas.todos((f) => f.contratoId === contratoId);
-    const faturado = faturas.filter((f) => f.estado === 'VALIDADA' || f.estado === 'PAGA').reduce((s, f) => s + (f.montanteAprovado ?? 0), 0);
+    const faturado = faturas.filter((f) => f.estado === 'VALIDADA').reduce((s, f) => s + (f.montanteAprovado ?? 0), 0);
     return {
       contratoId,
       precoContratualAtual: contrato?.precoContratualAtual ?? 0,
@@ -60,6 +60,46 @@ export function rotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
         tipo, valor: aprovados.filter((r) => r.tipoDotacaoConsumida === tipo).reduce((s, r) => s + r.valorImputado, 0),
       })),
     };
+  });
+
+  /**
+   * FATURAÇÃO APROVADA por contrato e por mês. O «disponível» é corrido pela
+   * ordem cronológica das decisões: mostra quanto do contrato sobrava depois de
+   * cada fatura, que é a leitura de quem acompanha o esgotamento do valor.
+   * Só conta o APROVADO — o pagamento é do sistema financeiro da empresa.
+   */
+  app.get('/api/v1/relatorios/faturacao-aprovada', async (req) => {
+    exigirUtilizador(req);
+    const q = req.query as Record<string, string | undefined>;
+    const ano = q['ano'];
+    const contratos = await ctx.repos.contratos.todos(
+      q['contratoId'] !== undefined ? (c) => c.id === q['contratoId'] : undefined,
+    );
+    const linhas = [];
+    for (const contrato of contratos) {
+      const validadas = (await ctx.repos.faturas.todos((f) => f.contratoId === contrato.id && f.estado === 'VALIDADA'))
+        .filter((f) => ano === undefined || (f.dataAprovacao ?? f.dataRececao).startsWith(ano))
+        .sort((a, b) => ((a.dataAprovacao ?? a.dataRececao) < (b.dataAprovacao ?? b.dataRececao) ? -1 : 1));
+      if (validadas.length === 0) continue;
+      let acumulado = 0;
+      linhas.push({
+        contratoId: contrato.id, numero: contrato.numero, objeto: contrato.objeto,
+        precoContratualAtual: contrato.precoContratualAtual,
+        faturas: validadas.map((f) => {
+          const aprovado = f.montanteAprovado ?? f.montanteSemIva;
+          acumulado += aprovado;
+          return {
+            faturaId: f.id, numero: f.numero, tipo: f.tipo,
+            mes: (f.dataAprovacao ?? f.dataRececao).slice(0, 7),
+            montanteAprovado: aprovado,
+            disponivelApos: Math.max(0, contrato.precoContratualAtual - acumulado),
+          };
+        }),
+        totalAprovado: acumulado,
+        disponivel: Math.max(0, contrato.precoContratualAtual - acumulado),
+      });
+    }
+    return { dados: linhas };
   });
 
   app.get('/api/v1/relatorios/indicadores-gestor', async (req) => {

@@ -45,8 +45,10 @@ describe('máquina da fatura (secção 7.3)', () => {
     expect(maquinaFatura.transicaoPermitida('EM_CONFERENCIA', 'INVALIDADA', 'GESTOR_CONTRATO').permitida).toBe(true);
     expect(maquinaFatura.transicaoPermitida('EM_CONFERENCIA', 'DEVOLVIDA', 'GESTOR_CONTRATO').permitida).toBe(true);
   });
-  it('validada → paga', () =>
-    expect(maquinaFatura.transicaoPermitida('VALIDADA', 'PAGA', 'GESTOR_CONTRATO').permitida).toBe(true));
+  it('a decisão fecha o ciclo: não há transição de pagamento', () => {
+    // O pagamento acontece no sistema financeiro da empresa, fora da aplicação.
+    expect(maquinaFatura.transicoes.some((t) => t.de === 'VALIDADA')).toBe(false);
+  });
   it('recebida NÃO salta para validada', () =>
     expect(maquinaFatura.transicaoPermitida('RECEBIDA', 'VALIDADA', 'GESTOR_CONTRATO').permitida).toBe(false));
 });
