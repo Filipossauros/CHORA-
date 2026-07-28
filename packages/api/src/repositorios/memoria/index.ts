@@ -67,24 +67,51 @@ export interface Repositorios {
 }
 
 /**
- * Relatório ad-hoc: uma tabela composta no assistente, a pedido do utilizador.
+ * Um passo da receita: a função e os parâmetros com que correu.
  *
- * Guarda os DADOS tal como estavam quando foi criado, não a receita para os
- * recalcular. É deliberado: quem guarda um relatório quer o retrato daquele
- * dia, e um número que muda sozinho entre a exportação e a reunião não serve
- * para discutir nada. A proveniência fica ao lado, para se saber como se chegou
- * ali e se poder repetir a pergunta quando se quiser o valor de hoje.
+ * Guardam-se os PARÂMETROS, não a frase. Reencaminhar a frase no futuro
+ * dependeria do encaminhamento de então e da desambiguação que aconteceu
+ * naquela conversa e já não existe — se o utilizador escolheu um contrato de
+ * entre três, é o identificador que se guarda, não o texto ambíguo. A frase
+ * fica ao lado só para se ler o que se pediu.
+ */
+export interface PassoRelatorio {
+  capacidade: string;
+  parametros: Record<string, unknown>;
+  /** O que se pediu, em linguagem corrente. Não é executável. */
+  frase: string;
+}
+
+/**
+ * Relatório ad-hoc: uma pergunta composta no assistente e guardada para se
+ * voltar a fazer.
+ *
+ * Guarda a RECEITA, não os dados. É a diferença entre ter arquivado uma lista e
+ * ter construído um relatório: executado outra vez, responde com os números de
+ * hoje. O retrato de um dia — aquele que se leva a uma reunião e que tem de
+ * continuar a dizer o mesmo daqui a um ano — obtém-se descarregando o Excel,
+ * que leva a data da execução e a receita na segunda folha.
+ *
+ * Consequência de desenho que vale a pena ter presente: como a execução repete
+ * os passos, cada um volta a passar pela matriz de permissões de quem abre o
+ * relatório. Um relatório com faturação não mostra faturação a quem não a pode
+ * consultar — o que um retrato guardado não conseguiria garantir.
  */
 export interface RelatorioAdHoc {
   id: string;
   titulo: string;
   tipoEntidade: string;
-  colunas: string[];
-  linhas: Array<Array<string | number>>;
-  /** As perguntas que o construíram, por ordem. */
-  origem: Array<{ frase: string; capacidade: string }>;
+  /** Os passos, por ordem: a consulta que abre a lista e o que se lhe fez. */
+  passos: PassoRelatorio[];
+  /**
+   * O período dito é relativo à data de execução («este ano») ou fixo («2026»,
+   * ou datas explícitas)? Detetado ao guardar e alterável no relatório.
+   */
+  periodoRelativo: boolean;
   criadoEm: string;
   criadoPor: string;
+  /** Última vez que correu — serve de sinal de que os números mudaram. */
+  ultimaExecucao?: { em: string; por: string; linhas: number };
 }
 
 /** Orçamento anual da unidade, tal como fica guardado. */

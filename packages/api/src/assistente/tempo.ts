@@ -116,6 +116,28 @@ export function periodoNaFrase(frase: string, hoje: string): Periodo | undefined
   return undefined;
 }
 
+/**
+ * A frase pede um período RELATIVO à data em que é feita?
+ *
+ * Interessa a quem guarda uma pergunta para a repetir: «que contratos terminam
+ * este ano?» guardada em 2026 e executada em 2027 pode querer dizer 2026 (o
+ * exercício que se fechou) ou 2027 (o ano em que se está). Só quem guarda sabe,
+ * mas a aplicação tem de propor a leitura certa por omissão.
+ *
+ * Descobre-se sem léxico novo: resolve-se o período com duas datas de referência
+ * afastadas um ano. Se o resultado mudar, a expressão era relativa; se não
+ * mudar, era uma data ou um ano concretos. É a própria função de interpretação a
+ * responder, pelo que nunca fica dessincronizada dela.
+ */
+export function periodoERelativo(frase: string, hoje: string): boolean {
+  const agora = periodoNaFrase(frase, hoje);
+  if (agora === undefined) return false;
+  const d = new Date(`${hoje}T00:00:00Z`);
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  const daqui = periodoNaFrase(frase, d.toISOString().slice(0, 10));
+  return daqui === undefined || daqui.de !== agora.de || daqui.ate !== agora.ate;
+}
+
 /** Período por omissão: o ano civil corrente. */
 export function anoCorrente(hoje: string): Periodo {
   const a = Number(hoje.slice(0, 4));

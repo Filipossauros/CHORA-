@@ -25,7 +25,7 @@ const zTabela = z.object({
   colunas: z.array(z.string()),
   linhas: z.array(z.array(z.union([z.string(), z.number()]))),
   chaves: z.array(z.object({ tipo: zTipoEntidade, id: z.string() })).optional(),
-  origem: z.array(z.object({ frase: z.string(), capacidade: z.string() })),
+  origem: z.array(z.object({ frase: z.string(), capacidade: z.string(), parametros: z.record(z.unknown()) })),
 });
 
 const zConversa = z.object({

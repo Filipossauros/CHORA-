@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { montarApp, comoGestor, comoRecurso } from './helpers.js';
 import { encaminhar, numeroContratoNaFrase, valorHoraNaFrase, montanteNaFrase, referenciaContratoNaFrase } from '../src/assistente/router.js';
-import { periodoNaFrase } from '../src/assistente/tempo.js';
+import { periodoNaFrase, periodoERelativo } from '../src/assistente/tempo.js';
 import { CAPACIDADES } from '../src/assistente/capacidades/index.js';
 
 let fechar: (() => Promise<unknown>) | undefined;
@@ -63,6 +63,21 @@ describe('extração de entidades e tempo', () => {
     // Um número de contrato não é um ano.
     expect(periodoNaFrase('o saldo do C-2026-001', hoje)).toBeUndefined();
     expect(periodoNaFrase('quanto falta executar?', hoje)).toBeUndefined();
+  });
+
+  it('distingue período relativo de período fixo — é o que decide o que um relatório guardado repete', () => {
+    const hoje = '2026-07-21';
+    // Relativos: acompanham o calendário de quem executa.
+    expect(periodoERelativo('que contratos terminam este ano?', hoje)).toBe(true);
+    expect(periodoERelativo('nos últimos 3 meses', hoje)).toBe(true);
+    expect(periodoERelativo('e no próximo ano?', hoje)).toBe(true);
+    expect(periodoERelativo('este trimestre', hoje)).toBe(true);
+    // Fixos: fecham sobre um exercício concreto.
+    expect(periodoERelativo('que contratos terminam em 2026?', hoje)).toBe(false);
+    expect(periodoERelativo('no 1.º trimestre de 2027', hoje)).toBe(false);
+    expect(periodoERelativo('em março de 2027', hoje)).toBe(false);
+    // Sem recorte temporal não há nada a decidir.
+    expect(periodoERelativo('quanto falta executar?', hoje)).toBe(false);
   });
 });
 
@@ -580,18 +595,94 @@ describe('compor uma lista pergunta a pergunta', () => {
     expect(dois.resultado?.exportavel?.folhas.length).toBe(2);
   });
 
-  it('guardar arquiva o retrato do dia e o relatório aparece na listagem', async () => {
+  it('guardar grava a RECEITA — funções e parâmetros, não as frases', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const um = await perguntar(app, 'Que contratos comportam um perfil a 40 euros por hora?');
+    const dois = await perguntar(app, 'Acrescenta os consumos atuais de cada contrato', um.conversa);
+    await perguntar(app, 'Guarda esta lista nos relatórios', dois.conversa);
+
+    const lista = await app.inject({ method: 'GET', url: '/api/v1/relatorios/ad-hoc', headers: comoGestor() });
+    const { dados } = lista.json() as { dados: Array<{ passos: Array<{ capacidade: string; parametros: Record<string, unknown> }>; periodoRelativo: boolean }> };
+    expect(dados.length).toBe(1);
+    expect(dados[0]!.passos.map((p) => p.capacidade)).toEqual(['capacidade.folga-por-valor-hora', 'tabela.acrescentar']);
+    expect(dados[0]!.passos[0]!.parametros['valorHoraEuros']).toBe(40);
+    expect(dados[0]!.passos[1]!.parametros['bloco']).toBe('execucao');
+    // Sem recorte temporal na frase, o período não é relativo a nada.
+    expect(dados[0]!.periodoRelativo).toBe(false);
+  });
+
+  it('executar responde com os dados de HOJE, não com os do dia em que foi guardado', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const um = await perguntar(app, 'Que registos estão por aprovar?');
+    const linhasAoGuardar = um.resultado!.tabela!.linhas.length;
+    expect(linhasAoGuardar).toBeGreaterThan(0);
+    await perguntar(app, 'Guarda esta lista nos relatórios', um.conversa);
+
+    const { dados } = (await app.inject({ method: 'GET', url: '/api/v1/relatorios/ad-hoc', headers: comoGestor() })).json() as { dados: Array<{ id: string }> };
+    const id = dados[0]!.id;
+
+    // Executar sem nada mudar reproduz a lista.
+    const antes = await app.inject({ method: 'POST', url: `/api/v1/relatorios/ad-hoc/${id}/executar`, headers: comoGestor() });
+    const rAntes = antes.json() as { tabela?: { linhas: unknown[]; colunas: string[] }; executadoEm: string };
+    expect(rAntes.tabela?.linhas.length).toBe(linhasAoGuardar);
+    expect(rAntes.tabela?.colunas).toEqual(um.resultado!.tabela!.colunas);
+
+    // Aprovar tudo esvazia a fila — e o relatório passa a dizê-lo.
+    const submetidos = await app.inject({ method: 'GET', url: '/api/v1/registos-tempo?estado=SUBMETIDO&tamanho=200', headers: comoGestor() });
+    const ids = (submetidos.json() as { dados: Array<{ id: string }> }).dados.map((x) => x.id);
+    await app.inject({ method: 'POST', url: '/api/v1/registos-tempo:aprovar', headers: comoGestor(), payload: { ids } });
+
+    const depois = await app.inject({ method: 'POST', url: `/api/v1/relatorios/ad-hoc/${id}/executar`, headers: comoGestor() });
+    const rDepois = depois.json() as { tabela?: { linhas: unknown[] }; problema?: { tipo: string } };
+    const linhasDepois = rDepois.tabela?.linhas.length ?? 0;
+    expect(linhasDepois).toBeLessThan(linhasAoGuardar);
+  });
+
+  it('a execução respeita as permissões de quem abre, não as de quem guardou', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    // «faturas.estado» exige gerir.faturas.compromissos, que um elemento não tem.
+    const um = await perguntar(app, 'Que faturas estão por conferir?');
+    await perguntar(app, 'Guarda esta lista nos relatórios', um.conversa);
+    const { dados } = (await app.inject({ method: 'GET', url: '/api/v1/relatorios/ad-hoc', headers: comoGestor() })).json() as { dados: Array<{ id: string }> };
+
+    const r = await app.inject({ method: 'POST', url: `/api/v1/relatorios/ad-hoc/${dados[0]!.id}/executar`, headers: comoRecurso() });
+    const j = r.json() as { tabela?: unknown; problema?: { tipo: string; passo: number } };
+    expect(j.tabela).toBeUndefined();
+    expect(j.problema?.tipo).toBe('SEM_COMPETENCIA');
+    expect(j.problema?.passo).toBe(1);
+  });
+
+  it('um período dito em linguagem corrente fica marcado como relativo e é alterável', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const um = await perguntar(app, 'Que contratos terminam este ano?');
+    await perguntar(app, 'Guarda esta lista nos relatórios', um.conversa);
+    const { dados } = (await app.inject({ method: 'GET', url: '/api/v1/relatorios/ad-hoc', headers: comoGestor() })).json() as { dados: Array<{ id: string; periodoRelativo: boolean }> };
+    expect(dados[0]!.periodoRelativo).toBe(true);
+
+    const patch = await app.inject({
+      method: 'PATCH', url: `/api/v1/relatorios/ad-hoc/${dados[0]!.id}`,
+      headers: comoGestor(), payload: { periodoRelativo: false },
+    });
+    expect((patch.json() as { periodoRelativo: boolean }).periodoRelativo).toBe(false);
+
+    // Fixo, o período executado é o que ficou nos parâmetros.
+    const exec = await app.inject({ method: 'POST', url: `/api/v1/relatorios/ad-hoc/${dados[0]!.id}/executar`, headers: comoGestor() });
+    expect((exec.json() as { periodo?: { de: string } }).periodo?.de).toMatch(/^\d{4}-01-01$/);
+  });
+
+  it('apagar exige quem gere contratos e limpa a definição', async () => {
     const { app } = await montarApp();
     fechar = () => app.close();
     const um = await perguntar(app, 'Que contratos estão em risco?');
-    const dois = await perguntar(app, 'Guarda esta lista nos relatórios', um.conversa);
-    expect(dois.resultado?.texto).toContain('guardado nos relatórios');
+    await perguntar(app, 'Guarda esta lista nos relatórios', um.conversa);
+    const { dados } = (await app.inject({ method: 'GET', url: '/api/v1/relatorios/ad-hoc', headers: comoGestor() })).json() as { dados: Array<{ id: string }> };
 
-    const lista = await app.inject({ method: 'GET', url: '/api/v1/relatorios/ad-hoc', headers: comoGestor() });
-    const { dados } = lista.json() as { dados: Array<{ id: string; linhas: unknown[]; origem: unknown[] }> };
-    expect(dados.length).toBe(1);
-    expect(dados[0]!.linhas.length).toBe(um.resultado?.tabela?.linhas.length);
-    expect(dados[0]!.origem.length).toBeGreaterThan(0);
+    const negado = await app.inject({ method: 'DELETE', url: `/api/v1/relatorios/ad-hoc/${dados[0]!.id}`, headers: comoRecurso() });
+    expect(negado.statusCode).toBe(403);
 
     const apagar = await app.inject({ method: 'DELETE', url: `/api/v1/relatorios/ad-hoc/${dados[0]!.id}`, headers: comoGestor() });
     expect(apagar.statusCode).toBe(204);

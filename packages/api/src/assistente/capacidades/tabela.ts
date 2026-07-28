@@ -3,6 +3,7 @@ import type { Capacidade, ContextoExecucao, ResultadoCapacidade, TabelaTrabalho 
 import { ErroEsclarecimento } from '../erros.js';
 import { enriquecimentoPedido, enriquecimentosPara, semDados } from '../enriquecimentos.js';
 import { ServicoRelatoriosAdHoc } from '../../servicos/relatorios-adhoc.js';
+import { periodoERelativo } from '../tempo.js';
 import { F } from './comum.js';
 
 /**
@@ -69,7 +70,7 @@ function numero(v: string | number): number | undefined {
 }
 
 /** Reconstrói a tabela mantendo chaves e proveniência alinhadas com as linhas. */
-function comLinhas(t: TabelaTrabalho, indices: number[], passo: { frase: string; capacidade: string }): TabelaTrabalho {
+function comLinhas(t: TabelaTrabalho, indices: number[], passo: TabelaTrabalho['origem'][number]): TabelaTrabalho {
   return {
     ...t,
     linhas: indices.map((i) => t.linhas[i]!),
@@ -134,7 +135,7 @@ export const acrescentarColunas: Capacidade<z.infer<typeof zAcrescentar>> = {
       ...t,
       colunas: [...t.colunas, ...enr.colunas],
       linhas: t.linhas.map((l, i) => [...l, ...(valores.get(ids[i]!) ?? vazia)]),
-      origem: [...t.origem, { frase: `+ ${enr.titulo}`, capacidade: 'tabela.acrescentar' }],
+      origem: [...t.origem, { frase: `+ ${enr.titulo}`, capacidade: 'tabela.acrescentar', parametros: { bloco: enr.nome } }],
     };
     e.lembrar({ tabela: nova });
     const semValor = t.linhas.filter((_l, i) => valores.get(ids[i]!) === undefined).length;
@@ -209,7 +210,13 @@ export const filtrarTabela: Capacidade<z.infer<typeof zFiltrar>> = {
         tabela: t, fontes: [], semResultado: true,
       };
     }
-    const nova = comLinhas(t, indices, { frase: `filtro: ${t.colunas[idx]} ${descricao}`, capacidade: 'tabela.filtrar' });
+    const nova = comLinhas(t, indices, {
+      frase: `filtro: ${t.colunas[idx]} ${descricao}`, capacidade: 'tabela.filtrar',
+      // Guarda-se a coluna pelo rótulo que ela tem AGORA. Se um bloco lhe mudar
+      // o nome, a execução seguinte diz que o passo se partiu — melhor do que
+      // filtrar silenciosamente pela coluna errada.
+      parametros: { coluna: t.colunas[idx]!, ...(p.contem !== undefined ? { contem: p.contem } : {}), ...(p.minimo !== undefined ? { minimo: p.minimo } : {}), ...(p.maximo !== undefined ? { maximo: p.maximo } : {}) },
+    });
     e.lembrar({ tabela: nova });
     return {
       texto: `${indices.length} de ${t.linhas.length} linha(s) têm ${t.colunas[idx]} ${descricao}.`,
@@ -253,6 +260,7 @@ export const ordenarTabela: Capacidade<z.infer<typeof zOrdenar>> = {
     const nova = comLinhas(t, indices, {
       frase: `ordem: ${t.colunas[idx]} ${p.ascendente === true ? 'crescente' : 'decrescente'}`,
       capacidade: 'tabela.ordenar',
+      parametros: { coluna: t.colunas[idx]!, ...(p.ascendente === true ? { ascendente: true } : {}) },
     });
     e.lembrar({ tabela: nova });
     return {
@@ -284,28 +292,45 @@ export const exportarTabela: Capacidade<Record<string, never>> = {
         'A folha de cálculo leva uma segunda página com as perguntas que construíram a lista: quem a abrir daqui a três ' +
         'meses precisa de saber de onde vieram os números.',
       tabela: t,
-      exportavel: { nome: ficheiro(t.titulo), folhas: folhasDe(t) },
+      exportavel: { nome: ficheiro(t.titulo), folhas: folhasDe(t, { executadoEm: new Date(e.ctx.relogio.agora()).toISOString(), executadoPor: e.utilizador.utilizadorId }) },
       fontes: [F('REGRA', 'Lista composta na conversa')],
       proximos: [{ rotulo: 'Guardar nos relatórios', frase: 'Guarda esta lista nos relatórios' }],
     };
   },
 };
 
-/** As duas folhas: os dados, e como se lá chegou. */
-function folhasDe(t: TabelaTrabalho): Array<{ nome: string; linhas: Array<Record<string, string | number>> }> {
+/**
+ * As duas folhas: os dados e a receita.
+ *
+ * O ficheiro é que passa a ser o retrato — o relatório guardado na aplicação
+ * responde sempre com os números de hoje. Um Excel numa pasta partilhada tem de
+ * se explicar sozinho daqui a um ano: leva por isso a data em que correu, quem
+ * o correu e os passos que o produziram.
+ */
+export function folhasDe(
+  t: TabelaTrabalho, contexto: { executadoEm: string; executadoPor: string; periodo?: string },
+): Array<{ nome: string; linhas: Array<Record<string, string | number>> }> {
   return [
     {
       nome: 'Dados',
       linhas: t.linhas.map((l) => Object.fromEntries(t.colunas.map((c, i) => [c, l[i] ?? '']))),
     },
     {
-      nome: 'Proveniência',
-      linhas: t.origem.map((o, i) => ({ '#': i + 1, 'Passo': o.frase, 'Função': o.capacidade })),
+      nome: 'Receita',
+      linhas: [
+        { '#': '', 'Passo': `«${t.titulo}» — ${t.linhas.length} linha(s)`, 'Função': '', 'Parâmetros': '' },
+        { '#': '', 'Passo': `Executado em ${contexto.executadoEm.slice(0, 16).replace('T', ' ')} por ${contexto.executadoPor}`, 'Função': '', 'Parâmetros': '' },
+        ...(contexto.periodo !== undefined ? [{ '#': '', 'Passo': `Período: ${contexto.periodo}`, 'Função': '', 'Parâmetros': '' }] : []),
+        ...t.origem.map((o, i) => ({
+          '#': i + 1, 'Passo': o.frase, 'Função': o.capacidade,
+          'Parâmetros': Object.entries(o.parametros).map(([k, v]) => `${k}=${String(v)}`).join(' · '),
+        })),
+      ],
     },
   ];
 }
 
-const ficheiro = (titulo: string): string =>
+export const ficheiro = (titulo: string): string =>
   norm(titulo).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'lista';
 
 // ─── GUARDAR NOS RELATÓRIOS ─────────────────────────────────────────────────
@@ -316,12 +341,13 @@ export const guardarTabela: Capacidade<z.infer<typeof zGuardar>> = {
   nome: 'tabela.guardar',
   titulo: 'Guardar a lista nos relatórios',
   descricao:
-    'Arquiva a lista em curso no separador «Relatórios», com a data e as perguntas que a construíram. Guarda o retrato ' +
-    'do dia, não a receita — e pode ser apagada quando deixar de servir.',
+    'Guarda a lista em curso como relatório reutilizável no separador «Relatórios». Fica a RECEITA — as perguntas e os ' +
+    'seus parâmetros —, pelo que executá-la outra vez responde com os números desse dia. O retrato de hoje é o Excel.',
   tipo: 'ACAO',
   gereTabela: true,
-  // Arquivar um retrato da carteira é ato de quem a gere: o relatório fica
-  // visível a todos no separador «Relatórios», e responde por quem o guardou.
+  // Criar um relatório da unidade é ato de quem a gere: a definição fica
+  // visível a todos e responde por quem a guardou. Executá-la, essa, é livre —
+  // cada passo torna a passar pelas permissões de quem abre.
   operacao: 'gerir.contratos',
   parametros: zGuardar,
   parametrosDescricao: [{ nome: 'titulo', tipo: 'texto', obrigatorio: false, descricao: 'Nome com que fica arquivada' }],
@@ -331,15 +357,23 @@ export const guardarTabela: Capacidade<z.infer<typeof zGuardar>> = {
     const t = tabelaDe(e);
     if (t === undefined) return SEM_TABELA;
     const nome = titulo !== undefined && titulo.trim() !== '' ? titulo.trim() : t.titulo;
+    const primeira = t.origem[0];
+    const relativo = primeira !== undefined && periodoERelativo(primeira.frase, e.hoje);
+
     const relatorio = await new ServicoRelatoriosAdHoc(e.ctx).guardar({
-      titulo: nome, tipoEntidade: t.tipoEntidade, colunas: t.colunas, linhas: t.linhas, origem: t.origem,
+      titulo: nome, tipoEntidade: t.tipoEntidade, periodoRelativo: relativo,
+      passos: t.origem.map((o) => ({ capacidade: o.capacidade, parametros: o.parametros, frase: o.frase })),
     }, e.utilizador);
+
     return {
       texto:
-        `«${nome}» guardado nos relatórios, com ${t.linhas.length} linha(s) tal como estão hoje. ` +
-        'Encontra-o em «Relatórios → Relatórios guardados», onde o pode exportar ou apagar.',
+        `«${nome}» guardado nos relatórios, em ${t.origem.length} passo(s). Não ficaram os números de hoje: ficou a ` +
+        'pergunta — executá-lo outra vez responde com os dados desse dia. Para congelar este retrato, descarregue o Excel.' +
+        (relativo
+          ? ' O período é relativo à data de execução, pelo que o relatório acompanha o calendário; pode fixá-lo no próprio relatório.'
+          : ''),
       tabela: t,
-      fontes: [F('REGRA', `Relatório ${relatorio.id} — retrato de ${relatorio.criadoEm.slice(0, 10)}`)],
+      fontes: [F('REGRA', `Relatório ${relatorio.id} — receita de ${relatorio.passos.length} passo(s)`)],
     };
   },
 };

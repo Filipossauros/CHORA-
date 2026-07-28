@@ -124,7 +124,7 @@ export class ServicoAssistente {
     try {
       if (capacidade.tipo === 'CONSULTA') {
         const resultado = await (capacidade.executar as Capacidade['executar'])(parsed.data, exec);
-        abrirTabela(memoria, capacidade, frase, resultado);
+        abrirTabela(memoria, capacidade, frase, parsed.data as Record<string, unknown>, resultado);
         await this.auditar(frase, capacidade, 'CONSULTAR', u);
         return { ...base, resultado };
       }
@@ -133,7 +133,7 @@ export class ServicoAssistente {
         return { ...base, simulacao };
       }
       const resultado = await (capacidade.executar as Capacidade['executar'])(parsed.data, exec);
-      abrirTabela(memoria, capacidade, frase, resultado);
+      abrirTabela(memoria, capacidade, frase, parsed.data as Record<string, unknown>, resultado);
       return { ...base, resultado };
     } catch (erro) {
       if (erro instanceof ErroEsclarecimento) {
@@ -206,14 +206,17 @@ export class ServicoAssistente {
  * certos. As capacidades que gerem a própria tabela ficam de fora — já a
  * atualizaram, com a proveniência que lhes pertence.
  */
-function abrirTabela(memoria: ContextoConversa, c: Capacidade<never>, frase: string, r: ResultadoCapacidade): void {
+function abrirTabela(
+  memoria: ContextoConversa, c: Capacidade<never>, frase: string,
+  parametros: Record<string, unknown>, r: ResultadoCapacidade,
+): void {
   if (c.gereTabela === true) return;
   const chaves = r.tabela?.chaves;
   if (r.tabela === undefined || chaves === undefined || chaves.length === 0) return;
   memoria.tabela = {
     ...r.tabela, chaves,
     tipoEntidade: chaves[0]!.tipo,
-    origem: [{ frase, capacidade: c.nome }],
+    origem: [{ frase, capacidade: c.nome, parametros }],
   };
 }
 

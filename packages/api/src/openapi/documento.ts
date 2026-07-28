@@ -59,6 +59,7 @@ export function gerarOpenApi(): Record<string, unknown> {
     { name: 'tamanho', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 200 } },
   ];
 
+  const idRelatorio = { name: 'id', in: 'path', required: true, schema: { type: 'string' } };
   const paths: Record<string, unknown> = {
     '/api/v1/contratos': {
       get: {
@@ -144,11 +145,15 @@ export function gerarOpenApi(): Record<string, unknown> {
       get: { summary: 'Execução financeira', tags: ['Relatórios'], security: seguranca, parameters: [{ name: 'contratoId', in: 'query', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Relatório' } } },
     },
     '/api/v1/relatorios/ad-hoc': {
-      get: { summary: 'Relatórios compostos no assistente e guardados pelo utilizador', tags: ['Relatórios'], security: seguranca, responses: { '200': { description: 'Lista' } } },
+      get: { summary: 'Relatórios compostos no assistente (definições, não dados)', tags: ['Relatórios'], security: seguranca, responses: { '200': { description: 'Lista de receitas' } } },
     },
     '/api/v1/relatorios/ad-hoc/{id}': {
-      get: { summary: 'Obtém um relatório ad-hoc', tags: ['Relatórios'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Relatório' }, ...respostaProblema('404', 'Inexistente') } },
-      delete: { summary: 'Apaga um relatório ad-hoc', tags: ['Relatórios'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '204': { description: 'Apagado' }, ...respostaProblema('404', 'Inexistente') } },
+      get: { summary: 'Obtém a definição de um relatório ad-hoc', tags: ['Relatórios'], security: seguranca, parameters: [idRelatorio], responses: { '200': { description: 'Definição' }, ...respostaProblema('404', 'Inexistente') } },
+      patch: { summary: 'Alterna a leitura do período entre relativa e fixa', tags: ['Relatórios'], security: seguranca, parameters: [idRelatorio], responses: { '200': { description: 'Definição atualizada' }, ...respostaProblema('403', 'Papel insuficiente') } },
+      delete: { summary: 'Apaga um relatório ad-hoc', tags: ['Relatórios'], security: seguranca, parameters: [idRelatorio], responses: { '204': { description: 'Apagado' }, ...respostaProblema('403', 'Papel insuficiente') } },
+    },
+    '/api/v1/relatorios/ad-hoc/{id}/executar': {
+      post: { summary: 'Executa a receita com os dados de hoje e as permissões de quem pede', tags: ['Relatórios'], security: seguranca, parameters: [idRelatorio], responses: { '200': { description: 'Tabela, ou o passo que impediu a execução' }, ...respostaProblema('404', 'Inexistente') } },
     },
     '/api/v1/alertas': {
       get: { summary: 'Lista alertas', tags: ['Alertas'], security: seguranca, responses: { '200': { description: 'Lista de alertas' } } },

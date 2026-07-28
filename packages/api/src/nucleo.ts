@@ -23,10 +23,12 @@ export { ServicoAlertas, ATO_RESOLVE } from './servicos/alertas.js';
 export { ServicoEntregaveis } from './servicos/entregaveis.js';
 export { ServicoOrcamentos, type OrcamentoComResumo } from './servicos/orcamentos.js';
 export { ServicoRelatoriosAdHoc, type NovoRelatorioAdHoc } from './servicos/relatorios-adhoc.js';
+export { executarRelatorio, periodoDoRelatorio, type ResultadoRelatorio, type MotivoFalha } from './servicos/relatorios-executar.js';
+export { folhasDe as folhasDaTabela, ficheiro as nomeFicheiroTabela } from './assistente/capacidades/tabela.js';
 export { ServicoAssistente, type Interpretacao, type Esclarecimento } from './servicos/assistente.js';
 export { CAPACIDADES, capacidadePorNome } from './assistente/capacidades/index.js';
 export { encaminhar, normalizar, numeroContratoNaFrase, valorHoraNaFrase, montanteNaFrase, type Encaminhamento } from './assistente/router.js';
-export { periodoNaFrase, anoCorrente, type Periodo } from './assistente/tempo.js';
+export { periodoNaFrase, periodoERelativo, anoCorrente, type Periodo } from './assistente/tempo.js';
 export { ErroEsclarecimento } from './assistente/erros.js';
 export { AgenteLocal, CONFIG_MODELO_OMISSAO, type ConfigModeloLocal } from './assistente/agente-local.js';
 export type {
@@ -36,7 +38,7 @@ export type {
 } from './assistente/tipos.js';
 export { type Diretorio, DIRETORIO_VAZIO } from './contexto.js';
 export { DIRETORIO_SEED, PESSOAS } from './seed/diretorio.js';
-export type { Acesso, RelatorioEvidencia } from './repositorios/memoria/index.js';
+export type { Acesso, RelatorioEvidencia, PassoRelatorio } from './repositorios/memoria/index.js';
 export { JobAlertas, NotifierConsola } from './alertas/job-alertas.js';
 export { paraProblema, ErroProibido, ErroNaoEncontrado, type Problema } from './erros/problema.js';
 export { semear, resumoSeed } from './seed/semear.js';

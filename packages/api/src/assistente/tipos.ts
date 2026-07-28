@@ -82,8 +82,13 @@ export interface TabelaResposta {
  */
 export interface TabelaTrabalho extends TabelaResposta {
   tipoEntidade: TipoEntidade;
-  /** Perguntas e capacidades que a construíram, por ordem. É a proveniência. */
-  origem: Array<{ frase: string; capacidade: string }>;
+  /**
+   * Os passos que a construíram, por ordem — com os PARÂMETROS de cada um, não
+   * só a frase. É o que permite guardar a lista como receita e voltar a
+   * executá-la: uma frase teria de ser reencaminhada, e o encaminhamento de
+   * amanhã não é o de hoje.
+   */
+  origem: Array<{ frase: string; capacidade: string; parametros: Record<string, unknown> }>;
 }
 
 /** Ecrã real a embeber na conversa, com valores iniciais. */

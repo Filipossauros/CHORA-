@@ -1,7 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import * as XLSX from 'xlsx';
 import type { Contrato, Fatura, TipoFaturacao } from '@chora/domain';
-import type { RelatorioAdHoc } from '@chora/api/nucleo';
+import { executarRelatorio, folhasDaTabela, nomeFicheiroTabela, type RelatorioAdHoc, type ResultadoRelatorio } from '@chora/api/nucleo';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { Barra, formatarDuracao, formatarMoeda, hoje, mensagemErro, useAsync } from '../comum.js';
@@ -101,20 +101,44 @@ export function Relatorios(): ReactNode {
 }
 
 /**
- * RELATÓRIOS GUARDADOS — as listas compostas no assistente.
+ * RELATÓRIOS GUARDADOS — as perguntas compostas no assistente.
  *
- * Guardam os dados tal como estavam no dia em que foram criados, não a receita
- * para os recalcular: quem arquiva um relatório quer o retrato daquele dia, e um
- * número que muda sozinho entre a exportação e a reunião não serve para discutir
- * nada. A proveniência fica ao lado, para se saber como se lá chegou — e para se
- * poder repetir a pergunta quando o que se quer é o valor de hoje.
+ * Guardam a RECEITA, não os dados: executar responde com os números de hoje. É
+ * a diferença entre ter arquivado uma lista e ter construído um relatório — o
+ * mesmo relatório serve a reunião deste mês e a do mês que vem. O retrato
+ * congelado, aquele que tem de continuar a dizer o mesmo daqui a um ano, é o
+ * Excel, que leva a data da execução e a receita na segunda folha.
+ *
+ * A execução repete os passos com as permissões de QUEM ABRE. Um relatório com
+ * faturação não mostra faturação a quem não a pode consultar — garantia que um
+ * retrato guardado não conseguiria dar, porque os dados já lá estariam escritos.
  */
 function Guardados({ relatorios, onMudanca }: { relatorios: RelatorioAdHoc[]; onMudanca: () => void }): ReactNode {
-  const [aberto, setAberto] = useState<string | undefined>(undefined);
+  const [resultados, setResultados] = useState<Record<string, ResultadoRelatorio | undefined>>({});
+  const [aCorrer, setACorrer] = useState<string | undefined>(undefined);
   const [erro, setErro] = useState<string | undefined>(undefined);
 
+  async function executar(r: RelatorioAdHoc): Promise<void> {
+    setACorrer(r.id); setErro(undefined);
+    try {
+      const resultado = await executarRelatorio(app.ctx, r, app.utilizador());
+      setResultados((x) => ({ ...x, [r.id]: resultado }));
+      // A execução ficou registada na definição: relê-la é o que faz aparecer
+      // «última execução», que é o sinal de quando estes números foram vistos.
+      onMudanca();
+    } catch (e) { setErro(mensagemErro(e)); } finally { setACorrer(undefined); }
+  }
+
+  async function alternarPeriodo(r: RelatorioAdHoc): Promise<void> {
+    try {
+      await app.relatoriosAdHoc.definirPeriodoRelativo(r.id, !r.periodoRelativo, app.utilizador());
+      setResultados((x) => ({ ...x, [r.id]: undefined }));
+      onMudanca();
+    } catch (e) { setErro(mensagemErro(e)); }
+  }
+
   async function apagar(r: RelatorioAdHoc): Promise<void> {
-    if (!confirm(`Apagar «${r.titulo}»? O relatório desaparece; as perguntas que o construíram podem ser repetidas no assistente.`)) return;
+    if (!confirm(`Apagar «${r.titulo}»? Desaparece a definição; nenhum dado de contratos é afetado.`)) return;
     try {
       await app.relatoriosAdHoc.remover(r.id, app.utilizador());
       onMudanca();
@@ -129,7 +153,7 @@ function Guardados({ relatorios, onMudanca }: { relatorios: RelatorioAdHoc[]; on
           Estes relatórios nascem no <b>«Perguntar»</b> do ecrã Hoje: faça uma pergunta que devolva uma lista
           (por exemplo, <i>que contratos comportam um perfil a 40 euros por hora?</i>), acrescente-lhe colunas
           (<i>acrescenta os consumos atuais</i>), filtre-a ou ordene-a, e depois diga
-          <i> guarda esta lista nos relatórios</i>. Fica aqui, com a data e as perguntas que a construíram.
+          <i> guarda esta lista nos relatórios</i>. Fica aqui a pergunta — não a resposta —, pronta a repetir.
         </div>
       </div></div>
     );
@@ -138,65 +162,104 @@ function Guardados({ relatorios, onMudanca }: { relatorios: RelatorioAdHoc[]; on
   return (
     <>
       {erro !== undefined && <div className="erro-cx" style={{ marginBottom: 12 }}>⚠ {erro}</div>}
-      {relatorios.map((r) => (
-        <div className="cartao" key={r.id} style={{ marginBottom: 12 }}>
-          <h3>
-            {r.titulo}
-            <span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>
-              {r.criadoEm.slice(0, 10)} · {r.linhas.length} linha(s) · {r.colunas.length} coluna(s)
-            </span>
-            <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-              <button className="btn sm" onClick={() => setAberto(aberto === r.id ? undefined : r.id)}>
-                {aberto === r.id ? 'Fechar' : 'Ver'}
-              </button>
-              <button className="btn sm" onClick={() => exportarAdHoc(r)}>⬇ Excel</button>
-              <button className="btn sm" onClick={() => void apagar(r)}>Apagar</button>
-            </span>
-          </h3>
+      {relatorios.map((r) => {
+        const res = resultados[r.id];
+        return (
+          <div className="cartao" key={r.id} style={{ marginBottom: 12 }}>
+            <h3>
+              {r.titulo}
+              <span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>
+                {r.passos.length} passo(s) · criado {r.criadoEm.slice(0, 10)}
+                {r.ultimaExecucao !== undefined && ` · última execução ${r.ultimaExecucao.em.slice(0, 10)} (${r.ultimaExecucao.linhas} linhas)`}
+              </span>
+              <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                <button className="btn sm pri" disabled={aCorrer === r.id} onClick={() => void executar(r)}>
+                  {aCorrer === r.id ? 'A correr…' : res !== undefined ? '↻ Executar' : '▸ Executar'}
+                </button>
+                {res?.tabela !== undefined && (
+                  <button className="btn sm" onClick={() => exportarAdHoc(r, res)}>⬇ Excel</button>
+                )}
+                <button className="btn sm" onClick={() => void apagar(r)}>Apagar</button>
+              </span>
+            </h3>
 
-          <div className="corpo" style={{ paddingTop: 0 }}>
-            <div className="sec" style={{ fontSize: 12.5 }}>
-              Composto em {r.origem.length} passo(s): {r.origem.map((o) => `«${o.frase}»`).join(' → ')}
+            <div className="corpo" style={{ paddingTop: 0 }}>
+              <div className="sec" style={{ fontSize: 12.5 }}>
+                {r.passos.map((p) => `«${p.frase}»`).join(' → ')}
+              </div>
+              {temPeriodo(r) && (
+                <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}>
+                  <span className={`pill ${r.periodoRelativo ? 'p-azul' : 'p-ard'}`}>
+                    {r.periodoRelativo ? 'Período relativo' : 'Período fixo'}
+                  </span>
+                  <span className="sec">
+                    {r.periodoRelativo
+                      ? 'reinterpretado na data da execução — o relatório acompanha o calendário'
+                      : 'congelado nas datas do dia em que foi guardado'}
+                  </span>
+                  <button className="ligacao" onClick={() => void alternarPeriodo(r)}>
+                    passar a {r.periodoRelativo ? 'fixo' : 'relativo'}
+                  </button>
+                </div>
+              )}
             </div>
+
+            {res?.problema !== undefined && (
+              <div className="erro-cx" style={{ margin: 12 }}>
+                <b>Passo {res.problema.passo} ({res.problema.capacidade})</b> — {res.problema.motivo}
+              </div>
+            )}
+
+            {res?.tabela !== undefined && (
+              <>
+                <div style={{ overflowX: 'auto' }}>
+                  <table>
+                    <thead><tr>{res.tabela.colunas.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+                    <tbody>
+                      {res.tabela.linhas.map((linha, i) => (
+                        <tr key={i}>{linha.map((v, j) => <td key={j} className={typeof v === 'number' ? 'num tabnum' : undefined}>{v}</td>)}</tr>
+                      ))}
+                      {res.tabela.linhas.length === 0 && <tr><td colSpan={res.tabela.colunas.length} className="vazio">Sem linhas.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="sec" style={{ margin: 12, fontSize: 12.5 }}>
+                  Executado em {res.executadoEm.slice(0, 16).replace('T', ' ')}
+                  {res.periodo !== undefined && ` · período ${res.periodo.rotulo}`}
+                  {' '}— estes são os números de agora.
+                </div>
+              </>
+            )}
           </div>
-
-          {aberto === r.id && (
-            <div style={{ overflowX: 'auto' }}>
-              <table>
-                <thead><tr>{r.colunas.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-                <tbody>
-                  {r.linhas.map((linha, i) => (
-                    <tr key={i}>{linha.map((v, j) => <td key={j} className={typeof v === 'number' ? 'num tabnum' : undefined}>{v}</td>)}</tr>
-                  ))}
-                  {r.linhas.length === 0 && <tr><td colSpan={r.colunas.length} className="vazio">Sem linhas.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
       <div className="aviso">
-        Os números são os do dia em que cada relatório foi guardado — não se atualizam sozinhos. Para o retrato de hoje,
-        repita as perguntas da proveniência no «Perguntar».
+        Cada relatório é uma pergunta guardada, não uma folha arquivada: executar responde com os dados de hoje, e os
+        passos voltam a passar pelas permissões de quem está a executar. Para congelar um retrato — o que se leva a uma
+        reunião e tem de continuar a dizer o mesmo —, descarregue o Excel.
       </div>
     </>
   );
 }
 
-/** Duas folhas: os dados e a proveniência. Sem a segunda, ninguém sabe o que lê. */
-function exportarAdHoc(r: RelatorioAdHoc): void {
+/** Só faz sentido oferecer o interruptor a quem tem recorte temporal. */
+function temPeriodo(r: RelatorioAdHoc): boolean {
+  const p = r.passos[0]?.parametros ?? {};
+  return r.periodoRelativo || (typeof p['periodoDe'] === 'string' && typeof p['periodoAte'] === 'string');
+}
+
+/** Duas folhas: os dados e a receita. Sem a segunda, ninguém sabe o que lê. */
+function exportarAdHoc(r: RelatorioAdHoc, res: ResultadoRelatorio): void {
+  if (res.tabela === undefined) return;
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    wb,
-    XLSX.utils.json_to_sheet(r.linhas.map((l) => Object.fromEntries(r.colunas.map((c, i) => [c, l[i] ?? ''])))),
-    'Dados',
-  );
-  XLSX.utils.book_append_sheet(
-    wb,
-    XLSX.utils.json_to_sheet(r.origem.map((o, i) => ({ '#': i + 1, 'Passo': o.frase, 'Função': o.capacidade }))),
-    'Proveniência',
-  );
-  XLSX.writeFile(wb, `${r.titulo.replace(/[^\p{L}\p{N}]+/gu, '-').slice(0, 60)}-${r.criadoEm.slice(0, 10)}.xlsx`);
+  for (const folha of folhasDaTabela(res.tabela, {
+    executadoEm: res.executadoEm,
+    executadoPor: app.utilizador().utilizadorId,
+    ...(res.periodo !== undefined ? { periodo: res.periodo.rotulo } : {}),
+  })) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(folha.linhas), folha.nome.slice(0, 31));
+  }
+  XLSX.writeFile(wb, `${nomeFicheiroTabela(r.titulo)}-${res.executadoEm.slice(0, 10)}.xlsx`);
 }
 
 /** Consumo por perfil de um contrato — a leitura de quem gere a bolsa de horas. */

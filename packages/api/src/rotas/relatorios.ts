@@ -8,6 +8,7 @@ import { podeExecutar } from '../auth/permissoes.js';
 import { JobAlertas } from '../alertas/job-alertas.js';
 import { ServicoAlertas } from '../servicos/alertas.js';
 import { ServicoRelatoriosAdHoc } from '../servicos/relatorios-adhoc.js';
+import { executarRelatorio } from '../servicos/relatorios-executar.js';
 
 export function rotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
   app.get('/api/v1/relatorios/horas-por-perfil', async (req) => {
@@ -125,10 +126,14 @@ export function rotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
     };
   });
 
-  // Relatórios ad-hoc — as listas compostas no assistente e arquivadas por quem
-  // as compôs. Só se listam, se leem e se apagam: criam-se na conversa, que é
-  // onde ganham a proveniência que os torna legíveis a quem não estava lá.
+  // Relatórios ad-hoc — as perguntas compostas no assistente e guardadas como
+  // receita. Criam-se na conversa; aqui listam-se, executam-se e apagam-se.
+  //
+  // Ver a definição é livre: o que ela contém é a pergunta, não a resposta. Já a
+  // execução repete os passos e cada um torna a passar pela matriz de
+  // permissões — é aí, e só aí, que se decide o que cada um pode ver.
   const adHoc = new ServicoRelatoriosAdHoc(ctx);
+  const idDe = (req: { params: unknown }): string => (req.params as { id: string }).id;
 
   app.get('/api/v1/relatorios/ad-hoc', async (req) => {
     exigirUtilizador(req);
@@ -137,14 +142,37 @@ export function rotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
 
   app.get('/api/v1/relatorios/ad-hoc/:id', async (req) => {
     exigirUtilizador(req);
-    return adHoc.obter((req.params as { id: string }).id);
+    return adHoc.obter(idDe(req));
+  });
+
+  /** Corre a receita com os dados de hoje e as permissões de quem pede. */
+  app.post('/api/v1/relatorios/ad-hoc/:id/executar', async (req) => {
+    const u = exigirUtilizador(req);
+    return executarRelatorio(ctx, await adHoc.obter(idDe(req)), u);
+  });
+
+  /** Alterna entre ler o período como relativo à execução ou fixo. */
+  app.patch('/api/v1/relatorios/ad-hoc/:id', async (req) => {
+    const u = exigirUtilizador(req);
+    exigirGestorDeContratos(u.papeis);
+    const corpo = z.object({ periodoRelativo: z.boolean() }).safeParse(req.body);
+    if (!corpo.success) throw new ErroValidacao('Corpo inválido.', corpo.error.issues);
+    return adHoc.definirPeriodoRelativo(idDe(req), corpo.data.periodoRelativo, u);
   });
 
   app.delete('/api/v1/relatorios/ad-hoc/:id', async (req, reply) => {
     const u = exigirUtilizador(req);
-    await adHoc.remover((req.params as { id: string }).id, u);
+    exigirGestorDeContratos(u.papeis);
+    await adHoc.remover(idDe(req), u);
     return reply.code(204).send();
   });
+}
+
+/** Criar e apagar relatórios da unidade é de quem gere contratos; ler não. */
+function exigirGestorDeContratos(papeis: ReadonlyArray<import('@chora/domain').PapelAplicacional>): void {
+  if (!podeExecutar(papeis, 'gerir.contratos')) {
+    throw new ErroProibido('Os relatórios são partilhados: só quem gere contratos os altera ou apaga.');
+  }
 }
 
 export function rotasAlertas(app: FastifyInstance, ctx: Contexto): void {
