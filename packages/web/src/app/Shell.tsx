@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { decisoesPendentes } from '@chora/domain';
+import { CATALOGO_CENARIOS } from '@chora/api/nucleo';
 import { app, UTILIZADORES } from '../porta/aplicacao-local.js';
 import { useMudancas } from '../comum.js';
 
@@ -36,7 +37,17 @@ const GAVETA = [
   { to: '/recursos', rot: 'Recursos' },
   { to: '/auditoria', rot: 'Auditoria' },
   { to: '/acessos', rot: 'Acessos' },
+  { to: '/dados', rot: 'Dados de demonstração' },
 ];
+
+/**
+ * Nome curto do cenário para a barra de topo. Estar a demonstrar e não saber em
+ * que dados se está é metade do problema — e o botão que aqui estava antes
+ * apagava tudo sem sequer dizer o quê.
+ */
+const NOME_CENARIO: Record<string, string> = Object.fromEntries(
+  CATALOGO_CENARIOS.map((c) => [c.id, c.id === 'cobertura' ? 'Dados: cobertura' : `Dados: ${c.nome.toLowerCase()}`]),
+);
 
 const embebido = new URLSearchParams(location.search).get('host') === 'ado';
 
@@ -112,7 +123,13 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
       {/* Barra de sessão fixa no topo (renderizada por portal simplificado) */}
       <div style={{ position: 'fixed', top: 10, right: 18, display: 'flex', gap: 10, zIndex: 20, alignItems: 'center' }}>
         <button className="btn sm" onClick={alternarTema} title="Alternar tema">◑</button>
-        <button className="btn sm" onClick={() => void app.reporSeed()} title="Repor dados de demonstração">Repor seed</button>
+        <button
+          className="btn sm"
+          onClick={() => navegar('/dados')}
+          title="Que conjunto de dados está carregado — e como trocar"
+        >
+          {NOME_CENARIO[app.cenarioAtual()] ?? 'Dados'}
+        </button>
         <label className="papel-chip">
           <select value={uid} onChange={(e) => trocarUtilizador(e.target.value)} style={{ border: 'none', background: 'transparent', padding: 0 }}>
             {UTILIZADORES.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}

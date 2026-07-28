@@ -16,6 +16,7 @@ import { Orcamentacao } from './telas/Orcamentacao.js';
 import { Regras } from './telas/Regras.js';
 import { Auditoria } from './telas/Auditoria.js';
 import { Acessos } from './telas/Acessos.js';
+import { DadosDemonstracao } from './telas/DadosDemonstracao.js';
 
 const rotas = [
   // "Hoje" é a entrada: a fila única de decisões.
@@ -33,6 +34,7 @@ const rotas = [
   { path: '/regras', element: <Regras /> },
   { path: '/auditoria', element: <Auditoria /> },
   { path: '/acessos', element: <Acessos /> },
+  { path: '/dados', element: <DadosDemonstracao /> },
 ];
 
 const router = createHashRouter(rotas.map((r) => ({ ...r, element: <Shell>{r.element}</Shell> })));

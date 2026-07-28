@@ -3,6 +3,7 @@ import {
   ServicoContratos, ServicoRegistosTempo, ServicoProcedimentos, ServicoEstrutura,
   ServicoAfetacoes, ServicoFaturas, ServicoRecursos, ServicoAcessos, ServicoEntregaveis,
   ServicoOrcamentos, ServicoRelatoriosAdHoc, DIRETORIO_SEED, PESSOAS,
+  cenarioPorId, CENARIO_OMISSAO, CATALOGO_CENARIOS,
   type Contexto, type Repositorios, type ContextoUtilizador,
 } from '@chora/api/nucleo';
 import { relogioSistema, type PapelAplicacional } from '@chora/domain';
@@ -31,8 +32,15 @@ export const prestadorAzure = (id: string): string | undefined => AZURE_USERS.fi
  * utilizador não tem como saber que o que vê é de uma versão anterior. Subir
  * este número repõe a demonstração no arranque seguinte.
  */
-const VERSAO_DADOS = '2026-07-28.relatorios-receita';
+const VERSAO_DADOS = '2026-07-28.cenarios';
 const CHAVE_VERSAO = 'chora:versao';
+/**
+ * Que cenário está carregado. Guarda-se à parte dos dados porque sobrevive à
+ * reposição: subir a versão do formato repõe o cenário ESCOLHIDO, não o
+ * completo. Quem estava a demonstrar a faturação não quer encontrar os vinte
+ * contratos da cobertura por ter havido uma atualização entretanto.
+ */
+const CHAVE_CENARIO = 'chora:cenario';
 
 function criarReposLocais(): Repositorios {
   const r = <T extends { id: string }>(nome: string) => new RepositorioLocalStorage<T>(nome);
@@ -79,6 +87,12 @@ export class AplicacaoLocal {
     this.relatoriosAdHoc = new ServicoRelatoriosAdHoc(this.ctx);
   }
 
+  /** O cenário carregado, ou o de omissão no primeiro arranque. */
+  cenarioAtual(): string {
+    const id = localStorage.getItem(CHAVE_CENARIO) ?? CENARIO_OMISSAO;
+    return cenarioPorId(id) !== undefined ? id : CENARIO_OMISSAO;
+  }
+
   /**
    * Semeia no primeiro arranque, repõe quando o formato dos dados mudou, e
    * reavalia SEMPRE as decisões.
@@ -90,25 +104,48 @@ export class AplicacaoLocal {
    * que reavaliar em cada arranque não custa nada ao utilizador.
    */
   async inicializar(): Promise<void> {
-    const vazio = (await this.ctx.repos.procedimentos.todos()).length === 0;
-    if (vazio || localStorage.getItem(CHAVE_VERSAO) !== VERSAO_DADOS) {
-      this.limpar();
-      await semear(this.ctx);
-      localStorage.setItem(CHAVE_VERSAO, VERSAO_DADOS);
+    // Não se pode inferir «ainda não semeou» de a base estar vazia: o cenário
+    // «Vazio» é exatamente isso, e voltaria a semear-se por cima dele a cada
+    // arranque. O carimbo de versão é o que distingue as duas situações.
+    if (localStorage.getItem(CHAVE_VERSAO) !== VERSAO_DADOS) {
+      await this.carregarCenario(this.cenarioAtual());
     }
     await new JobAlertas(this.ctx).executar();
   }
 
-  /** Apaga tudo o que é da aplicação, sem recarregar. */
-  private limpar(): void {
-    for (const chave of Object.keys(localStorage)) {
-      if (chave.startsWith('chora:')) localStorage.removeItem(chave);
-    }
+  /**
+   * Troca o conjunto de dados carregado. SUBSTITUI tudo — o isolamento é o
+   * objetivo: um cenário só demonstra bem o que demonstra se não houver mais
+   * nada por perto.
+   */
+  async carregarCenario(id: string): Promise<void> {
+    const cenario = cenarioPorId(id) ?? cenarioPorId(CENARIO_OMISSAO)!;
+    this.limpar();
+    await cenario.semear(this.ctx);
+    await new JobAlertas(this.ctx).executar();
+    localStorage.setItem(CHAVE_CENARIO, cenario.id);
+    localStorage.setItem(CHAVE_VERSAO, VERSAO_DADOS);
   }
 
-  /** Repõe os dados de demonstração (limpa localStorage e semeia de novo). */
+  /**
+   * Apaga os dados de TODOS os repositórios.
+   *
+   * Não chega remover as chaves do localStorage: cada repositório mantém um
+   * mapa em memória hidratado no arranque, e a escrita seguinte devolveria tudo
+   * ao armazenamento. Isto passava despercebido porque a única reposição que
+   * existia recarregava a página logo a seguir — os mapas morriam com ela. A
+   * troca de cenário semeia sem recarregar, e foi aí que apareceu.
+   */
+  private limpar(): void {
+    for (const repo of Object.values(this.ctx.repos)) {
+      (repo as { limpar?: () => void }).limpar?.();
+    }
+    localStorage.removeItem(CHAVE_VERSAO);
+  }
+
+  /** Recarrega o cenário atual do zero, descartando o que foi feito por cima. */
   async reporSeed(): Promise<void> {
-    this.limpar();
+    await this.carregarCenario(this.cenarioAtual());
     location.reload();
   }
 

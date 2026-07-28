@@ -42,4 +42,5 @@ export type { Acesso, RelatorioEvidencia, PassoRelatorio } from './repositorios/
 export { JobAlertas, NotifierConsola } from './alertas/job-alertas.js';
 export { paraProblema, ErroProibido, ErroNaoEncontrado, type Problema } from './erros/problema.js';
 export { semear, resumoSeed } from './seed/semear.js';
+export { CATALOGO_CENARIOS, CENARIO_OMISSAO, cenarioPorId, type Cenario } from './seed/cenarios/index.js';
 export { UTILIZADORES_DEV } from './seed/utilizadores.js';
