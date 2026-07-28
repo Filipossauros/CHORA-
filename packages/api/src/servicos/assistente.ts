@@ -124,6 +124,7 @@ export class ServicoAssistente {
     try {
       if (capacidade.tipo === 'CONSULTA') {
         const resultado = await (capacidade.executar as Capacidade['executar'])(parsed.data, exec);
+        abrirTabela(memoria, capacidade, frase, resultado);
         await this.auditar(frase, capacidade, 'CONSULTAR', u);
         return { ...base, resultado };
       }
@@ -131,7 +132,9 @@ export class ServicoAssistente {
         const simulacao = await (capacidade.simular as NonNullable<Capacidade['simular']>)(parsed.data, exec);
         return { ...base, simulacao };
       }
-      return { ...base, resultado: await (capacidade.executar as Capacidade['executar'])(parsed.data, exec) };
+      const resultado = await (capacidade.executar as Capacidade['executar'])(parsed.data, exec);
+      abrirTabela(memoria, capacidade, frase, resultado);
+      return { ...base, resultado };
     } catch (erro) {
       if (erro instanceof ErroEsclarecimento) {
         return { ...base, esclarecimento: { pergunta: erro.pergunta, opcoes: erro.opcoes } };
@@ -192,6 +195,26 @@ export class ServicoAssistente {
       depois: { frase, capacidade: c.nome, tipo: c.tipo, ...(parametros !== undefined ? { parametros } : {}) },
     });
   }
+}
+
+/**
+ * Põe a tabela devolvida em cima da mesa, para a pergunta seguinte poder
+ * trabalhar sobre ela.
+ *
+ * Só as tabelas com CHAVES entram: sem identificador por linha não há junção
+ * possível, e juntar por texto é como se constroem relatórios que parecem
+ * certos. As capacidades que gerem a própria tabela ficam de fora — já a
+ * atualizaram, com a proveniência que lhes pertence.
+ */
+function abrirTabela(memoria: ContextoConversa, c: Capacidade<never>, frase: string, r: ResultadoCapacidade): void {
+  if (c.gereTabela === true) return;
+  const chaves = r.tabela?.chaves;
+  if (r.tabela === undefined || chaves === undefined || chaves.length === 0) return;
+  memoria.tabela = {
+    ...r.tabela, chaves,
+    tipoEntidade: chaves[0]!.tipo,
+    origem: [{ frase, capacidade: c.nome }],
+  };
 }
 
 function publica(c: Capacidade<never>): CapacidadePublica {

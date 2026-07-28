@@ -130,6 +130,12 @@ interface Padrao {
   termos: string[][];
   /** Termos que, se presentes, impedem este padrão. */
   excluir?: string[];
+  /**
+   * Só vale quando há uma lista em curso. «Acrescenta os consumos» é a
+   * continuação de uma pergunta anterior — sem lista, é outra coisa qualquer, e
+   * é melhor deixar o padrão seguinte tentar.
+   */
+  exigeTabela?: boolean;
   extrair(frase: string): Record<string, unknown>;
   confianca: number;
 }
@@ -138,7 +144,89 @@ interface Padrao {
 const def = (o: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 
+/** Número solto na frase, para os filtros («mais de 100 000»). */
+function limiteNaFrase(t: string): { minimo?: number; maximo?: number } {
+  const n = normalizar(t);
+  const valor = (re: RegExp): number | undefined => {
+    const m = n.match(re);
+    if (m?.[1] === undefined) return undefined;
+    const v = Number(m[1].replace(/[\s.]/g, '').replace(',', '.'));
+    return Number.isFinite(v) ? v : undefined;
+  };
+  const min = valor(/(?:mais de|superior a|acima de|maior que|a partir de|pelo menos)\s*(\d[\d\s.]*(?:,\d+)?)/);
+  const max = valor(/(?:menos de|inferior a|abaixo de|menor que|ate)\s*(\d[\d\s.]*(?:,\d+)?)/);
+  return { ...(min !== undefined ? { minimo: min } : {}), ...(max !== undefined ? { maximo: max } : {}) };
+}
+
+/**
+ * Coluna referida num pedido de filtro ou ordenação. Trabalha sobre a frase sem
+ * acentos porque é assim que a comparação com os cabeçalhos é feita — e porque
+ * ninguém escreve «valor disponível» com o acento certo quando tem pressa.
+ */
+function colunaNaFrase(t: string): string | undefined {
+  const n = normalizar(t);
+  const m =
+    n.match(/(?:em que|onde|cuj[oa]s?)\s+(?:o|a|os|as)?\s*([^?.,;]{2,40}?)\s+(?:e|seja|for|esteja|estao|sao|fica|ficam)\b/) ??
+    n.match(/(?:ordena(?:r)?|ordem)\s+(?:a lista\s+|a tabela\s+)?(?:por|pel[oa]s?)\s+([^?.,;]{2,40}?)(?=\s*[?.,;]|\s+(?:do|da|de|crescente|decrescente)\b|$)/) ??
+    n.match(/(?:pel[oa]s?|por|no|na)\s+(?:coluna\s+)?([^?.,;]{2,40}?)\s+(?:superior|inferior|acima|abaixo|maior|menor|mais|menos)\b/) ??
+    n.match(/(?:superior|inferior|acima|abaixo|maior|menor|mais|menos)\s+(?:a|de|que|do que)?\s*\d[\d\s.,]*\s+(?:em|no|na|de|d[oa])\s+(?:coluna\s+)?([^?.,;]{2,40}?)(?=\s*[?.,;]|$)/);
+  const bruto = m?.[1]?.trim();
+  return bruto !== undefined && bruto.length >= 2 ? bruto : undefined;
+}
+
 const PADROES: Padrao[] = [
+  // ─── COMPOSIÇÃO DA LISTA EM CURSO ─────────────────────────────────────────
+  // Vêm à frente de tudo, mas só valem com uma lista em cima da mesa: são
+  // continuações de uma pergunta anterior, não perguntas por si.
+  {
+    capacidade: 'tabela.acrescentar',
+    termos: [['acrescenta', 'acrescentar', 'acrescente', 'junta', 'juntar', 'junte', 'mostra tambem', 'com a coluna', 'coluna d']],
+    excluir: ['complementar', 'complementares'],
+    exigeTabela: true,
+    confianca: 0.9,
+    // A frase inteira serve de pedido: o catálogo de enriquecimentos reconhece
+    // os termos, e o que não reconhecer devolve as opções em vez de adivinhar.
+    extrair: (frase) => ({ bloco: frase }),
+  },
+  {
+    capacidade: 'tabela.exportar',
+    termos: [['exporta', 'exportar', 'descarrega', 'descarregar', 'excel', 'folha de calculo', 'xlsx']],
+    excluir: ['guarda', 'guardar', 'arquiva'],
+    exigeTabela: true,
+    confianca: 0.9,
+    extrair: () => ({}),
+  },
+  {
+    capacidade: 'tabela.guardar',
+    termos: [['guarda', 'guardar', 'arquiva', 'arquivar', 'grava', 'gravar'], ['relatorio', 'relatorios', 'lista', 'tabela']],
+    exigeTabela: true,
+    confianca: 0.9,
+    extrair(frase) {
+      const m = frase.match(/(?:como|chamad[oa]|com o nome)\s+«?([^»?.,;]{3,60})»?/i);
+      return def({ titulo: m?.[1]?.trim() });
+    },
+  },
+  {
+    capacidade: 'tabela.filtrar',
+    termos: [['filtra', 'filtrar', 'fica so', 'fica apenas', 'so as que', 'so os que', 'apenas as que', 'apenas os que', 'deixa so', 'tira as que', 'tira os que']],
+    exigeTabela: true,
+    confianca: 0.85,
+    extrair(frase) {
+      const contem = frase.match(/cont[eê]m\s+«?([^»?.,;]{2,40})»?/i)?.[1]?.trim();
+      return def({ coluna: colunaNaFrase(frase), contem, ...limiteNaFrase(frase) });
+    },
+  },
+  {
+    capacidade: 'tabela.ordenar',
+    termos: [['ordena', 'ordenar', 'ordem', 'do maior', 'do menor']],
+    exigeTabela: true,
+    confianca: 0.85,
+    extrair: (frase) => def({
+      coluna: colunaNaFrase(frase),
+      ascendente: /do menor|crescente|ascendente/i.test(frase) ? true : undefined,
+    }),
+  },
+
   // ─── AÇÕES ────────────────────────────────────────────────────────────────
   // Vêm primeiro: uma frase de substituição também menciona «perfil» e
   // «contrato», e não queremos que caia numa consulta.
@@ -401,6 +489,7 @@ export function encaminhar(frase: string, contexto: ContextoConversa = {}): Enca
   const t = normalizar(frase);
 
   for (const p of PADROES) {
+    if (p.exigeTabela === true && contexto.tabela === undefined) continue;
     const bate = p.termos.every((grupo) => grupo.some((termo) => t.includes(normalizar(termo))));
     if (!bate) continue;
     if (p.excluir?.some((x) => t.includes(normalizar(x))) === true) continue;

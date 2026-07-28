@@ -62,6 +62,29 @@ export interface Repositorios {
   projetos: Repository<Projeto>;
   /** Orçamentos anuais em preparação ou fechados. */
   orcamentos: Repository<OrcamentoGuardado>;
+  /** Relatórios compostos no assistente e guardados pelo utilizador. */
+  relatoriosAdHoc: Repository<RelatorioAdHoc>;
+}
+
+/**
+ * Relatório ad-hoc: uma tabela composta no assistente, a pedido do utilizador.
+ *
+ * Guarda os DADOS tal como estavam quando foi criado, não a receita para os
+ * recalcular. É deliberado: quem guarda um relatório quer o retrato daquele
+ * dia, e um número que muda sozinho entre a exportação e a reunião não serve
+ * para discutir nada. A proveniência fica ao lado, para se saber como se chegou
+ * ali e se poder repetir a pergunta quando se quiser o valor de hoje.
+ */
+export interface RelatorioAdHoc {
+  id: string;
+  titulo: string;
+  tipoEntidade: string;
+  colunas: string[];
+  linhas: Array<Array<string | number>>;
+  /** As perguntas que o construíram, por ordem. */
+  origem: Array<{ frase: string; capacidade: string }>;
+  criadoEm: string;
+  criadoPor: string;
 }
 
 /** Orçamento anual da unidade, tal como fica guardado. */
@@ -122,6 +145,7 @@ export function criarRepositoriosMemoria(): Repositorios {
     relatoriosEvidencia: new RepositorioMemoria('relatoriosEvidencia'),
     projetos: new RepositorioMemoria('projetos'),
     orcamentos: new RepositorioMemoria('orcamentos'),
+    relatoriosAdHoc: new RepositorioMemoria('relatoriosAdHoc'),
   };
 }
 

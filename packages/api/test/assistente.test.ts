@@ -118,16 +118,25 @@ describe('catálogo de capacidades', () => {
     for (const c of CAPACIDADES.filter((x) => x.tipo === 'ACAO')) {
       expect(c.operacao, `${c.nome} não declara operação`).toBeDefined();
     }
-    // A única ação sem simulação é a que só abre um ecrã.
+    // Só duas ações dispensam simulação: a que apenas abre um ecrã, e a que
+    // arquiva uma lista — não altera nada do contrato e apaga-se num clique.
     const semSimular = CAPACIDADES.filter((c) => c.tipo === 'ACAO' && c.simular === undefined).map((c) => c.nome);
-    expect(semSimular).toEqual(['fatura.registar']);
+    expect(semSimular.sort()).toEqual(['fatura.registar', 'tabela.guardar']);
   });
 
   it('cada exemplo do catálogo é encaminhado para a sua própria capacidade', () => {
+    // As funções que compõem a lista só valem com uma lista em cima da mesa:
+    // sem contexto, «acrescenta os consumos» não é sequer uma pergunta.
+    const comLista = {
+      tabela: {
+        titulo: 'Lista', tipoEntidade: 'CONTRATO' as const, colunas: ['Contrato'], linhas: [['C-1']],
+        chaves: [{ tipo: 'CONTRATO' as const, id: 'c1' }], origem: [],
+      },
+    };
     const falhas: string[] = [];
     for (const c of CAPACIDADES) {
       for (const exemplo of c.exemplos) {
-        const e = encaminhar(exemplo);
+        const e = encaminhar(exemplo, c.gereTabela === true ? comLista : {});
         if (e?.capacidade !== c.nome) falhas.push(`«${exemplo}» → ${e?.capacidade ?? 'nada'} (esperado ${c.nome})`);
       }
     }
@@ -479,5 +488,124 @@ describe('faturação pelo chat', () => {
     const r = await perguntar(app, 'Quero validar uma fatura do C-2026-001');
     expect(r.capacidade?.nome).toBe('fatura.registar');
     expect(r.resultado?.ui?.ecra).toBe('FATURACAO');
+  });
+});
+
+// ─── COMPOSIÇÃO DE LISTAS E RELATÓRIOS AD-HOC ────────────────────────────────
+
+describe('compor uma lista pergunta a pergunta', () => {
+  it('uma consulta com chaves fica em cima da mesa para a pergunta seguinte', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const r = await perguntar(app, 'Que contratos comportam um perfil a 40 euros por hora?');
+    const t = r.conversa['tabela'] as { tipoEntidade: string; chaves: unknown[]; origem: unknown[] } | undefined;
+    expect(t?.tipoEntidade).toBe('CONTRATO');
+    expect(t?.chaves.length).toBe(r.resultado?.tabela?.linhas.length);
+    expect(t?.origem.length).toBe(1);
+  });
+
+  it('acrescentar consumos junta colunas às MESMAS linhas, por identificador', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const um = await perguntar(app, 'Que contratos comportam um perfil a 40 euros por hora?');
+    const antes = um.resultado?.tabela;
+    const dois = await perguntar(app, 'Acrescenta os consumos atuais de cada contrato', um.conversa);
+
+    expect(dois.capacidade?.nome).toBe('tabela.acrescentar');
+    expect(dois.resultado?.tabela?.linhas.length).toBe(antes?.linhas.length);
+    expect(dois.resultado?.tabela?.colunas).toContain('Executado');
+    expect(dois.resultado?.tabela?.colunas).toContain('Por executar');
+    // A proveniência acumula: a pergunta original e o bloco acrescentado.
+    expect((dois.conversa['tabela'] as { origem: unknown[] }).origem.length).toBe(2);
+  });
+
+  it('um bloco que não existe para aquele tipo de entidade pergunta de volta', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const um = await perguntar(app, 'Que contratos estão em risco?');
+    const dois = await perguntar(app, 'Junta a essa lista o número de telefone', um.conversa);
+    expect(dois.esclarecimento?.pergunta).toContain('Não sei calcular');
+    expect(dois.esclarecimento!.opcoes.length).toBeGreaterThan(3);
+  });
+
+  it('sem lista em curso, as funções de composição explicam como se começa', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const r = await app.inject({
+      method: 'POST', url: '/api/v1/assistente/interpretar', headers: comoGestor(),
+      payload: { frase: 'exporta esta lista', encaminhamento: { capacidade: 'tabela.exportar', parametros: {} } },
+    });
+    const j = r.json() as Resposta;
+    expect(j.resultado?.semResultado).toBe(true);
+    expect(j.resultado?.texto).toContain('lista em cima da mesa');
+  });
+
+  it('filtrar corta pela coluna dita e mantém as chaves alinhadas', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const um = await perguntar(app, 'Que contratos comportam um perfil a 40 euros por hora?');
+    const antes = um.conversa['tabela'] as { linhas: Array<Array<string | number>>; colunas: string[] };
+    const coluna = antes.colunas.indexOf('Valor disponível');
+    const maior = Math.max(...antes.linhas.map((l) => Number(l[coluna])));
+
+    const dois = await perguntar(app, `Fica só com as linhas em que o valor disponível é superior a ${maior}`, um.conversa);
+    const nova = dois.conversa['tabela'] as { linhas: unknown[][]; chaves: unknown[] };
+    expect(dois.capacidade?.nome).toBe('tabela.filtrar');
+    expect(dois.esclarecimento).toBeUndefined();
+    // Só o contrato com o maior valor sobrevive ao corte.
+    expect(nova.linhas.length).toBe(1);
+    expect(nova.chaves.length).toBe(1);
+    expect(dois.resultado?.tabela?.linhas.length).toBe(1);
+  });
+
+  it('ordenar pela coluna dita inverte a lista quando se pede o menor primeiro', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const um = await perguntar(app, 'Que contratos comportam um perfil a 40 euros por hora?');
+    const coluna = um.resultado!.tabela!.colunas.indexOf('Valor disponível');
+    const dois = await perguntar(app, 'Ordena a lista pelo valor disponível, do menor para o maior', um.conversa);
+    const depois = dois.resultado!.tabela!.linhas as Array<Array<string | number>>;
+    expect(dois.capacidade?.nome).toBe('tabela.ordenar');
+    expect(dois.esclarecimento).toBeUndefined();
+    expect(depois.length).toBe(um.resultado!.tabela!.linhas.length);
+    const valores = depois.map((l) => Number(l[coluna]));
+    expect(valores).toEqual([...valores].sort((a, b) => a - b));
+  });
+
+  it('exportar leva duas folhas: os dados e a proveniência', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const um = await perguntar(app, 'Que contratos estão em risco?');
+    const dois = await perguntar(app, 'Exporta esta lista para Excel', um.conversa);
+    expect(dois.resultado?.exportavel?.folhas.length).toBe(2);
+  });
+
+  it('guardar arquiva o retrato do dia e o relatório aparece na listagem', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const um = await perguntar(app, 'Que contratos estão em risco?');
+    const dois = await perguntar(app, 'Guarda esta lista nos relatórios', um.conversa);
+    expect(dois.resultado?.texto).toContain('guardado nos relatórios');
+
+    const lista = await app.inject({ method: 'GET', url: '/api/v1/relatorios/ad-hoc', headers: comoGestor() });
+    const { dados } = lista.json() as { dados: Array<{ id: string; linhas: unknown[]; origem: unknown[] }> };
+    expect(dados.length).toBe(1);
+    expect(dados[0]!.linhas.length).toBe(um.resultado?.tabela?.linhas.length);
+    expect(dados[0]!.origem.length).toBeGreaterThan(0);
+
+    const apagar = await app.inject({ method: 'DELETE', url: `/api/v1/relatorios/ad-hoc/${dados[0]!.id}`, headers: comoGestor() });
+    expect(apagar.statusCode).toBe(204);
+    const depois = await app.inject({ method: 'GET', url: '/api/v1/relatorios/ad-hoc', headers: comoGestor() });
+    expect((depois.json() as { dados: unknown[] }).dados.length).toBe(0);
+  });
+
+  it('um elemento da equipa não arquiva relatórios da carteira', async () => {
+    const { app } = await montarApp();
+    fechar = () => app.close();
+    const r = await app.inject({
+      method: 'POST', url: '/api/v1/assistente/executar', headers: comoRecurso(),
+      payload: { capacidade: 'tabela.guardar', parametros: {} },
+    });
+    expect(r.statusCode).toBe(403);
   });
 });

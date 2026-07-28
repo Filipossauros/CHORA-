@@ -47,6 +47,11 @@ export function Perguntar(): ReactNode {
    * anterior, e o fio da conversa perder-se-ia precisamente quando importa.
    */
   const conversa = useRef<ContextoConversa>({});
+  /**
+   * A lista em curso, espelhada no estado só para se poder mostrar. O ref
+   * continua a ser a fonte: isto é uma etiqueta, não a memória.
+   */
+  const [tabela, setTabela] = useState<ContextoConversa['tabela']>(undefined);
 
   const servico = new ServicoAssistente(app.ctx);
 
@@ -80,6 +85,7 @@ export function Perguntar(): ReactNode {
       const e = await resolverEncaminhamento(texto);
       const resposta = await servico.interpretar(texto, app.utilizador(), e, conversa.current);
       conversa.current = resposta.conversa;
+      setTabela(resposta.conversa.tabela);
       atualizar(id, { resposta, aPensar: false });
     } catch (err) {
       atualizar(id, { erro: mensagemErro(err), aPensar: false });
@@ -117,6 +123,7 @@ export function Perguntar(): ReactNode {
         confianca: 0.9, origem: 'PADRAO',
       }, conversa.current);
       conversa.current = resposta.conversa;
+      setTabela(resposta.conversa.tabela);
       atualizar(id, { documentos: lidos, resposta, aPensar: false });
     } catch (err) {
       atualizar(id, { erro: mensagemErro(err), aPensar: false });
@@ -139,6 +146,7 @@ export function Perguntar(): ReactNode {
         conversa.current,
       );
       conversa.current = resposta.conversa;
+      setTabela(resposta.conversa.tabela);
       atualizar(turno.id, { resposta, erro: undefined });
     } catch (err) {
       atualizar(turno.id, { erro: mensagemErro(err) });
@@ -170,6 +178,20 @@ export function Perguntar(): ReactNode {
               onLimpar={() => setTurnos((ts) => ts.filter((x) => x.id !== t.id))}
             />
           ))}
+        </div>
+      )}
+
+      {tabela !== undefined && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, fontSize: 12.5 }}>
+          <span className="pill p-azul">Lista em curso</span>
+          <span className="prim">{tabela.titulo}</span>
+          <span className="sec">{tabela.linhas.length} linha(s) · {tabela.colunas.length} coluna(s)</span>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 7 }}>
+            <button className="btn sm" style={{ fontWeight: 400 }} onClick={() => void perguntar('Acrescenta colunas a esta lista')}>Acrescentar colunas</button>
+            <button className="btn sm" style={{ fontWeight: 400 }} onClick={() => void perguntar('Exporta esta lista para Excel')}>⬇ Excel</button>
+            <button className="btn sm" style={{ fontWeight: 400 }} onClick={() => void perguntar('Guarda esta lista nos relatórios')}>Guardar nos relatórios</button>
+            <button className="ligacao" onClick={() => { const { tabela: _t, ...resto } = conversa.current; conversa.current = resto; setTabela(undefined); }}>largar</button>
+          </span>
         </div>
       )}
 

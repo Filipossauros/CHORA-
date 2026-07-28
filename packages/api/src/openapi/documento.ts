@@ -143,6 +143,13 @@ export function gerarOpenApi(): Record<string, unknown> {
     '/api/v1/relatorios/execucao-financeira': {
       get: { summary: 'Execução financeira', tags: ['Relatórios'], security: seguranca, parameters: [{ name: 'contratoId', in: 'query', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Relatório' } } },
     },
+    '/api/v1/relatorios/ad-hoc': {
+      get: { summary: 'Relatórios compostos no assistente e guardados pelo utilizador', tags: ['Relatórios'], security: seguranca, responses: { '200': { description: 'Lista' } } },
+    },
+    '/api/v1/relatorios/ad-hoc/{id}': {
+      get: { summary: 'Obtém um relatório ad-hoc', tags: ['Relatórios'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Relatório' }, ...respostaProblema('404', 'Inexistente') } },
+      delete: { summary: 'Apaga um relatório ad-hoc', tags: ['Relatórios'], security: seguranca, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '204': { description: 'Apagado' }, ...respostaProblema('404', 'Inexistente') } },
+    },
     '/api/v1/alertas': {
       get: { summary: 'Lista alertas', tags: ['Alertas'], security: seguranca, responses: { '200': { description: 'Lista de alertas' } } },
     },

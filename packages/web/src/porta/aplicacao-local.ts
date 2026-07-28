@@ -2,7 +2,7 @@ import {
   criarContexto, semear, resumoSeed, JobAlertas, FakeTokenValidator, UTILIZADORES_DEV,
   ServicoContratos, ServicoRegistosTempo, ServicoProcedimentos, ServicoEstrutura,
   ServicoAfetacoes, ServicoFaturas, ServicoRecursos, ServicoAcessos, ServicoEntregaveis,
-  ServicoOrcamentos, DIRETORIO_SEED, PESSOAS,
+  ServicoOrcamentos, ServicoRelatoriosAdHoc, DIRETORIO_SEED, PESSOAS,
   type Contexto, type Repositorios, type ContextoUtilizador,
 } from '@chora/api/nucleo';
 import { relogioSistema, type PapelAplicacional } from '@chora/domain';
@@ -31,7 +31,7 @@ export const prestadorAzure = (id: string): string | undefined => AZURE_USERS.fi
  * utilizador não tem como saber que o que vê é de uma versão anterior. Subir
  * este número repõe a demonstração no arranque seguinte.
  */
-const VERSAO_DADOS = '2026-07-27.assistente';
+const VERSAO_DADOS = '2026-07-28.relatorios-adhoc';
 const CHAVE_VERSAO = 'chora:versao';
 
 function criarReposLocais(): Repositorios {
@@ -43,7 +43,7 @@ function criarReposLocais(): Repositorios {
     compromissos: r('compromissos'), faturas: r('faturas'), documentosHabilitacao: r('documentosHabilitacao'),
     alertas: r('alertas'), eventosAuditoria: r('eventosAuditoria'), contratoProjetos: r('contratoProjetos'),
     acessos: r('acessos'), relatoriosEvidencia: r('relatoriosEvidencia'),
-    projetos: r('projetos'), orcamentos: r('orcamentos'),
+    projetos: r('projetos'), orcamentos: r('orcamentos'), relatoriosAdHoc: r('relatoriosAdHoc'),
   };
 }
 
@@ -60,6 +60,7 @@ export class AplicacaoLocal {
   readonly acessos: ServicoAcessos;
   readonly entregaveis: ServicoEntregaveis;
   readonly orcamentos: ServicoOrcamentos;
+  readonly relatoriosAdHoc: ServicoRelatoriosAdHoc;
   private utilizadorId = 'oid-gestor-contrato';
 
   constructor() {
@@ -75,6 +76,7 @@ export class AplicacaoLocal {
     this.acessos = new ServicoAcessos(this.ctx);
     this.entregaveis = new ServicoEntregaveis(this.ctx);
     this.orcamentos = new ServicoOrcamentos(this.ctx);
+    this.relatoriosAdHoc = new ServicoRelatoriosAdHoc(this.ctx);
   }
 
   /**

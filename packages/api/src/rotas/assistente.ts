@@ -11,7 +11,25 @@ function parse<T>(s: z.ZodType<T>, corpo: unknown): T {
   return r.data;
 }
 
+const zTipoEntidade = z.enum(['CONTRATO', 'PESSOA', 'PERFIL', 'PROJETO', 'FATURA', 'ENTREGAVEL']);
+
+/**
+ * A lista em curso viaja no corpo do pedido, como o resto da memória: o servidor
+ * não guarda sessões, e a conversa é do cliente. Vem validada porque é dela que
+ * saem os identificadores usados nas junções — e um identificador que se aceite
+ * sem esquema é um identificador que se aceita de qualquer lado.
+ */
+const zTabela = z.object({
+  titulo: z.string(),
+  tipoEntidade: zTipoEntidade,
+  colunas: z.array(z.string()),
+  linhas: z.array(z.array(z.union([z.string(), z.number()]))),
+  chaves: z.array(z.object({ tipo: zTipoEntidade, id: z.string() })).optional(),
+  origem: z.array(z.object({ frase: z.string(), capacidade: z.string() })),
+});
+
 const zConversa = z.object({
+  tabela: zTabela.optional(),
   contratoId: z.string().optional(), contratoNumero: z.string().optional(),
   projetoId: z.string().optional(), projetoNome: z.string().optional(),
   pessoaId: z.string().optional(), pessoaNome: z.string().optional(),

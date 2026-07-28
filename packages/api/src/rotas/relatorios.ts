@@ -7,6 +7,7 @@ import { ErroProibido, ErroValidacao } from '../erros/problema.js';
 import { podeExecutar } from '../auth/permissoes.js';
 import { JobAlertas } from '../alertas/job-alertas.js';
 import { ServicoAlertas } from '../servicos/alertas.js';
+import { ServicoRelatoriosAdHoc } from '../servicos/relatorios-adhoc.js';
 
 export function rotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
   app.get('/api/v1/relatorios/horas-por-perfil', async (req) => {
@@ -122,6 +123,27 @@ export function rotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
       rejeitados: registos.filter((r) => r.estado === 'REJEITADO').length,
       anulados: registos.filter((r) => r.estado === 'ANULADO').length,
     };
+  });
+
+  // Relatórios ad-hoc — as listas compostas no assistente e arquivadas por quem
+  // as compôs. Só se listam, se leem e se apagam: criam-se na conversa, que é
+  // onde ganham a proveniência que os torna legíveis a quem não estava lá.
+  const adHoc = new ServicoRelatoriosAdHoc(ctx);
+
+  app.get('/api/v1/relatorios/ad-hoc', async (req) => {
+    exigirUtilizador(req);
+    return { dados: await adHoc.listar() };
+  });
+
+  app.get('/api/v1/relatorios/ad-hoc/:id', async (req) => {
+    exigirUtilizador(req);
+    return adHoc.obter((req.params as { id: string }).id);
+  });
+
+  app.delete('/api/v1/relatorios/ad-hoc/:id', async (req, reply) => {
+    const u = exigirUtilizador(req);
+    await adHoc.remover((req.params as { id: string }).id, u);
+    return reply.code(204).send();
   });
 }
 

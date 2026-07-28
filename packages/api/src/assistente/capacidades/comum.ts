@@ -1,11 +1,20 @@
 import type { Contrato, PerfilContratual, FonteResposta, Proveniencia } from '@chora/domain';
-import type { ContextoExecucao, RegraAvaliada } from '../tipos.js';
+import type { ChaveLinha, ContextoExecucao, RegraAvaliada, TipoEntidade } from '../tipos.js';
 import type { Projeto } from '../../repositorios/memoria/index.js';
 import { ErroEsclarecimento } from '../erros.js';
 import { resolverContrato, resolverPessoa, resolverProjeto, resolverPerfil, rotuloContrato } from '../resolucao.js';
 import { anoCorrente, type Periodo } from '../tempo.js';
 
 export const F = (proveniencia: Proveniencia, referencia: string): FonteResposta => ({ proveniencia, referencia });
+
+/**
+ * Chaves de uma tabela: uma entidade por linha, na mesma ordem das linhas.
+ *
+ * É o que transforma uma resposta num ponto de partida — sem isto, a pergunta
+ * seguinte teria de cruzar as listas por texto, que é como se constroem
+ * relatórios errados com ar de certos.
+ */
+export const K = (tipo: TipoEntidade, ids: ReadonlyArray<string>): ChaveLinha[] => ids.map((id) => ({ tipo, id }));
 export const horas = (min: number): number => Math.round(min / 60);
 export const euros = (c: number): number => +(c / 100).toFixed(2);
 

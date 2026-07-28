@@ -52,11 +52,38 @@ export interface Simulacao {
   bloqueada: boolean;
 }
 
+/**
+ * Entidade a que uma linha de tabela respeita. É o que permite JUNTAR o
+ * resultado de duas perguntas: a junção faz-se por identificador, nunca por
+ * texto — cruzar tabelas por nome é como se constroem relatórios errados.
+ */
+export type TipoEntidade = 'CONTRATO' | 'PESSOA' | 'PERFIL' | 'PROJETO' | 'FATURA' | 'ENTREGAVEL';
+export interface ChaveLinha { tipo: TipoEntidade; id: string }
+
 /** Tabela apresentada no chat e exportável para folha de cálculo. */
 export interface TabelaResposta {
   titulo: string;
   colunas: string[];
   linhas: Array<Array<string | number>>;
+  /**
+   * Uma chave por linha, na mesma ordem. Não se apresenta: serve para
+   * acrescentar colunas a partir de outra pergunta. Sem chaves, a tabela é só
+   * de leitura — o assistente diz isso em vez de juntar às cegas.
+   */
+  chaves?: ChaveLinha[];
+}
+
+/**
+ * TABELA DE TRABALHO — o resultado que sobrevive entre perguntas.
+ *
+ * Uma pergunta produz a lista, a seguinte acrescenta-lhe colunas, uma terceira
+ * filtra-a, e no fim exporta-se. Sem isto, cada resposta era um beco: bonita de
+ * ler e impossível de compor.
+ */
+export interface TabelaTrabalho extends TabelaResposta {
+  tipoEntidade: TipoEntidade;
+  /** Perguntas e capacidades que a construíram, por ordem. É a proveniência. */
+  origem: Array<{ frase: string; capacidade: string }>;
 }
 
 /** Ecrã real a embeber na conversa, com valores iniciais. */
@@ -94,6 +121,8 @@ export interface ResultadoCapacidade {
  * chat que não segue o fio é uma caixa de pesquisa com passos a mais.
  */
 export interface ContextoConversa {
+  /** A lista em construção, transportada de turno em turno. */
+  tabela?: TabelaTrabalho;
   contratoId?: string;
   contratoNumero?: string;
   projetoId?: string;
@@ -126,6 +155,13 @@ export interface Capacidade<P = unknown> {
   parametrosDescricao: Array<{ nome: string; tipo: string; obrigatorio: boolean; descricao: string }>;
   /** Operação da matriz de permissões que autoriza esta capacidade. */
   operacao?: import('../auth/permissoes.js').Operacao;
+  /**
+   * A capacidade gere ela própria a tabela de trabalho (acrescenta, filtra,
+   * ordena). Sem isto, o serviço substituiria a lista em curso pela devolvida —
+   * e a proveniência, que é o que distingue um relatório composto de uma tabela
+   * caída do céu, perdia-se ao segundo passo.
+   */
+  gereTabela?: boolean;
   /** Regras de negócio avaliadas na execução. Vazio nas consultas. */
   regras: string[];
   /** Frases que a acionam — servem o router determinístico e o modelo. */

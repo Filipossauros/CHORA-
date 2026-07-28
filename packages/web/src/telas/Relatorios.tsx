@@ -1,9 +1,10 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import * as XLSX from 'xlsx';
 import type { Contrato, Fatura, TipoFaturacao } from '@chora/domain';
+import type { RelatorioAdHoc } from '@chora/api/nucleo';
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
-import { Barra, formatarDuracao, formatarMoeda, hoje, useAsync } from '../comum.js';
+import { Barra, formatarDuracao, formatarMoeda, hoje, mensagemErro, useAsync } from '../comum.js';
 
 const ROT_TIPO: Record<TipoFaturacao, string> = {
   BOLSA_HORAS: 'Bolsa de horas', ENTREGAVEL: 'Entregável', LICENCIAMENTO: 'Licenciamento',
@@ -17,7 +18,24 @@ interface LinhaFaturacao {
   disponivelApos: number;
 }
 
+type Seccao = 'faturacao' | 'consumo' | 'guardados';
+
+/**
+ * RELATÓRIOS — três leituras, cada uma com o seu âmbito à vista.
+ *
+ * A confusão anterior não vinha do número de quadros: vinha de os controlos não
+ * pertencerem ao que governavam. Havia um seletor de contrato no cabeçalho que
+ * só mexia no primeiro quadro e um seletor de ano dentro do segundo, com o
+ * terceiro a seguir esse ano sem o dizer. Agora cada secção declara o seu âmbito
+ * — um ano, um contrato, ou nenhum — e traz o respetivo controlo ao lado do
+ * título.
+ *
+ * A terceira secção é de outra natureza: são relatórios que a aplicação não sabe
+ * produzir e que alguém compôs no assistente, pergunta a pergunta. Ficam aqui
+ * porque é aqui que se procuram relatórios, e apagam-se aqui pela mesma razão.
+ */
 export function Relatorios(): ReactNode {
+  const [seccao, setSeccao] = useState<Seccao>('faturacao');
   const [contratoId, setContratoId] = useState('');
   const [ano, setAno] = useState(hoje().slice(0, 4));
 
@@ -26,31 +44,191 @@ export function Relatorios(): ReactNode {
     const cid = contratoId || contratos[0]?.id || '';
     const resumo = await app.contratos.resumoExecucao(cid) as { saldosPerfis: Array<{ perfilId: string; nome: string; minutosPrevistos: number; minutosConsumidos: number; valorConsumido: number; valorPrevisto: number }> };
     const faturas = await app.ctx.repos.faturas.todos((f) => f.estado === 'VALIDADA');
-    return { contratos, cid, resumo, faturas };
+    const guardados = await app.relatoriosAdHoc.listar();
+    return { contratos, cid, resumo, faturas, guardados };
   }, [contratoId]);
 
   if (base.dados === undefined) return <p className="vazio">A carregar…</p>;
-  const { contratos, cid, resumo, faturas } = base.dados;
+  const { contratos, cid, resumo, faturas, guardados } = base.dados;
   const anos = [...new Set(faturas.map((f) => (f.dataAprovacao ?? f.dataRececao).slice(0, 4)))].sort().reverse();
+  const doAno = faturas.filter((f) => (f.dataAprovacao ?? f.dataRececao).startsWith(ano));
+
+  const seletorAno = (
+    <select value={ano} onChange={(e) => setAno(e.target.value)} aria-label="Ano">
+      {(anos.length > 0 ? anos : [ano]).map((a) => <option key={a} value={a}>{a}</option>)}
+    </select>
+  );
+  const seletorContrato = (
+    <select value={cid} onChange={(e) => setContratoId(e.target.value)} aria-label="Contrato">
+      {contratos.map((c) => <option key={c.id} value={c.id}>{c.numero}</option>)}
+    </select>
+  );
 
   return (
     <>
-      <Cabecalho titulo="Relatórios" sub="Horas por perfil · faturação aprovada" acoes={
-        <select value={cid} onChange={(e) => setContratoId(e.target.value)}>{contratos.map((c) => <option key={c.id} value={c.id}>{c.numero}</option>)}</select>
-      } />
+      <Cabecalho titulo="Relatórios" sub="Faturação do ano · consumo de um contrato · relatórios compostos no assistente" />
 
-      <div className="cartao" style={{ marginBottom: 16 }}><h3>Horas consumidas por perfil<span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{contratos.find((c) => c.id === cid)?.numero}</span>
-        <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => exportarPerfis(contratos.find((c) => c.id === cid)?.numero ?? cid, resumo.saldosPerfis)}>⬇ Excel</button>
-      </h3><table>
-        <thead><tr><th>Perfil</th><th className="num">Consumidas / previstas</th><th style={{ width: 160 }}>Consumo</th><th className="num">Valor consumido</th></tr></thead>
-        <tbody>{resumo.saldosPerfis.map((s) => { const frac = s.minutosPrevistos > 0 ? s.minutosConsumidos / s.minutosPrevistos : 0; return (
-          <tr key={s.perfilId}><td className="prim">{s.nome}</td><td className="num">{formatarDuracao(s.minutosConsumidos)} / {formatarDuracao(s.minutosPrevistos)}</td><td><Barra fracao={frac} /></td><td className="num">{formatarMoeda(s.valorConsumido)}</td></tr>
-        ); })}{resumo.saldosPerfis.length === 0 && <tr><td colSpan={4} className="vazio">Sem perfis neste contrato.</td></tr>}</tbody>
-      </table></div>
+      <div className="abas" style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <button className={`btn sm ${seccao === 'faturacao' ? 'pri' : ''}`} onClick={() => setSeccao('faturacao')}>
+          Faturação ({doAno.length})
+        </button>
+        <button className={`btn sm ${seccao === 'consumo' ? 'pri' : ''}`} onClick={() => setSeccao('consumo')}>
+          Consumo por perfil
+        </button>
+        <button className={`btn sm ${seccao === 'guardados' ? 'pri' : ''}`} onClick={() => setSeccao('guardados')}>
+          Guardados ({guardados.length})
+        </button>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {seccao === 'faturacao' && <><span className="sec">Ano</span>{seletorAno}</>}
+          {seccao === 'consumo' && <><span className="sec">Contrato</span>{seletorContrato}</>}
+        </span>
+      </div>
 
-      <FaturacaoAprovada contratos={contratos} faturas={faturas} ano={ano} anos={anos} onAno={setAno} />
-      <FaturasValidadas contratos={contratos} faturas={faturas} ano={ano} />
+      {seccao === 'faturacao' && (
+        <>
+          <FaturasValidadas contratos={contratos} faturas={doAno} ano={ano} />
+          <FaturacaoAprovada contratos={contratos} faturas={doAno} ano={ano} />
+        </>
+      )}
+
+      {seccao === 'consumo' && (
+        <ConsumoPorPerfil numero={contratos.find((c) => c.id === cid)?.numero ?? cid} saldos={resumo.saldosPerfis} />
+      )}
+
+      {seccao === 'guardados' && <Guardados relatorios={guardados} onMudanca={base.recarregar} />}
     </>
+  );
+}
+
+/**
+ * RELATÓRIOS GUARDADOS — as listas compostas no assistente.
+ *
+ * Guardam os dados tal como estavam no dia em que foram criados, não a receita
+ * para os recalcular: quem arquiva um relatório quer o retrato daquele dia, e um
+ * número que muda sozinho entre a exportação e a reunião não serve para discutir
+ * nada. A proveniência fica ao lado, para se saber como se lá chegou — e para se
+ * poder repetir a pergunta quando o que se quer é o valor de hoje.
+ */
+function Guardados({ relatorios, onMudanca }: { relatorios: RelatorioAdHoc[]; onMudanca: () => void }): ReactNode {
+  const [aberto, setAberto] = useState<string | undefined>(undefined);
+  const [erro, setErro] = useState<string | undefined>(undefined);
+
+  async function apagar(r: RelatorioAdHoc): Promise<void> {
+    if (!confirm(`Apagar «${r.titulo}»? O relatório desaparece; as perguntas que o construíram podem ser repetidas no assistente.`)) return;
+    try {
+      await app.relatoriosAdHoc.remover(r.id, app.utilizador());
+      onMudanca();
+    } catch (e) { setErro(mensagemErro(e)); }
+  }
+
+  if (relatorios.length === 0) {
+    return (
+      <div className="cartao"><div className="corpo">
+        <p className="vazio" style={{ margin: 0 }}>Ainda não há relatórios guardados.</p>
+        <div className="aviso" style={{ marginTop: 12 }}>
+          Estes relatórios nascem no <b>«Perguntar»</b> do ecrã Hoje: faça uma pergunta que devolva uma lista
+          (por exemplo, <i>que contratos comportam um perfil a 40 euros por hora?</i>), acrescente-lhe colunas
+          (<i>acrescenta os consumos atuais</i>), filtre-a ou ordene-a, e depois diga
+          <i> guarda esta lista nos relatórios</i>. Fica aqui, com a data e as perguntas que a construíram.
+        </div>
+      </div></div>
+    );
+  }
+
+  return (
+    <>
+      {erro !== undefined && <div className="erro-cx" style={{ marginBottom: 12 }}>⚠ {erro}</div>}
+      {relatorios.map((r) => (
+        <div className="cartao" key={r.id} style={{ marginBottom: 12 }}>
+          <h3>
+            {r.titulo}
+            <span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>
+              {r.criadoEm.slice(0, 10)} · {r.linhas.length} linha(s) · {r.colunas.length} coluna(s)
+            </span>
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <button className="btn sm" onClick={() => setAberto(aberto === r.id ? undefined : r.id)}>
+                {aberto === r.id ? 'Fechar' : 'Ver'}
+              </button>
+              <button className="btn sm" onClick={() => exportarAdHoc(r)}>⬇ Excel</button>
+              <button className="btn sm" onClick={() => void apagar(r)}>Apagar</button>
+            </span>
+          </h3>
+
+          <div className="corpo" style={{ paddingTop: 0 }}>
+            <div className="sec" style={{ fontSize: 12.5 }}>
+              Composto em {r.origem.length} passo(s): {r.origem.map((o) => `«${o.frase}»`).join(' → ')}
+            </div>
+          </div>
+
+          {aberto === r.id && (
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead><tr>{r.colunas.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+                <tbody>
+                  {r.linhas.map((linha, i) => (
+                    <tr key={i}>{linha.map((v, j) => <td key={j} className={typeof v === 'number' ? 'num tabnum' : undefined}>{v}</td>)}</tr>
+                  ))}
+                  {r.linhas.length === 0 && <tr><td colSpan={r.colunas.length} className="vazio">Sem linhas.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ))}
+      <div className="aviso">
+        Os números são os do dia em que cada relatório foi guardado — não se atualizam sozinhos. Para o retrato de hoje,
+        repita as perguntas da proveniência no «Perguntar».
+      </div>
+    </>
+  );
+}
+
+/** Duas folhas: os dados e a proveniência. Sem a segunda, ninguém sabe o que lê. */
+function exportarAdHoc(r: RelatorioAdHoc): void {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet(r.linhas.map((l) => Object.fromEntries(r.colunas.map((c, i) => [c, l[i] ?? ''])))),
+    'Dados',
+  );
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet(r.origem.map((o, i) => ({ '#': i + 1, 'Passo': o.frase, 'Função': o.capacidade }))),
+    'Proveniência',
+  );
+  XLSX.writeFile(wb, `${r.titulo.replace(/[^\p{L}\p{N}]+/gu, '-').slice(0, 60)}-${r.criadoEm.slice(0, 10)}.xlsx`);
+}
+
+/** Consumo por perfil de um contrato — a leitura de quem gere a bolsa de horas. */
+function ConsumoPorPerfil({ numero, saldos }: {
+  numero: string;
+  saldos: Array<{ perfilId: string; nome: string; minutosPrevistos: number; minutosConsumidos: number; valorConsumido: number; valorPrevisto: number }>;
+}): ReactNode {
+  return (
+    <div className="cartao">
+      <h3>
+        Horas consumidas por perfil
+        <span className="sec" style={{ marginLeft: 8, fontWeight: 400 }}>{numero}</span>
+        <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => exportarPerfis(numero, saldos)}>⬇ Excel</button>
+      </h3>
+      <table>
+        <thead><tr><th>Perfil</th><th className="num">Consumidas / previstas</th><th style={{ width: 160 }}>Consumo</th><th className="num">Valor consumido</th></tr></thead>
+        <tbody>
+          {saldos.map((s) => {
+            const frac = s.minutosPrevistos > 0 ? s.minutosConsumidos / s.minutosPrevistos : 0;
+            return (
+              <tr key={s.perfilId}>
+                <td className="prim">{s.nome}</td>
+                <td className="num">{formatarDuracao(s.minutosConsumidos)} / {formatarDuracao(s.minutosPrevistos)}</td>
+                <td><Barra fracao={frac} /></td>
+                <td className="num">{formatarMoeda(s.valorConsumido)}</td>
+              </tr>
+            );
+          })}
+          {saldos.length === 0 && <tr><td colSpan={4} className="vazio">Sem perfis neste contrato.</td></tr>}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -67,15 +245,13 @@ function FaturasValidadas({ contratos, faturas, ano }: {
   contratos: Contrato[]; faturas: Fatura[]; ano: string;
 }): ReactNode {
   const numeroContrato = (id: string): string => contratos.find((c) => c.id === id)?.numero ?? id;
-  const doAno = faturas
-    .filter((f) => (f.dataAprovacao ?? f.dataRececao).startsWith(ano))
-    .sort((a, b) => ((a.dataAprovacao ?? a.dataRececao) < (b.dataAprovacao ?? b.dataRececao) ? 1 : -1));
+  const doAno = [...faturas].sort((a, b) => ((a.dataAprovacao ?? a.dataRececao) < (b.dataAprovacao ?? b.dataRececao) ? 1 : -1));
   const total = doAno.reduce((s, f) => s + (f.montanteAprovado ?? f.montanteSemIva), 0);
 
   return (
-    <div className="cartao" style={{ marginTop: 16 }}>
+    <div className="cartao" style={{ marginBottom: 16 }}>
       <h3>
-        Faturas validadas no projeto
+        Faturas validadas
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <span className="sec">{doAno.length} fatura(s) · {formatarMoeda(total)} em {ano}</span>
         </span>
@@ -141,14 +317,12 @@ function exportarPerfis(numero: string, saldos: Array<{ nome: string; minutosPre
  * esgotamento do valor. Conta-se o aprovado — o pagamento acontece no sistema
  * financeiro da empresa e a aplicação não tem visibilidade sobre ele.
  */
-function FaturacaoAprovada({ contratos, faturas, ano, anos, onAno }: {
-  contratos: Contrato[]; faturas: Fatura[]; ano: string; anos: string[]; onAno: (a: string) => void;
+function FaturacaoAprovada({ contratos, faturas, ano }: {
+  contratos: Contrato[]; faturas: Fatura[]; ano: string;
 }): ReactNode {
-  const doAno = faturas.filter((f) => (f.dataAprovacao ?? f.dataRececao).startsWith(ano));
-
   const porContrato = contratos
     .map((contrato) => {
-      const suas = doAno
+      const suas = faturas
         .filter((f) => f.contratoId === contrato.id)
         .sort((a, b) => ((a.dataAprovacao ?? a.dataRececao) < (b.dataAprovacao ?? b.dataRececao) ? -1 : 1));
       let acumulado = 0;
@@ -167,12 +341,7 @@ function FaturacaoAprovada({ contratos, faturas, ano, anos, onAno }: {
     <div className="cartao">
       <h3>
         Faturação aprovada por contrato e mês
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className="sec">Total {formatarMoeda(totalGeral)}</span>
-          <select value={ano} onChange={(e) => onAno(e.target.value)}>
-            {(anos.length > 0 ? anos : [ano]).map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-        </span>
+        <span style={{ marginLeft: 'auto' }} className="sec">Total {formatarMoeda(totalGeral)} em {ano}</span>
       </h3>
       <table>
         <thead><tr><th>Mês</th><th>Fatura</th><th>Tipo</th><th className="num">Montante aprovado</th><th className="num">Disponível no contrato</th></tr></thead>

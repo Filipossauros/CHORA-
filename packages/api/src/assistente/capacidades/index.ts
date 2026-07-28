@@ -13,6 +13,9 @@ import {
   substituirAfetacao, criarAfetacao, prorrogarVigencia, registarComplementares,
   transitarSaldo, aprovarRegistos, registarEntrega, dispensarDecisao, registarFatura,
 } from './acoes.js';
+import {
+  acrescentarColunas, filtrarTabela, ordenarTabela, exportarTabela, guardarTabela,
+} from './tabela.js';
 
 /** «O que sabes fazer?» — respondido do próprio catálogo, nunca de uma lista à parte. */
 const ajuda: Capacidade<Record<string, never>> = {
@@ -51,6 +54,9 @@ const ajuda: Capacidade<Record<string, never>> = {
  * fecha nas mais óbvias.
  */
 export const CAPACIDADES: ReadonlyArray<Capacidade<never>> = [
+  // Composição — trabalham sobre a lista em curso, por isso vêm antes de tudo:
+  // «acrescenta os consumos» não é uma pergunta nova, é a continuação de uma.
+  acrescentarColunas, filtrarTabela, ordenarTabela, exportarTabela, guardarTabela,
   // Carteira — as perguntas transversais, que não vivem na ficha de nenhum contrato.
   riscoCarteira, contratosTerminam, resumoDaCarteira,
   // Capacidade — onde cabe mais gente.

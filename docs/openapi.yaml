@@ -605,6 +605,64 @@ paths:
       responses:
         200:
           description: Relatório
+  /api/v1/relatorios/ad-hoc:
+    get:
+      summary: Relatórios compostos no assistente e guardados pelo utilizador
+      tags:
+        - Relatórios
+      security:
+        -
+          bearerAuth: []
+      responses:
+        200:
+          description: Lista
+  /api/v1/relatorios/ad-hoc/{id}:
+    get:
+      summary: Obtém um relatório ad-hoc
+      tags:
+        - Relatórios
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Relatório
+        404:
+          description: Inexistente
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+    delete:
+      summary: Apaga um relatório ad-hoc
+      tags:
+        - Relatórios
+      security:
+        -
+          bearerAuth: []
+      parameters:
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Apagado
+        404:
+          description: Inexistente
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
   /api/v1/alertas:
     get:
       summary: Lista alertas

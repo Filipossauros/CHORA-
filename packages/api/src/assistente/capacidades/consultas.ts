@@ -7,7 +7,7 @@ import {
 } from '@chora/domain';
 import type { Capacidade } from '../tipos.js';
 import { ServicoAlertas } from '../../servicos/alertas.js';
-import { F, horas, euros, contratoDe, projetoDe, pessoaDe, periodoDe, DESC_CONTRATO, DESC_PERIODO } from './comum.js';
+import { F, K, horas, euros, contratoDe, projetoDe, pessoaDe, periodoDe, DESC_CONTRATO, DESC_PERIODO } from './comum.js';
 
 const zContrato = z.object({ contratoNumero: z.string().optional() });
 const zContratoPeriodo = z.object({
@@ -133,7 +133,11 @@ export const quemEstaNoContrato: Capacidade<z.infer<typeof zContrato>> = {
     });
     return {
       texto: `${afetacoes.length} pessoa(s) afeta(s) ao contrato ${contrato.numero} (${contrato.prestador.nome}).`,
-      tabela: { titulo: `Afetações ativas do ${contrato.numero}`, colunas: ['Pessoa', 'Perfil', 'Horas aprovadas', 'Desde'], linhas },
+      tabela: {
+        titulo: `Afetações ativas do ${contrato.numero}`,
+        colunas: ['Pessoa', 'Perfil', 'Horas aprovadas', 'Desde'], linhas,
+        chaves: K('PESSOA', afetacoes.map((a) => a.recursoId)),
+      },
       fontes: [F('REGRA', 'Afetações ativas'), F('REGRA', 'Registos de tempo aprovados')],
       proximos: [{ rotulo: 'Substituir alguém', frase: `Substituir uma pessoa no ${contrato.numero}` }],
     };
@@ -174,6 +178,7 @@ export const riscoCarteira: Capacidade<Record<string, never>> = {
         linhas: riscos.map((r) => [
           r.numero, r.objeto, r.motivos.map((m) => m.descricao).join(' '), euros(r.gapNoTermino), r.diasAteTermino,
         ]),
+        chaves: K('CONTRATO', riscos.map((r) => r.contratoId)),
       },
       fontes: [F('PROJECAO', 'Ritmo das últimas 6 semanas'), F('REGRA', 'Prazo de lançamento de novo procedimento')],
       proximos: [{ rotulo: `Ver o ${pior.numero}`, frase: `Qual o saldo do ${pior.numero}?` }],
@@ -213,6 +218,7 @@ export const contratosTerminam: Capacidade<{ periodoDe?: string; periodoAte?: st
         linhas: lista.map((c) => [
           c.numero, c.objeto, c.dataTermino, euros(c.valorPorExecutar), c.dataLimiteProcedimento, c.diasParaLancarProcedimento,
         ]),
+        chaves: K('CONTRATO', lista.map((c) => c.contratoId)),
       },
       fontes: [F('REGRA', 'Vigência contratual'), F('REGRA', 'Prazo de instrução do procedimento (base legal versionada)')],
     };
@@ -306,6 +312,7 @@ export const folgaPorPerfil: Capacidade<{ perfil: string; projeto?: string }> = 
           f.contratoNumero, f.perfilNome, horas(f.minutosDisponiveis), euros(f.valorHora),
           f.diasUteisRestantes, f.pessoasComportadas, f.pessoasAfetas, f.entidadeNipc,
         ]),
+        chaves: K('CONTRATO', folgas.map((f) => f.contratoId)),
       },
       fontes: [
         F('REGRA', 'Saldos de perfil sobre execução aprovada'),
@@ -353,6 +360,7 @@ export const folgaPorValorHora: Capacidade<{ valorHoraEuros: number }> = {
           f.contratoNumero, f.contratoObjeto, euros(f.valorDisponivel), f.horasComportadas,
           f.pessoasComportadas, f.perfilCompativel?.nome ?? '— (criar)', f.entidadeNipc,
         ]),
+        chaves: K('CONTRATO', folgas.map((f) => f.contratoId)),
       },
       fontes: [F('REGRA', 'Preço contratual atual menos execução aprovada'), F('PROJECAO', 'Dias úteis até ao término × 8 h por pessoa')],
     };
@@ -397,6 +405,7 @@ export const ondeEstaPessoa: Capacidade<{ pessoa: string }> = {
           a.vigenteDe, a.vigenteAte ?? '—',
           horas(aprovados.filter((r) => r.contratoId === a.contratoId && r.perfilId === a.perfilId).reduce((s, r) => s + r.duracao, 0)),
         ]),
+        chaves: K('CONTRATO', afetacoes.map((a) => a.contratoId)),
       },
       fontes: [F('REGRA', 'Afetações e substituições'), F('REGRA', 'Registos de tempo aprovados')],
     };
@@ -448,6 +457,7 @@ export const registosPorAprovar: Capacidade<z.infer<typeof zContratoPeriodo>> = 
             v.n, horas(v.minutos), euros(v.valor),
           ];
         }),
+        chaves: K('PESSOA', [...porPessoa.keys()].map((k) => k.split('|')[0]!)),
       },
       fontes: [F('REGRA', 'Registos no estado SUBMETIDO')],
       proximos: [{ rotulo: 'Aprovar estes registos', frase: `Aprovar os registos ${ambito}` }],
@@ -495,6 +505,7 @@ export const estadoFaturas: Capacidade<z.infer<typeof zContratoPeriodo>> = {
           contratos.find((c) => c.id === f.contratoId)?.numero ?? f.contratoId,
           f.estado, euros(f.montanteSemIva), euros(f.montanteAprovado ?? 0), f.dataAprovacao ?? f.dataRececao,
         ]),
+        chaves: K('FATURA', [...abertas, ...validadas].map((f) => f.id)),
       },
       fontes: [F('REGRA', 'Estados da fatura'), F('REGRA', 'RN-612 — líquido de nota de crédito')],
       ...(aguardam.length > 0
@@ -536,6 +547,7 @@ export const estadoEntregaveis: Capacidade<z.infer<typeof zContrato>> = {
         titulo: `Entregáveis do ${contrato.numero}`,
         colunas: ['Entregável', 'Valor', 'Estado', 'Data prevista', 'Entregue em'],
         linhas: entregaveis.map((x) => [x.designacao, euros(x.valor), estadoEntregavel(x), x.dataPrevista ?? '—', x.entregueEm ?? '—']),
+        chaves: K('ENTREGAVEL', entregaveis.map((x) => x.id)),
       },
       fontes: [F('REGRA', 'RN-608 — só se fatura o que está entregue'), F('REGRA', 'RN-609 — montante igual ao valor do entregável')],
       ...(porFaturar.length > 0
@@ -580,6 +592,7 @@ export const decisoesPendentes: Capacidade<z.infer<typeof zContrato>> = {
           contratos.find((c) => c.id === a.contratoId)?.numero ?? a.contratoId,
           a.titulo, a.codigo, a.dataLimiteAcao ?? '—', a.diasParaLimite ?? '—',
         ]),
+        chaves: K('CONTRATO', ordenadas.map((a) => a.contratoId)),
       },
       fontes: [F('REGRA', 'Catálogo de alertas — decisões abertas ou em curso')],
       proximos: [{ rotulo: `Explicar «${proxima.titulo}»`, frase: `Explica a decisão ${proxima.codigo} do contrato ${contratos.find((c) => c.id === proxima.contratoId)?.numero ?? ''}` }],
@@ -714,6 +727,7 @@ export const projetoExecutado: Capacidade<{ projeto?: string }> = {
           c.numero, c.objeto, euros(c.precoContratualAtual), euros(c.valorExecutado), euros(c.valorValidado),
           euros(c.valorPorExecutar), horas(c.minutosAprovados), c.partilhado ? 'sim' : 'não',
         ]),
+        chaves: K('CONTRATO', x.contratos.map((c) => c.contratoId)),
       },
       exportavel: {
         nome: `execucao-${p.nome}`,

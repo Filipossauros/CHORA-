@@ -4,7 +4,7 @@
  * (GitHub Pages). NÃO importar `server.ts` a partir daqui.
  */
 export { criarContexto, CONFIG_OMISSAO, type Contexto, type Config } from './contexto.js';
-export { criarRepositoriosMemoria, type Repositorios, type ContratoProjeto, type Projeto, type OrcamentoGuardado } from './repositorios/memoria/index.js';
+export { criarRepositoriosMemoria, type Repositorios, type ContratoProjeto, type Projeto, type OrcamentoGuardado, type RelatorioAdHoc } from './repositorios/memoria/index.js';
 export { RepositorioMemoria } from './repositorios/memoria/repositorio-memoria.js';
 export { normalizarPaginacao } from './repositorios/tipos.js';
 export type { Repository, Filtro, Ordenacao, Pagina, Paginacao } from './repositorios/tipos.js';
@@ -22,6 +22,7 @@ export { ServicoRecursos, ServicoAcessos } from './servicos/recursos-acessos.js'
 export { ServicoAlertas, ATO_RESOLVE } from './servicos/alertas.js';
 export { ServicoEntregaveis } from './servicos/entregaveis.js';
 export { ServicoOrcamentos, type OrcamentoComResumo } from './servicos/orcamentos.js';
+export { ServicoRelatoriosAdHoc, type NovoRelatorioAdHoc } from './servicos/relatorios-adhoc.js';
 export { ServicoAssistente, type Interpretacao, type Esclarecimento } from './servicos/assistente.js';
 export { CAPACIDADES, capacidadePorNome } from './assistente/capacidades/index.js';
 export { encaminhar, normalizar, numeroContratoNaFrase, valorHoraNaFrase, montanteNaFrase, type Encaminhamento } from './assistente/router.js';
@@ -30,7 +31,8 @@ export { ErroEsclarecimento } from './assistente/erros.js';
 export { AgenteLocal, CONFIG_MODELO_OMISSAO, type ConfigModeloLocal } from './assistente/agente-local.js';
 export type {
   Capacidade, CapacidadePublica, TipoCapacidade, Simulacao, RegraAvaliada,
-  ResultadoCapacidade, TabelaResposta, UiEmbebida, Exportavel, ContextoConversa,
+  ResultadoCapacidade, TabelaResposta, TabelaTrabalho, ChaveLinha, TipoEntidade,
+  UiEmbebida, Exportavel, ContextoConversa,
 } from './assistente/tipos.js';
 export { type Diretorio, DIRETORIO_VAZIO } from './contexto.js';
 export { DIRETORIO_SEED, PESSOAS } from './seed/diretorio.js';
