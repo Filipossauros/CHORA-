@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import * as XLSX from 'xlsx';
-import { ServicoAssistente, AgenteLocal, encaminhar, type Interpretacao } from '@chora/api/nucleo';
+import { ServicoAssistente, AgenteLocal, encaminhar, type Interpretacao, type ContextoConversa } from '@chora/api/nucleo';
 import type { Proveniencia } from '@chora/domain';
 import { app } from '../porta/aplicacao-local.js';
 import { hoje, mensagemErro } from '../comum.js';
@@ -41,6 +41,12 @@ export function Perguntar(): ReactNode {
   const [aPensar, setAPensar] = useState(false);
   const refFicheiro = useRef<HTMLInputElement | null>(null);
   const proximo = useRef(1);
+  /**
+   * Memória da conversa. Vive num ref e não no estado porque é lida dentro de
+   * chamadas assíncronas: um valor capturado do estado seria o do turno
+   * anterior, e o fio da conversa perder-se-ia precisamente quando importa.
+   */
+  const conversa = useRef<ContextoConversa>({});
 
   const servico = new ServicoAssistente(app.ctx);
 
@@ -59,7 +65,7 @@ export function Perguntar(): ReactNode {
    * devolve é revalidado pelo serviço como qualquer outro encaminhamento.
    */
   async function resolverEncaminhamento(frase: string): Promise<Parameters<ServicoAssistente['interpretar']>[2]> {
-    const det = encaminhar(frase);
+    const det = encaminhar(frase, conversa.current);
     if (det !== undefined) return det;
     const cfg = configModelo();
     if (!cfg.ativo) return undefined;
@@ -72,7 +78,8 @@ export function Perguntar(): ReactNode {
     const id = novoTurno({ pergunta: texto, aPensar: true });
     try {
       const e = await resolverEncaminhamento(texto);
-      const resposta = await servico.interpretar(texto, app.utilizador(), e);
+      const resposta = await servico.interpretar(texto, app.utilizador(), e, conversa.current);
+      conversa.current = resposta.conversa;
       atualizar(id, { resposta, aPensar: false });
     } catch (err) {
       atualizar(id, { erro: mensagemErro(err), aPensar: false });
@@ -91,7 +98,10 @@ export function Perguntar(): ReactNode {
       if (fatura === undefined) {
         atualizar(id, {
           documentos: lidos, aPensar: false,
-          resposta: { mensagem: 'Li os documentos mas não encontrei nenhuma fatura. Carregue a fatura para eu abrir a conferência.' },
+          resposta: {
+            conversa: conversa.current,
+            mensagem: 'Li os documentos mas não encontrei nenhuma fatura. Carregue a fatura para eu abrir a conferência.',
+          },
         });
         return;
       }
@@ -105,10 +115,33 @@ export function Perguntar(): ReactNode {
           ...(campo('montanteSemIva') !== undefined ? { montanteSemIvaEuros: Number(campo('montanteSemIva')) } : {}),
         },
         confianca: 0.9, origem: 'PADRAO',
-      });
+      }, conversa.current);
+      conversa.current = resposta.conversa;
       atualizar(id, { documentos: lidos, resposta, aPensar: false });
     } catch (err) {
       atualizar(id, { erro: mensagemErro(err), aPensar: false });
+    } finally { setAPensar(false); }
+  }
+
+  /**
+   * Responde a um pedido de esclarecimento. Reencaminha para a MESMA capacidade
+   * com os parâmetros que a escolha fixou — não é uma pergunta nova, é a mesma
+   * agora completa.
+   */
+  async function esclarecer(turno: Turno, parametros: Record<string, unknown>): Promise<void> {
+    const nome = turno.resposta?.capacidade?.nome;
+    if (nome === undefined) return;
+    setAPensar(true);
+    try {
+      const resposta = await servico.interpretar(
+        turno.pergunta, app.utilizador(),
+        { capacidade: nome, parametros: { ...turno.resposta?.parametros, ...parametros }, confianca: 1, origem: 'PADRAO' },
+        conversa.current,
+      );
+      conversa.current = resposta.conversa;
+      atualizar(turno.id, { resposta, erro: undefined });
+    } catch (err) {
+      atualizar(turno.id, { erro: mensagemErro(err) });
     } finally { setAPensar(false); }
   }
 
@@ -117,7 +150,7 @@ export function Perguntar(): ReactNode {
     if (r?.capacidade === undefined || r.parametros === undefined) return;
     setAPensar(true);
     try {
-      const resultado = await servico.executar(r.capacidade.nome, r.parametros, turno.pergunta, app.utilizador());
+      const resultado = await servico.executar(r.capacidade.nome, r.parametros, turno.pergunta, app.utilizador(), conversa.current);
       atualizar(turno.id, { executado: { texto: resultado.texto } });
     } catch (err) {
       atualizar(turno.id, { erro: mensagemErro(err) });
@@ -128,7 +161,15 @@ export function Perguntar(): ReactNode {
     <div>
       {turnos.length > 0 && (
         <div style={{ maxHeight: '55vh', overflowY: 'auto', marginBottom: 12, display: 'grid', gap: 10 }}>
-          {turnos.map((t) => <TurnoConversa key={t.id} turno={t} onConfirmar={() => void confirmar(t)} onLimpar={() => setTurnos((ts) => ts.filter((x) => x.id !== t.id))} />)}
+          {turnos.map((t) => (
+            <TurnoConversa
+              key={t.id} turno={t}
+              onConfirmar={() => void confirmar(t)}
+              onEsclarecer={(params) => void esclarecer(t, params)}
+              onSeguir={(frase) => void perguntar(frase)}
+              onLimpar={() => setTurnos((ts) => ts.filter((x) => x.id !== t.id))}
+            />
+          ))}
         </div>
       )}
 
@@ -153,7 +194,12 @@ export function Perguntar(): ReactNode {
   );
 }
 
-function TurnoConversa({ turno, onConfirmar, onLimpar }: { turno: Turno; onConfirmar: () => void; onLimpar: () => void }): ReactNode {
+function TurnoConversa({ turno, onConfirmar, onEsclarecer, onSeguir, onLimpar }: {
+  turno: Turno; onConfirmar: () => void;
+  onEsclarecer: (parametros: Record<string, unknown>) => void;
+  onSeguir: (frase: string) => void;
+  onLimpar: () => void;
+}): ReactNode {
   const r = turno.resposta;
   return (
     <div className="cartao" style={{ margin: 0 }}>
@@ -177,7 +223,8 @@ function TurnoConversa({ turno, onConfirmar, onLimpar }: { turno: Turno; onConfi
           </div>
         )}
 
-        {r?.resultado !== undefined && <Resultado resultado={r.resultado} origem={r.origem} />}
+        {r?.esclarecimento !== undefined && <Esclarecimento esclarecimento={r.esclarecimento} onEscolher={onEsclarecer} />}
+        {r?.resultado !== undefined && <Resultado resultado={r.resultado} origem={r.origem} onSeguir={onSeguir} />}
         {r?.simulacao !== undefined && turno.executado === undefined && (
           <Simulacao simulacao={r.simulacao} onConfirmar={onConfirmar} />
         )}
@@ -207,7 +254,32 @@ function Documentos({ docs }: { docs: DocumentoLido[] }): ReactNode {
   );
 }
 
-function Resultado({ resultado, origem }: { resultado: NonNullable<Interpretacao['resultado']>; origem?: string }): ReactNode {
+/**
+ * PERGUNTA DE VOLTA em vez de recusa. Quando o pedido é ambíguo ou lhe falta um
+ * dado, mostram-se as opções: escolher uma resolve em um clique, e não obriga
+ * quem perguntou a reformular a frase com o código exato.
+ */
+function Esclarecimento({ esclarecimento, onEscolher }: {
+  esclarecimento: NonNullable<Interpretacao['esclarecimento']>;
+  onEscolher: (parametros: Record<string, unknown>) => void;
+}): ReactNode {
+  return (
+    <div style={{ marginTop: 10, border: '1px solid var(--linha-forte)', borderRadius: 9, padding: 12, background: 'var(--superficie)' }}>
+      <div style={{ fontSize: 13, marginBottom: esclarecimento.opcoes.length > 0 ? 10 : 0 }}>{esclarecimento.pergunta}</div>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+        {esclarecimento.opcoes.map((o, i) => (
+          <button key={i} className="btn sm" style={{ fontWeight: 400, textAlign: 'left' }} onClick={() => onEscolher(o.parametros)}>
+            {o.rotulo}{o.detalhe !== undefined && <span className="sec" style={{ marginLeft: 6 }}>{o.detalhe}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Resultado({ resultado, origem, onSeguir }: {
+  resultado: NonNullable<Interpretacao['resultado']>; origem?: string; onSeguir: (frase: string) => void;
+}): ReactNode {
   function exportar(): void {
     const e = resultado.exportavel;
     if (e === undefined) return;
@@ -248,6 +320,14 @@ function Resultado({ resultado, origem }: { resultado: NonNullable<Interpretacao
               }}
             />
           )}
+        </div>
+      )}
+
+      {(resultado.proximos?.length ?? 0) > 0 && (
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 12 }}>
+          {resultado.proximos!.map((p) => (
+            <button key={p.frase} className="btn sm" style={{ fontWeight: 400 }} onClick={() => onSeguir(p.frase)}>{p.rotulo} →</button>
+          ))}
         </div>
       )}
 

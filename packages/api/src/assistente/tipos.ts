@@ -78,14 +78,41 @@ export interface ResultadoCapacidade {
   tabela?: TabelaResposta;
   exportavel?: Exportavel;
   ui?: UiEmbebida;
+  /**
+   * O que faz sentido perguntar ou fazer a seguir. Uma resposta que diz que um
+   * contrato vai deixar 99 600 € por executar e não oferece prorrogá-lo obriga
+   * quem lê a redescobrir sozinho o passo seguinte.
+   */
+  proximos?: Array<{ rotulo: string; frase: string }>;
   /** A capacidade correu mas não encontrou o que lhe pediram. */
   semResultado?: boolean;
+}
+
+/**
+ * MEMÓRIA DA CONVERSA. Guarda as entidades já mencionadas para que «e a
+ * vigência?» ou «e nesse?» funcionem — sem isto cada turno é independente, e um
+ * chat que não segue o fio é uma caixa de pesquisa com passos a mais.
+ */
+export interface ContextoConversa {
+  contratoId?: string;
+  contratoNumero?: string;
+  projetoId?: string;
+  projetoNome?: string;
+  pessoaId?: string;
+  pessoaNome?: string;
+  perfilNome?: string;
+  periodoDe?: string;
+  periodoAte?: string;
 }
 
 export interface ContextoExecucao {
   ctx: Contexto;
   utilizador: ContextoUtilizador;
   hoje: string;
+  /** Entidades já mencionadas na conversa; as capacidades podem consultá-las. */
+  conversa: ContextoConversa;
+  /** Atualiza a memória da conversa com o que esta capacidade resolveu. */
+  lembrar(patch: ContextoConversa): void;
 }
 
 export interface Capacidade<P = unknown> {

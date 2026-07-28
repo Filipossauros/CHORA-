@@ -22,13 +22,15 @@ export { ServicoRecursos, ServicoAcessos } from './servicos/recursos-acessos.js'
 export { ServicoAlertas, ATO_RESOLVE } from './servicos/alertas.js';
 export { ServicoEntregaveis } from './servicos/entregaveis.js';
 export { ServicoOrcamentos, type OrcamentoComResumo } from './servicos/orcamentos.js';
-export { ServicoAssistente, type Interpretacao } from './servicos/assistente.js';
-export { CAPACIDADES, capacidadePorNome } from './assistente/capacidades.js';
-export { encaminhar, normalizar, numeroContratoNaFrase, valorHoraNaFrase, type Encaminhamento } from './assistente/router.js';
+export { ServicoAssistente, type Interpretacao, type Esclarecimento } from './servicos/assistente.js';
+export { CAPACIDADES, capacidadePorNome } from './assistente/capacidades/index.js';
+export { encaminhar, normalizar, numeroContratoNaFrase, valorHoraNaFrase, montanteNaFrase, type Encaminhamento } from './assistente/router.js';
+export { periodoNaFrase, anoCorrente, type Periodo } from './assistente/tempo.js';
+export { ErroEsclarecimento } from './assistente/erros.js';
 export { AgenteLocal, CONFIG_MODELO_OMISSAO, type ConfigModeloLocal } from './assistente/agente-local.js';
 export type {
   Capacidade, CapacidadePublica, TipoCapacidade, Simulacao, RegraAvaliada,
-  ResultadoCapacidade, TabelaResposta, UiEmbebida, Exportavel,
+  ResultadoCapacidade, TabelaResposta, UiEmbebida, Exportavel, ContextoConversa,
 } from './assistente/tipos.js';
 export { type Diretorio, DIRETORIO_VAZIO } from './contexto.js';
 export { DIRETORIO_SEED, PESSOAS } from './seed/diretorio.js';

@@ -11,8 +11,18 @@ function parse<T>(s: z.ZodType<T>, corpo: unknown): T {
   return r.data;
 }
 
+const zConversa = z.object({
+  contratoId: z.string().optional(), contratoNumero: z.string().optional(),
+  projetoId: z.string().optional(), projetoNome: z.string().optional(),
+  pessoaId: z.string().optional(), pessoaNome: z.string().optional(),
+  perfilNome: z.string().optional(),
+  periodoDe: z.string().optional(), periodoAte: z.string().optional(),
+});
+
 const zInterpretar = z.object({
   frase: z.string().min(1),
+  /** Memória da conversa devolvida no turno anterior. */
+  conversa: zConversa.optional(),
   /**
    * Encaminhamento já resolvido por um modelo no cliente. O servidor não confia
    * nele: valida o nome contra o catálogo, os parâmetros contra o esquema e o
@@ -29,6 +39,7 @@ const zExecutar = z.object({
   capacidade: z.string().min(1),
   parametros: z.record(z.unknown()),
   frase: z.string().optional(),
+  conversa: zConversa.optional(),
 });
 
 export function rotasAssistente(app: FastifyInstance, ctx: Contexto): void {
@@ -52,6 +63,7 @@ export function rotasAssistente(app: FastifyInstance, ctx: Contexto): void {
     return servico.interpretar(
       d.frase, u,
       d.encaminhamento !== undefined ? { ...d.encaminhamento, confianca: d.encaminhamento.confianca ?? 0.5, origem: 'MODELO' as const } : undefined,
+      d.conversa ?? {},
     );
   });
 
@@ -59,6 +71,6 @@ export function rotasAssistente(app: FastifyInstance, ctx: Contexto): void {
   app.post('/api/v1/assistente/executar', async (req) => {
     const u = exigirUtilizador(req);
     const d = parse(zExecutar, req.body);
-    return servico.executar(d.capacidade, d.parametros, d.frase ?? '', u);
+    return servico.executar(d.capacidade, d.parametros, d.frase ?? '', u, d.conversa ?? {});
   });
 }
