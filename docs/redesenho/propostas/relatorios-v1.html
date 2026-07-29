@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>CHORA+ — Relatórios (proposta)</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/*
+ * PROPOSTA — «Relatórios», com o separador dos relatórios compostos no
+ * assistente à frente.
+ *
+ * O que este ecrã tem de dizer sem ser explicado: um relatório guardado é uma
+ * RECEITA, não um retrato. Guardaram-se os passos, não os números. Por isso
+ * cada cartão mostra a receita à vista, diz quando correu pela última vez e
+ * quanto mudou desde então — e o botão principal é «Executar», não «Abrir».
+ *
+ * O retrato congelado — aquele que daqui a um ano tem de continuar a dizer o
+ * mesmo — é o Excel: leva a data da execução e a receita na segunda folha.
+ *
+ * A execução repete os passos com as permissões de QUEM ABRE. Um relatório com
+ * faturação não mostra faturação a quem não a pode consultar. É o terceiro
+ * cartão, e é a razão pela qual não se guardam retratos partilhados.
+ */
+.rel{background:var(--superficie);border:1px solid var(--linha);border-radius:var(--r);
+  box-shadow:var(--sombra-s);margin-bottom:14px;overflow:hidden}
+.rel .cab{display:flex;align-items:flex-start;gap:14px;padding:16px 20px}
+.rel .quad{width:44px;height:44px;flex:0 0 44px;border-radius:12px;background:var(--azul-b);color:var(--azul-forte);
+  display:flex;align-items:center;justify-content:center}
+.rel h3{font-size:15px;font-weight:700;letter-spacing:-.2px;margin-bottom:5px}
+.rel .quem{font-size:11.5px;color:var(--texto-fraco)}
+.rel .cab .dir{margin-left:auto;display:flex;gap:8px;align-items:center;flex:0 0 auto}
+.receita{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 20px 14px 78px}
+.passo{display:inline-flex;align-items:center;gap:7px;background:var(--superficie-2);border:1px solid var(--linha-forte);
+  border-radius:20px;padding:4px 11px;font-size:12px;color:var(--texto-suave)}
+.passo i{font-style:normal;font-weight:700;color:var(--azul-forte);font-size:10px}
+.receita .sinal{color:var(--texto-fraco)}
+.periodo{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:3px 10px;
+  border-radius:20px;background:var(--verde-b);color:var(--verde-forte)}
+.periodo.fixo{background:var(--cinza-b);color:var(--texto-suave)}
+
+.resultado{border-top:1px solid var(--linha)}
+.resultado .tit{display:flex;align-items:center;gap:10px;padding:11px 20px;background:var(--superficie-2);
+  font-size:12.5px;color:var(--texto-suave)}
+.resultado .tit b{color:var(--texto)}
+.resultado .tit .dir{margin-left:auto;display:flex;gap:8px}
+.delta{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700}
+.delta.sobe{color:var(--vermelho-forte)} .delta.desce{color:var(--verde-forte)}
+.resultado table{font-size:12.5px}
+.resultado thead th{padding:9px 20px}
+.resultado tbody td{padding:10px 20px}
+
+.falha{border-top:1px solid var(--linha);display:flex;gap:11px;align-items:flex-start;padding:15px 20px;
+  background:var(--amarelo-b);font-size:12.5px;color:#7A5A0E}
+.falha b{display:block;margin-bottom:3px}
+.falha code{background:#F3E4BB;padding:1px 6px;border-radius:5px;font-size:11px;font-weight:600}
+
+.faixa-rel{display:flex;align-items:center;gap:16px;background:linear-gradient(105deg,var(--azul-b),var(--azul-b2) 62%,#fff);
+  border:1px solid #DCE7FB;border-radius:16px;padding:14px 20px;margin-bottom:20px}
+.faixa-rel .fig{flex:0 0 52px}
+.faixa-rel .frase{font-size:13.5px;line-height:1.6;color:var(--texto-suave);max-width:640px}
+.faixa-rel .frase b{color:var(--texto);font-weight:700}
+.faixa-rel .dir{margin-left:auto}
+</style>
+</head>
+<body>
+<div class="app" data-ativo="relatorios" data-hoje="11">
+  <div class="principal">
+
+    <header class="cabeca">
+      <div>
+        <h1>Relatórios</h1>
+        <div class="sub">Faturação do ano · consumo de um contrato · relatórios compostos no assistente</div>
+      </div>
+      <div class="dir">
+        <div class="linha1">
+          <span class="chip-dados">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/></svg>
+            Dados: cobertura de regras
+          </span>
+          <span class="utilizador">Gestor de Contrato
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--texto-fraco)" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
+            <span class="av">GC</span>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <div class="conteudo">
+      <div class="seps">
+        <button class="sep">Faturação <span class="n" style="background:var(--cinza-b);color:var(--texto-suave)">7</span></button>
+        <button class="sep">Consumo por perfil</button>
+        <button class="sep on">Guardados <span class="n" style="background:var(--azul-b);color:var(--azul-forte)">4</span></button>
+      </div>
+
+      <section class="faixa-rel">
+        <div class="fig"><img class="mascote" src="ativos/choramingas-aceno.png" alt="Choramingas"></div>
+        <div class="frase">
+          <b>Estes relatórios guardam a receita, não os números.</b>
+          Executar repete os passos com os dados de hoje e com as <b>suas</b> permissões — por isso o mesmo
+          relatório serve a reunião deste mês e a do mês que vem. Para congelar um retrato, descarregue o Excel:
+          leva a data da execução e a receita na segunda folha.
+        </div>
+        <div class="dir">
+          <button class="btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+            Compor no assistente
+          </button>
+        </div>
+      </section>
+
+      <!-- ── 1. executado, com resultado ────────────────────────────────── -->
+      <article class="rel">
+        <div class="cab">
+          <div class="quad">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
+          </div>
+          <div>
+            <h3>Folga para um perfil a 40 €/h</h3>
+            <div class="quem">Composto por Gonçalo Dias · 14 jul 2026 · executado 6 vezes</div>
+          </div>
+          <div class="dir">
+            <span class="periodo">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+              período relativo
+            </span>
+            <button class="btn sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg>
+              Excel
+            </button>
+            <button class="btn sm azul">Executar</button>
+            <span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span>
+          </div>
+        </div>
+        <div class="receita">
+          <span class="passo"><i>1</i> contratos com folga para um perfil a 40 €/h</span>
+          <svg class="sinal" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="passo"><i>2</i> acrescentar «perfil compatível»</span>
+          <svg class="sinal" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="passo"><i>3</i> ordenar por valor disponível</span>
+        </div>
+        <div class="resultado">
+          <div class="tit">
+            Corrido agora, <b>29 jul 2026 às 09:41</b> · 4 linhas
+            <span class="delta sobe">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M5 15 12 8l7 7"/></svg>
+              +64 400,00 € desde a última execução, a 2 jul
+            </span>
+            <span class="dir"><button class="btn sm">Ver a execução anterior</button></span>
+          </div>
+          <table>
+            <thead><tr>
+              <th>Contrato</th><th>Objeto</th><th class="num">Valor disponível</th>
+              <th class="num">Horas que compra</th><th class="num">Pessoas a tempo inteiro</th><th>Perfil compatível</th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="prim">C-2026-FC1</td><td>Contrato a terminar — preparar continuidade</td>
+                <td class="num tab">146 800,00 €</td><td class="num tab">3 670 h</td><td class="num tab">5</td><td>Analista de Sistemas</td></tr>
+              <tr><td class="prim">C-2026-001</td><td>Outsourcing — desenvolvimento aplicacional</td>
+                <td class="num tab">179 840,00 €</td><td class="num tab">4 496 h</td><td class="num tab">1</td>
+                <td style="color:var(--texto-fraco)">— criar</td></tr>
+              <tr><td class="prim">C-2026-002</td><td>Outsourcing — sustentação e suporte</td>
+                <td class="num tab">116 160,00 €</td><td class="num tab">2 904 h</td><td class="num tab">0</td><td>Consultor Funcional</td></tr>
+              <tr><td class="prim">C-2026-BH2</td><td>Bolsa de horas para evolução de plataforma digital</td>
+                <td class="num tab">90 000,00 €</td><td class="num tab">2 250 h</td><td class="num tab">0</td><td>Especialista de Testes</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- ── 2. por executar ────────────────────────────────────────────── -->
+      <article class="rel">
+        <div class="cab">
+          <div class="quad">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          </div>
+          <div>
+            <h3>Contratos que terminam no próximo trimestre com saldo por executar</h3>
+            <div class="quem">Composto por Gonçalo Dias · 3 jun 2026 · última execução a 1 jul 2026</div>
+          </div>
+          <div class="dir">
+            <span class="periodo">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+              período relativo
+            </span>
+            <button class="btn sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg>
+              Excel
+            </button>
+            <button class="btn sm azul">Executar</button>
+            <span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span>
+          </div>
+        </div>
+        <div class="receita">
+          <span class="passo"><i>1</i> contratos a terminar no próximo trimestre</span>
+          <svg class="sinal" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="passo"><i>2</i> acrescentar «valor por executar» e «ritmo mensal»</span>
+          <svg class="sinal" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="passo"><i>3</i> filtrar por saldo &gt; 50 000 €</span>
+          <span style="margin-left:auto;font-size:11.5px;color:var(--texto-fraco)">
+            «próximo trimestre» resolve-se na execução — em outubro dá outro conjunto
+          </span>
+        </div>
+      </article>
+
+      <!-- ── 3. bloqueado por competência ──────────────────────────────── -->
+      <article class="rel">
+        <div class="cab">
+          <div class="quad" style="background:var(--amarelo-b);color:var(--amarelo-forte)">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8.4 10V7a3.6 3.6 0 0 1 7.2 0v3"/></svg>
+          </div>
+          <div>
+            <h3>Faturação validada por contrato, com horas aprovadas ao lado</h3>
+            <div class="quem">Composto por Ana Ferreira (Técnica) · 22 jun 2026 · partilhado com a equipa</div>
+          </div>
+          <div class="dir">
+            <span class="periodo fixo">período fixo · 2026</span>
+            <button class="btn sm" disabled>Excel</button>
+            <button class="btn sm" disabled>Executar</button>
+            <span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span>
+          </div>
+        </div>
+        <div class="receita">
+          <span class="passo"><i>1</i> faturas validadas em 2026</span>
+          <svg class="sinal" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="passo"><i>2</i> acrescentar «horas aprovadas no período»</span>
+          <svg class="sinal" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="passo"><i>3</i> agrupar por contrato</span>
+        </div>
+        <div class="falha">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 16px;margin-top:1px"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8.4 10V7a3.6 3.6 0 0 1 7.2 0v3"/></svg>
+          <div>
+            <b>O primeiro passo precisa de consultar faturação, e o seu perfil não a consulta.</b>
+            O relatório não corre pela metade nem lhe mostra números que não pode ver — <code>SEM_COMPETENCIA</code>.
+            É esta verificação, repetida a cada execução, que torna seguro partilhar um relatório: se guardássemos o
+            retrato em vez da receita, os números já cá estariam escritos.
+            <div style="margin-top:7px"><button class="btn sm">Pedir acesso a faturação</button></div>
+          </div>
+        </div>
+      </article>
+
+      <!-- ── 4. compacto ───────────────────────────────────────────────── -->
+      <article class="rel">
+        <div class="cab">
+          <div class="quad">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c0-3.4 2.8-5.2 6.2-5.2s6.2 1.8 6.2 5.2"/><path d="M16.4 5.6a3.4 3.4 0 0 1 0 5M21.2 20c0-2.7-1.1-4.2-2.8-4.8"/></svg>
+          </div>
+          <div>
+            <h3>Pessoas de entidade subcontratada com horas aprovadas no mês</h3>
+            <div class="quem">Composto por Gonçalo Dias · 8 mai 2026 · executado 11 vezes</div>
+          </div>
+          <div class="dir">
+            <span class="periodo">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+              período relativo
+            </span>
+            <button class="btn sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg>
+              Excel
+            </button>
+            <button class="btn sm azul">Executar</button>
+            <span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span>
+          </div>
+        </div>
+        <div class="receita">
+          <span class="passo"><i>1</i> pessoas afetas no mês corrente</span>
+          <svg class="sinal" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="passo"><i>2</i> filtrar por entidade ≠ adjudicatária</span>
+          <svg class="sinal" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>
+          <span class="passo"><i>3</i> acrescentar «horas aprovadas»</span>
+        </div>
+      </article>
+
+    </div>
+
+    <div class="assist" data-dica="Pergunte ao Choramingas — ex.: compõe-me a lista de contratos sem afetações há mais de 60 dias"></div>
+  </div>
+</div>
+<script src="casca.js"></script>
+</body>
+</html>

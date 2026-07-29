@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>CHORA+ — Contratos (proposta)</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/*
+ * PROPOSTA — «Contratos», a carteira. Conteúdo real do cenário «cobertura».
+ *
+ * A mudança que interessa não é cosmética: a lista deixa de ter uma coluna de
+ * consumo e passa a ter DUAS barras sobrepostas — tempo decorrido e valor
+ * executado. É a tensão que o CHORA+ existe para vigiar, e vê-se de relance
+ * quando as duas se descolam. Uma barra sozinha nunca disse isso.
+ */
+.faixa-carteira{display:flex;align-items:center;gap:14px;background:linear-gradient(105deg,var(--azul-b),var(--azul-b2) 62%,#fff);
+  border:1px solid #DCE7FB;border-radius:16px;padding:12px 18px;margin-bottom:18px}
+.faixa-carteira .fig{flex:0 0 46px}
+.faixa-carteira .frase{font-size:14px;line-height:1.5;color:var(--texto-suave)}
+.faixa-carteira .frase b{color:var(--texto);font-weight:700}
+.faixa-carteira .nums{margin-left:auto;display:flex;gap:24px;text-align:right}
+.faixa-carteira .nums b{display:block;font-size:19px;font-weight:750;letter-spacing:-.5px;line-height:1.15}
+.faixa-carteira .nums span{font-size:11px;color:var(--texto-suave)}
+
+/* Barra dupla: em cima o tempo, em baixo o dinheiro. */
+.tempo-dinheiro{min-width:0}
+.td-l{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.td-l:last-child{margin-bottom:0}
+.td-l .et{font-size:9.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--texto-fraco);width:16px}
+.td-l .bar{flex:1;height:6px;border-radius:3px;background:var(--cinza-b);overflow:hidden}
+.td-l .bar > i{display:block;height:100%;border-radius:3px}
+.td-l .pc{font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--texto-suave);width:32px;text-align:right}
+.td-t > i{background:var(--navy-3)}
+.td-d > i{background:var(--azul)}
+.td-d.folga > i{background:var(--laranja)}
+.td-d.tenso > i{background:var(--vermelho)}
+.desvio{font-size:10.5px;font-weight:700;margin-top:5px;display:flex;gap:5px;align-items:center;white-space:nowrap}
+.desvio svg{flex:0 0 auto}
+.desvio.folga{color:var(--laranja-forte)}
+.desvio.tenso{color:var(--vermelho-forte)}
+.desvio.ok{color:var(--verde-forte)}
+
+.dec-cel{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px;
+  background:var(--cinza-b);color:var(--texto-suave);white-space:nowrap}
+.dec-cel.tem{background:var(--amarelo-b);color:var(--amarelo-forte)}
+.dec-cel.tarde{background:var(--vermelho-b);color:var(--vermelho-forte)}
+tbody td{padding:13px 20px}
+.obj{font-size:11.5px;color:var(--texto-fraco);margin-top:2px}
+/* Larguras fixas: sem elas a coluna do objeto colapsa contra as datas — e com
+   larguras em pixel a tabela transborda. Fixed + percentagens resolve as duas. */
+table{table-layout:fixed}
+th.c-num{width:19%} th.c-prest{width:12%} th.c-vig{width:17%} th.c-val{width:11%}
+th.c-td{width:15%} th.c-dec{width:12%} th.c-est{width:11%} th.c-kb{width:3%}
+tbody td{padding:13px 14px} thead th{padding:11px 14px}
+tbody td:first-child,thead th:first-child{padding-left:20px}
+.vig{white-space:nowrap}
+.linha-filtros{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.filtros{margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="app" data-ativo="contratos" data-hoje="11">
+  <div class="principal">
+
+    <header class="cabeca">
+      <div>
+        <h1>Contratos</h1>
+        <div class="sub">20 contratos em carteira · 12 com decisões abertas</div>
+      </div>
+      <div class="dir">
+        <div class="linha1">
+          <button class="btn ico" title="Notificações">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8Z"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/></svg>
+          </button>
+          <span class="chip-dados">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/></svg>
+            Dados: cobertura de regras
+          </span>
+          <span class="utilizador">Gestor de Contrato
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--texto-fraco)" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
+            <span class="av">GC</span>
+          </span>
+        </div>
+        <button class="btn azul">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+          Novo contrato
+        </button>
+      </div>
+    </header>
+
+    <div class="conteudo">
+
+      <section class="faixa-carteira">
+        <div class="fig"><img class="mascote" src="ativos/choramingas-aceno.png" alt="Choramingas"></div>
+        <div class="frase">
+          <b>Quatro contratos gastam tempo mais depressa do que dinheiro.</b><br>
+          É onde nasce o saldo por executar — comece por esses.
+        </div>
+        <div class="nums">
+          <div><b class="tab">3 026 000,00 €</b><span>valor da carteira</span></div>
+          <div><b class="tab">18,4 %</b><span>executado</span></div>
+          <div><b class="tab">47</b><span>decisões abertas</span></div>
+        </div>
+      </section>
+
+      <div class="linha-filtros">
+        <div class="busca">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+          <input class="campo" placeholder="Procurar por número, objeto ou prestador…">
+        </div>
+        <span style="margin-left:auto"></span>
+        <button class="btn sm">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 5h16l-6.4 7.6V19l-3.2 2v-8.4L4 5Z"/></svg>
+          Mais filtros
+        </button>
+        <button class="btn sm">Ordenar: urgência</button>
+        <button class="btn sm">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg>
+          Excel
+        </button>
+      </div>
+
+      <div class="filtros">
+        <span class="fchip on">Todos <span class="n">20</span></span>
+        <span class="fchip">Com decisões <span class="n">12</span></span>
+        <span class="fchip">Fora de prazo <span class="n">4</span></span>
+        <span class="fchip">Folga sem tempo <span class="n">4</span></span>
+        <span class="fchip">Ritmo acelerado <span class="n">2</span></span>
+        <span class="fchip">Suspensos <span class="n">1</span></span>
+        <span class="fchip">Visto do TdC <span class="n">1</span></span>
+      </div>
+
+      <div class="cartao">
+        <table>
+          <thead><tr>
+            <th class="c-num">Nº / objeto</th>
+            <th class="c-prest">Prestador</th>
+            <th class="c-vig">Vigência</th>
+            <th class="num c-val">Valor atual</th>
+            <th class="c-td">Tempo × dinheiro</th>
+            <th class="c-dec">Decisões</th>
+            <th class="c-est">Estado</th>
+            <th class="c-kb"></th>
+          </tr></thead>
+          <tbody>
+
+            <tr class="clicavel">
+              <td>
+                <div class="prim">C-2026-FC1</div>
+                <div class="obj">Contrato a terminar — preparar continuidade do serviço</div>
+              </td>
+              <td>Prestador Alfa, Lda.<div class="sec">500000001</div></td>
+              <td class="tab vig">29 nov 2024 — 29 set 2026<div class="sec">faltam 2 meses</div></td>
+              <td class="num tab">100 000,00 €</td>
+              <td>
+                <div class="tempo-dinheiro">
+                  <div class="td-l"><span class="et">T</span><div class="bar td-t"><i style="width:89%"></i></div><span class="pc">89%</span></div>
+                  <div class="td-l"><span class="et">€</span><div class="bar td-d folga"><i style="width:42%"></i></div><span class="pc">42%</span></div>
+                </div>
+                <span class="desvio folga">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 3 2.5 20h19L12 3Z"/></svg>
+                  47 p.p. de folga
+                </span>
+              </td>
+              <td><span class="dec-cel tarde">6 · 2 fora de prazo</span></td>
+              <td><span class="pill verde">Em vigor</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td>
+            </tr>
+
+            <tr class="clicavel">
+              <td>
+                <div class="prim">C-2026-EX1</div>
+                <div class="obj">Contrato com saldo reduzido e complementares perto do teto</div>
+              </td>
+              <td>Prestador Alfa, Lda.<div class="sec">500000001</div></td>
+              <td class="tab vig">29 set 2025 — 29 set 2027<div class="sec">faltam 14 meses</div></td>
+              <td class="num tab">146 000,00 €</td>
+              <td>
+                <div class="tempo-dinheiro">
+                  <div class="td-l"><span class="et">T</span><div class="bar td-t"><i style="width:42%"></i></div><span class="pc">42%</span></div>
+                  <div class="td-l"><span class="et">€</span><div class="bar td-d tenso"><i style="width:81%"></i></div><span class="pc">81%</span></div>
+                </div>
+                <span class="desvio tenso">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 15 12 8l7 7"/></svg>
+                  ritmo a dobrar
+                </span>
+              </td>
+              <td><span class="dec-cel tarde">8 · 2 fora de prazo</span></td>
+              <td><span class="pill verde">Em vigor</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td>
+            </tr>
+
+            <tr class="clicavel">
+              <td>
+                <div class="prim">C-2026-PT4</div>
+                <div class="obj">Dotação anual quase esgotada antes do fim do ano económico</div>
+              </td>
+              <td>Prestador Alfa, Lda.<div class="sec">500000001</div></td>
+              <td class="tab vig">29 out 2025 — 29 out 2027<div class="sec">faltam 15 meses</div></td>
+              <td class="num tab">150 000,00 €</td>
+              <td>
+                <div class="tempo-dinheiro">
+                  <div class="td-l"><span class="et">T</span><div class="bar td-t"><i style="width:38%"></i></div><span class="pc">38%</span></div>
+                  <div class="td-l"><span class="et">€</span><div class="bar td-d"><i style="width:31%"></i></div><span class="pc">31%</span></div>
+                </div>
+                <span class="desvio ok">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m5 12.5 4.4 4.4L19 7"/></svg>
+                  a par do calendário
+                </span>
+              </td>
+              <td><span class="dec-cel tem">4</span></td>
+              <td><span class="pill verde">Em vigor</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td>
+            </tr>
+
+            <tr class="clicavel">
+              <td>
+                <div class="prim">C-2026-BH3</div>
+                <div class="obj">Bolsa de horas para manutenção aplicacional</div>
+              </td>
+              <td>Prestador Alfa, Lda.<div class="sec">500000001</div></td>
+              <td class="tab vig">29 jan 2026 — 29 abr 2027<div class="sec">faltam 9 meses</div></td>
+              <td class="num tab">200 000,00 €</td>
+              <td>
+                <div class="tempo-dinheiro">
+                  <div class="td-l"><span class="et">T</span><div class="bar td-t"><i style="width:40%"></i></div><span class="pc">40%</span></div>
+                  <div class="td-l"><span class="et">€</span><div class="bar td-d folga"><i style="width:4%"></i></div><span class="pc">4%</span></div>
+                </div>
+                <span class="desvio folga">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 3 2.5 20h19L12 3Z"/></svg>
+                  36 p.p. de folga
+                </span>
+              </td>
+              <td><span class="dec-cel tarde">6 · 1 fora de prazo</span></td>
+              <td><span class="pill verde">Em vigor</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td>
+            </tr>
+
+            <tr class="clicavel">
+              <td>
+                <div class="prim">C-2026-TC1</div>
+                <div class="obj">Contrato em execução com visto do Tribunal de Contas por obter</div>
+              </td>
+              <td>Prestador Alfa, Lda.<div class="sec">500000001</div></td>
+              <td class="tab vig">29 abr 2026 — 29 abr 2028<div class="sec">faltam 21 meses</div></td>
+              <td class="num tab">900 000,00 €</td>
+              <td>
+                <div class="tempo-dinheiro">
+                  <div class="td-l"><span class="et">T</span><div class="bar td-t"><i style="width:13%"></i></div><span class="pc">13%</span></div>
+                  <div class="td-l"><span class="et">€</span><div class="bar td-d"><i style="width:1%"></i></div><span class="pc">1%</span></div>
+                </div>
+                <span class="desvio ok">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m5 12.5 4.4 4.4L19 7"/></svg>
+                  a par do calendário
+                </span>
+              </td>
+              <td><span class="dec-cel tem">5</span></td>
+              <td><span class="pill verde">Em vigor</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td>
+            </tr>
+
+            <tr class="clicavel">
+              <td>
+                <div class="prim">C-2026-SU1</div>
+                <div class="obj">Contrato com suspensão em aberto há vários meses</div>
+              </td>
+              <td>Prestador Alfa, Lda.<div class="sec">500000001</div></td>
+              <td class="tab vig">29 jul 2024 — 29 jun 2027<div class="sec">suspenso há 7 meses</div></td>
+              <td class="num tab">100 000,00 €</td>
+              <td>
+                <div class="tempo-dinheiro">
+                  <div class="td-l"><span class="et">T</span><div class="bar td-t"><i style="width:69%"></i></div><span class="pc">69%</span></div>
+                  <div class="td-l"><span class="et">€</span><div class="bar td-d folga"><i style="width:6%"></i></div><span class="pc">6%</span></div>
+                </div>
+                <span class="desvio folga">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 3 2.5 20h19L12 3Z"/></svg>
+                  o prazo corre parado
+                </span>
+              </td>
+              <td><span class="dec-cel tem">4</span></td>
+              <td><span class="pill cinza">Suspenso</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td>
+            </tr>
+
+            <tr class="clicavel">
+              <td>
+                <div class="prim">C-2026-002</div>
+                <div class="obj">Prestação de serviços em outsourcing — sustentação e suporte</div>
+              </td>
+              <td>Prestador Alfa, Lda.<div class="sec">500000001</div></td>
+              <td class="tab vig">1 jan 2026 — 31 dez 2027<div class="sec">por iniciar</div></td>
+              <td class="num tab">100 000,00 €</td>
+              <td>
+                <div class="tempo-dinheiro">
+                  <div class="td-l"><span class="et">T</span><div class="bar td-t"><i style="width:0"></i></div><span class="pc">—</span></div>
+                  <div class="td-l"><span class="et">€</span><div class="bar td-d"><i style="width:0"></i></div><span class="pc">—</span></div>
+                </div>
+                <span class="desvio" style="color:var(--texto-fraco)">execução travada até ao visto</span>
+              </td>
+              <td><span class="dec-cel">—</span></td>
+              <td><span class="pill amarela">Aguarda visto do TdC</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td>
+            </tr>
+
+            <tr class="clicavel">
+              <td>
+                <div class="prim">C-2026-001</div>
+                <div class="obj">Prestação de serviços em outsourcing — desenvolvimento aplicacional</div>
+              </td>
+              <td>Prestador Alfa, Lda.<div class="sec">500000001</div></td>
+              <td class="tab vig">1 jan 2026 — 31 dez 2027<div class="sec">faltam 17 meses</div></td>
+              <td class="num tab">100 000,00 €</td>
+              <td>
+                <div class="tempo-dinheiro">
+                  <div class="td-l"><span class="et">T</span><div class="bar td-t"><i style="width:29%"></i></div><span class="pc">29%</span></div>
+                  <div class="td-l"><span class="et">€</span><div class="bar td-d folga"><i style="width:1%"></i></div><span class="pc">0,4%</span></div>
+                </div>
+                <span class="desvio folga">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 3 2.5 20h19L12 3Z"/></svg>
+                  29 p.p. de folga
+                </span>
+              </td>
+              <td><span class="dec-cel tem">3</span></td>
+              <td><span class="pill verde">Em vigor</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td>
+            </tr>
+
+            <tr class="clicavel">
+              <td>
+                <div class="prim">C-2026-LIC1</div>
+                <div class="obj">Licenciamento anual de software de gestão documental</div>
+              </td>
+              <td>Prestador Alfa, Lda.<div class="sec">500000001</div></td>
+              <td class="tab vig">29 out 2025 — 29 out 2027<div class="sec">renova em 3 meses</div></td>
+              <td class="num tab">48 000,00 €</td>
+              <td>
+                <div class="tempo-dinheiro">
+                  <div class="td-l"><span class="et">T</span><div class="bar td-t"><i style="width:38%"></i></div><span class="pc">38%</span></div>
+                  <div class="td-l"><span class="et">€</span><div class="bar td-d"><i style="width:0"></i></div><span class="pc">0%</span></div>
+                </div>
+                <span class="desvio" style="color:var(--texto-fraco)">licenciamento — não consome horas</span>
+              </td>
+              <td><span class="dec-cel tarde">3 · 1 fora de prazo</span></td>
+              <td><span class="pill verde">Em vigor</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td>
+            </tr>
+
+          </tbody>
+        </table>
+        <div class="rodape">A mostrar 9 de 20 contratos, ordenados por urgência da decisão mais antiga. <b style="color:var(--azul-forte)">Ver os restantes 11</b></div>
+      </div>
+    </div>
+
+    <div class="assist" data-dica="Pergunte ao Choramingas — ex.: que contratos terminam antes de junho com saldo por executar?"></div>
+  </div>
+</div>
+<script src="casca.js"></script>
+</body>
+</html>

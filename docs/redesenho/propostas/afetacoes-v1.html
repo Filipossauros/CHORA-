@@ -3,310 +3,21 @@
 <head>
 <meta charset="utf-8">
 <title>CHORA+ — Afetações (proposta)</title>
+<link rel="stylesheet" href="base.css">
 <style>
 /*
  * PROPOSTA — separador «Afetações» do contrato, no novo estilo.
- * Conteúdo real do contrato C-2026-001 do seed de cobertura.
- */
-
-/*
- * PROPOSTA v5 — «Hoje» com a mascote Choramingas em ativos externos.
  *
- * Mudanças face à v3, todas pedidas: cai a coluna direita; o assistente passa a
- * cartão flutuante em vez de faixa com linha; as decisões perdem o painel
- * cinzento do contrato e ficam planas; a seleção do menu é uma pastilha
- * arredondada; laranja e amarelo aproximados aos da referência.
+ * A mascote aparece aqui na pose de maestro — a distribuir pessoas por perfis —
+ * porque é literalmente o que o ecrã faz. Uma vez por ecrã, e nunca ao lado de
+ * um ato irreversível.
  *
- * Conteúdo real do cenário «Decisões do Hoje».
+ * Conteúdo real do contrato C-2026-001 do cenário «cobertura».
  */
-:root{
-  /* Marca — da folha da mascote */
-  --azul:#2563EB; --azul-forte:#1D4FD8; --azul-b:#EAF1FE; --azul-b2:#F5F8FF;
-  --navy:#16295C; --navy-2:#1E3570; --navy-3:#2C4788;
-  /* Página */
-  --fundo:#F7F9FC; --superficie:#fff;
-  --linha:#E9EDF6; --linha-forte:#DAE1EE;
-  --texto:#16295C; --texto-suave:#5C6A8F; --texto-fraco:#8D97B4;
-  /* Semânticas — aproximadas à referência */
-  --laranja:#EE7C2A; --laranja-forte:#DC6B18; --laranja-b:#FDEFE2; --laranja-c:#F9D9BC;
-  --amarelo:#E3A312; --amarelo-forte:#CE9209; --amarelo-b:#FDF6E2; --amarelo-c:#F4E3B4;
-  --verde:#3E9A62; --verde-b:#E9F6EE; --verde-mascote:#6CC188;
-  --vermelho:#D0453A; --vermelho-b:#FDEDEB;
-  --cinza-b:#EFF2F8;
-  --r:14px; --r-s:10px;
-  --sombra-s:0 1px 2px rgba(22,41,92,.04);
-  --sombra:0 2px 4px rgba(22,41,92,.04), 0 12px 28px -12px rgba(22,41,92,.16);
-  --sombra-alta:0 4px 8px rgba(22,41,92,.06), 0 20px 40px -14px rgba(22,41,92,.26);
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--fundo);color:var(--texto);
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  -webkit-font-smoothing:antialiased;font-size:13px;line-height:1.5}
-.tab{font-variant-numeric:tabular-nums}
-code{font-family:ui-monospace,Menlo,monospace}
-/* A mascote é um ATIVO, não código: trocar o ficheiro em ativos/ chega. */
-.mascote{display:block;width:100%;height:auto}
-.mascote.hero{width:100%;max-width:396px}
-svg{display:block}
-.app{display:flex;min-height:100vh}
-
-/* ── LATERAL ─────────────────────────────────────────────────────────────── */
-.lateral{width:272px;flex:0 0 272px;background:var(--navy);color:#A9B6D8;
-  display:flex;flex-direction:column;padding:18px 14px 14px}
-.marca{display:flex;align-items:center;gap:12px;padding:2px 8px 20px}
-.marca .logo{width:38px;height:38px;flex:0 0 38px;border-radius:11px;color:#fff;font-weight:800;font-size:15px;
-  background:linear-gradient(150deg,#4E7BE8,#2E55C4);display:flex;align-items:center;justify-content:center;letter-spacing:-.5px}
-.marca b{display:block;color:#fff;font-size:16px;line-height:1.2;letter-spacing:-.3px}
-.marca span{font-size:11px;color:#8496C4}
-.grupo{padding:16px 10px 7px;font-size:10px;letter-spacing:1.3px;text-transform:uppercase;color:#6C7EB2;font-weight:700}
-.nav{display:flex;align-items:center;gap:12px;padding:9px 12px;font-size:13.5px;color:#B7C4E2;
-  border-radius:var(--r-s);cursor:pointer;margin-bottom:1px}
-.nav .ic{width:18px;height:18px;flex:0 0 18px;opacity:.9}
-.nav.on{background:var(--navy-3);color:#fff;font-weight:600}
-.nav .cnt{margin-left:auto;background:var(--laranja);color:#fff;font-size:11px;font-weight:700;
-  min-width:21px;height:21px;border-radius:11px;display:flex;align-items:center;justify-content:center;padding:0 6px}
-.gaveta{margin-top:26px}
-.lateral .fim{margin-top:auto}
-.gaveta .grupo{display:flex;align-items:center;gap:6px}
-.ajuda{margin-top:12px;background:var(--navy-2);border-radius:var(--r-s);padding:11px 13px;
-  display:flex;gap:11px;align-items:center;cursor:pointer}
-.ajuda .fig{flex:0 0 36px}
-.ajuda b{display:block;color:#fff;font-size:12.5px}
-.ajuda span{font-size:11px;color:#8496C4;display:block}
-.ajuda .seta{margin-left:auto;color:#6C7EB2}
-
-/* ── PRINCIPAL ───────────────────────────────────────────────────────────── */
-.principal{flex:1;min-width:0;display:flex;flex-direction:column}
-.cabeca{display:flex;align-items:flex-start;padding:26px 30px 0;gap:16px}
-.cabeca h1{font-size:27px;font-weight:700;letter-spacing:-.7px;line-height:1.1}
-.cabeca .sub{font-size:13px;color:var(--texto-suave);margin-top:5px}
-.cabeca .dir{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:11px}
-.cabeca .linha1{display:flex;align-items:center;gap:10px}
-.conteudo{padding:20px 30px 0;flex:1}
-
-/* ── CONTROLOS ───────────────────────────────────────────────────────────── */
-.btn{height:38px;border-radius:var(--r-s);border:1px solid var(--linha-forte);background:var(--superficie);
-  color:var(--texto);font:inherit;font-size:13px;font-weight:600;padding:0 15px;cursor:pointer;
-  display:inline-flex;align-items:center;gap:8px;white-space:nowrap;box-shadow:var(--sombra-s)}
-.btn.azul{background:var(--azul);border-color:var(--azul);color:#fff}
-.btn.laranja{background:var(--laranja);border-color:var(--laranja);color:#fff}
-.btn.amarela{background:var(--amarelo);border-color:var(--amarelo);color:#fff}
-.btn.sm{height:33px;font-size:12.5px;padding:0 12px}
-.btn.ico{width:38px;padding:0;justify-content:center}
-.btn.ico.sm{width:33px}
-.chip-dados{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 13px;font-size:12.5px;
-  border:1px solid var(--linha-forte);border-radius:var(--r-s);background:var(--superficie);color:var(--texto-suave);
-  box-shadow:var(--sombra-s)}
-.utilizador{display:flex;align-items:center;gap:10px;height:38px;padding:0 6px 0 14px;border:1px solid var(--linha-forte);
-  border-radius:var(--r-s);font-size:12.5px;background:var(--superficie);box-shadow:var(--sombra-s);font-weight:500}
-.utilizador .av{width:26px;height:26px;border-radius:50%;background:var(--azul);color:#fff;font-size:10.5px;
-  font-weight:700;display:flex;align-items:center;justify-content:center}
-
-/* ── FAIXA DE BOAS-VINDAS ────────────────────────────────────────────────── */
-.banner{background:linear-gradient(105deg,var(--azul-b) 0%,var(--azul-b2) 55%,#fff 100%);
-  border:1px solid #DCE7FB;border-radius:16px;padding:16px 20px;margin-bottom:22px;
-  display:flex;align-items:center;gap:16px}
-.banner .texto{flex:0 0 292px}
-.banner .ola{font-size:21px;font-weight:700;letter-spacing:-.5px;margin-bottom:9px}
-.banner p{font-size:13.5px;color:var(--texto-suave);line-height:1.6;margin-bottom:6px}
-.banner p b{color:var(--texto);font-weight:700}
-.banner .btn{margin-top:12px}
-.banner .retrato{flex:1;min-width:0;display:flex;justify-content:center}
-
-.banner .estados{flex:0 0 268px;display:flex;flex-direction:column;gap:9px}
-.est{display:flex;align-items:center;gap:12px;border-radius:12px;padding:11px 14px;border:1px solid transparent}
-.est .quad{width:36px;height:36px;flex:0 0 36px;border-radius:10px;display:flex;align-items:center;justify-content:center}
-.est b{display:block;font-size:14px;font-weight:700;line-height:1.25}
-.est span{font-size:11.5px;color:var(--texto-suave);display:block}
-.est.laranja{background:var(--laranja-b);border-color:var(--laranja-c)}
-.est.laranja .quad{background:#F9DCC4;color:var(--laranja-forte)}
-.est.amarela{background:var(--amarelo-b);border-color:var(--amarelo-c)}
-.est.amarela .quad{background:#F6E6BA;color:var(--amarelo-forte)}
-.est.azul{background:var(--azul-b);border-color:#D3E1FA}
-.est.azul .quad{background:#D3E1FA;color:var(--azul-forte)}
-
-/* ── GRUPO ───────────────────────────────────────────────────────────────── */
-.grp{display:flex;align-items:center;gap:9px;margin:0 4px 11px}
-.grp b{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--texto-fraco);font-weight:700}
-.grp .qt{font-size:11px;color:var(--texto-fraco)}
-.grp .dir{margin-left:auto;font-size:11.5px;color:var(--texto-fraco)}
-.grp .dir b{font-size:11.5px;letter-spacing:0;text-transform:none;color:var(--texto-suave)}
-
-/* ── CARTÃO DE DECISÃO ───────────────────────────────────────────────────
-   Plano: sem painel interior, sem sombra pesada. O rail à esquerda e o quadrado
-   do ícone dão a urgência; o resto é ar. */
-.dec{background:var(--superficie);border:1px solid var(--linha);border-radius:var(--r);
-  margin-bottom:11px;display:flex;overflow:hidden;box-shadow:var(--sombra-s)}
-.dec .rail{width:5px;flex:0 0 5px}
-.dec.laranja .rail{background:var(--laranja)}
-.dec.amarela .rail{background:var(--amarelo)}
-.dec .quad{width:52px;height:52px;flex:0 0 52px;border-radius:12px;margin:19px 0 0 18px;
-  display:flex;align-items:center;justify-content:center}
-.dec.laranja .quad{background:var(--laranja-b);color:var(--laranja)}
-.dec.amarela .quad{background:var(--amarelo-b);color:var(--amarelo)}
-.dec .miolo{flex:1;min-width:0;padding:18px 18px 18px 16px}
-.dec .cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:7px}
-.dec .cab h3{font-size:14.5px;font-weight:700;letter-spacing:-.2px}
-.dec .txt{font-size:13px;color:var(--texto-suave);line-height:1.65}
-.dec .txt b{color:var(--texto);font-weight:700}
-.dec .lado{flex:0 0 208px;padding:18px 20px 18px 0;display:flex;flex-direction:column;align-items:flex-end;gap:14px}
-.dec .valor{text-align:right}
-.dec .valor .v{font-size:16.5px;font-weight:700;letter-spacing:-.3px}
-.dec .valor .r{font-size:11.5px;color:var(--texto-fraco);margin-top:1px}
-.dec .acoes{display:flex;align-items:center;gap:8px;margin-top:auto}
-.dec .kebab{color:var(--texto-fraco);cursor:pointer;padding:4px}
-.ctr{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;color:var(--azul-forte);
-  background:var(--azul-b);border-radius:7px;padding:2px 8px;letter-spacing:-.1px}
-.cod{display:inline-flex;font-size:10.5px;font-weight:600;color:var(--texto-suave);background:var(--cinza-b);
-  border-radius:6px;padding:3px 8px;letter-spacing:.2px}
-.selo{display:inline-flex;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;
-  text-transform:uppercase;letter-spacing:.4px}
-.selo.laranja{background:var(--laranja-b);color:var(--laranja-forte)}
-.selo.amarela{background:var(--amarelo-b);color:var(--amarelo-forte)}
-
-/* ── SECÇÕES RECOLHIDAS ──────────────────────────────────────────────────── */
-.recolhido{display:flex;align-items:center;gap:9px;padding:13px 4px;font-size:11px;letter-spacing:1.2px;
-  text-transform:uppercase;color:var(--texto-fraco);font-weight:700;cursor:pointer}
-.recolhido .qt{letter-spacing:0;text-transform:none;font-weight:400}
-
-/* ── ASSISTENTE ────────────────────────────────────────────────────────────
-   Cartão flutuante, destacado do fundo — não uma faixa com linha por cima. */
-.assist{position:sticky;bottom:0;padding:14px 30px 26px;margin-top:22px;
-  background:linear-gradient(to bottom,rgba(247,249,252,0) 0%,var(--fundo) 42%)}
-.assist .caixa{display:flex;align-items:center;gap:14px;background:var(--superficie);
-  border:1px solid var(--linha);border-radius:16px;padding:11px 13px 11px 16px;box-shadow:var(--sombra-alta)}
-.assist .avatar{flex:0 0 42px}
-.assist input{flex:1;border:none;background:transparent;font:inherit;font-size:13.5px;color:var(--texto);outline:none}
-.assist input::placeholder{color:var(--texto-fraco)}
-.assist .nota{font-size:11.5px;color:var(--texto-fraco);margin-top:9px;text-align:center}
-
-
-/* ── ECRÃ DO CONTRATO ────────────────────────────────────────────────────── */
-.miga{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--texto-fraco);margin-bottom:7px}
-.miga a{color:var(--azul-forte);font-weight:600}
-.pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:20px}
-.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
-.pill.verde{background:var(--verde-b);color:var(--verde)}
-.pill.laranja{background:var(--laranja-b);color:var(--laranja-forte)}
-.seps{display:flex;gap:4px;border-bottom:1px solid var(--linha);margin:20px 0 22px}
-.sep{padding:11px 16px;font-size:13.5px;color:var(--texto-suave);border-bottom:2.5px solid transparent;
-  cursor:pointer;font-weight:500;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
-.sep.on{color:var(--azul-forte);border-bottom-color:var(--azul);font-weight:700}
-.sep .n{margin-left:7px;font-size:11px;background:var(--laranja-b);color:var(--laranja-forte);
-  border-radius:10px;padding:1px 7px;font-weight:700}
-
-.cartao{background:var(--superficie);border:1px solid var(--linha);border-radius:var(--r);
-  box-shadow:var(--sombra-s);margin-bottom:16px;overflow:hidden}
-.cartao > h3{font-size:14.5px;font-weight:700;padding:15px 20px;display:flex;align-items:center;gap:10px;
-  border-bottom:1px solid var(--linha)}
-.cartao > h3 .qt{font-weight:400;font-size:12.5px;color:var(--texto-fraco)}
-.cartao > h3 .dir{margin-left:auto;display:flex;gap:8px}
-.cartao .rodape{padding:12px 20px;font-size:12px;color:var(--texto-fraco);border-top:1px solid var(--linha);
-  background:var(--superficie-2,#FAFBFE)}
-
-table{width:100%;border-collapse:collapse;font-size:13px}
-thead th{text-align:left;font-size:10.5px;letter-spacing:.7px;text-transform:uppercase;color:var(--texto-fraco);
-  font-weight:700;padding:11px 20px;border-bottom:1px solid var(--linha)}
-tbody td{padding:14px 20px;border-bottom:1px solid var(--linha);vertical-align:middle}
-tbody tr:last-child td{border-bottom:none}
-.num{text-align:right;font-variant-numeric:tabular-nums}
-td .prim{font-weight:700}
-td .sec{font-size:11.5px;color:var(--texto-fraco);margin-top:2px}
-
-.barra{height:7px;border-radius:4px;background:var(--cinza-b);overflow:hidden;min-width:96px}
-.barra > i{display:block;height:100%;border-radius:4px;background:var(--azul)}
-.consumo{display:flex;align-items:center;gap:10px}
-.consumo .pct{font-size:12px;color:var(--texto-suave);width:38px;text-align:right;font-variant-numeric:tabular-nums}
-
-.pessoa{display:flex;align-items:center;gap:11px}
-.pessoa .av{width:36px;height:36px;flex:0 0 36px;border-radius:50%;background:var(--azul-b);color:var(--azul-forte);
-  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
-.pessoa.fora .av{background:var(--amarelo-b);color:var(--amarelo-forte)}
-.marca-ent{display:inline-flex;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;
-  background:var(--cinza-b);color:var(--texto-suave);letter-spacing:.2px}
-.marca-ent.sub{background:var(--amarelo-b);color:var(--amarelo-forte)}
-.encerrada{opacity:.62}
-.aviso-rn{display:flex;gap:9px;align-items:flex-start;background:var(--amarelo-b);border:1px solid var(--amarelo-c);
-  border-radius:10px;padding:11px 13px;font-size:12.5px;color:#7A5A0E;margin:14px 20px 18px}
-.aviso-rn code{background:#F3E4BB;padding:1px 6px;border-radius:5px;font-size:11px;font-weight:600}
-
-.banner .texto.largo{flex:0 0 340px}
-.banner .numeros{display:flex;gap:26px;margin-top:14px}
-.banner .numeros b{display:block;font-size:22px;font-weight:750;letter-spacing:-.6px;line-height:1.1}
-.banner .numeros span{font-size:11.5px;color:var(--texto-suave)}
-
 </style>
 </head>
 <body>
-<div class="app">
-  <aside class="lateral">
-    <div class="marca">
-      <div class="logo">C+</div>
-      <div><b>CHORA+</b><span>Controlo de horas</span></div>
-    </div>
-
-    <div class="nav">
-      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 9.6 12 3l9 6.6V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.6Z"/></svg>
-      Hoje <span class="cnt">11</span>
-    </div>
-
-    <div class="grupo">Trabalho</div>
-    <div class="nav on">
-      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5"/></svg>
-      Contratos
-    </div>
-    <div class="nav">
-      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12.5 2.4 2.4 4.6-5"/></svg>
-      Registos e aprovações
-    </div>
-    <div class="nav">
-      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M14.6 9.3A3 3 0 1 0 12 15M9.4 11.2h5M9.4 13.4h5"/></svg>
-      Faturação
-    </div>
-
-    <div class="grupo">Análise</div>
-    <div class="nav">
-      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
-      Relatórios
-    </div>
-
-    <div class="gaveta">
-      <div class="grupo">Configurações e outros
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>
-      </div>
-      <div class="nav">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8Z"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/></svg>
-        Regras e alertas
-      </div>
-      <div class="nav">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6.5 3.4"/></svg>
-        Orçamentação
-      </div>
-      <div class="nav">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c0-3.4 2.8-5.2 6.2-5.2s6.2 1.8 6.2 5.2"/><path d="M16.4 5.6a3.4 3.4 0 0 1 0 5M21.2 20c0-2.7-1.1-4.2-2.8-4.8"/></svg>
-        Recursos
-      </div>
-      <div class="nav">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M7 3h10a2 2 0 0 1 2 2v16l-7-3.4L5 21V5a2 2 0 0 1 2-2Z"/></svg>
-        Auditoria
-      </div>
-      <div class="nav">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8.4 10V7a3.6 3.6 0 0 1 7.2 0v3"/></svg>
-        Acessos
-      </div>
-      <div class="nav">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><ellipse cx="12" cy="6" rx="7.5" ry="3.2"/><path d="M4.5 6v12c0 1.8 3.4 3.2 7.5 3.2s7.5-1.4 7.5-3.2V6"/><path d="M4.5 12c0 1.8 3.4 3.2 7.5 3.2s7.5-1.4 7.5-3.2"/></svg>
-        Dados de demonstração
-      </div>
-
-      </div>
-      <div class="fim"></div>
-      <div class="ajuda">
-        <div class="fig"><img class="mascote" src="ativos/choramingas-aceno.svg" alt="Choramingas"></div>
-        <div><b>Choramingas</b><span>Pergunte-lhe o que quiser</span></div>
-        <svg class="seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 6 6 6-6 6"/></svg>
-      </div>
-  </aside>
+<div class="app" data-ativo="contratos" data-hoje="11">
   <div class="principal">
 
     <header class="cabeca">
@@ -352,7 +63,7 @@ td .sec{font-size:11.5px;color:var(--texto-fraco);margin-top:2px}
             Nova afetação
           </button>
         </div>
-        <div class="retrato"><img class="mascote hero" src="ativos/choramingas-maestro.svg" alt="Choramingas"></div>
+        <div class="retrato"><img class="mascote faixa" src="ativos/choramingas-maestro.png" alt="Choramingas"></div>
       </section>
 
       <!-- ── PERFIS CONTRATUAIS ──────────────────────────────────────────── -->
@@ -443,21 +154,9 @@ td .sec{font-size:11.5px;color:var(--texto-fraco);margin-top:2px}
       </div>
     </div>
 
-    <!-- ═══ ASSISTENTE ═════════════════════════════════════════════════ -->
-    <div class="assist">
-      <div class="caixa">
-        <div class="avatar"><img class="mascote" src="ativos/choramingas-aceno.svg" alt="Choramingas"></div>
-        <input placeholder="Pergunte ao Choramingas — ex.: onde posso colocar mais um arquiteto?">
-        <button class="btn ico sm" title="Carregar documentos">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21.4 11.1 12.9 2.6a4 4 0 0 0-5.7 5.7l8.5 8.5a2.5 2.5 0 0 0 3.5-3.5l-7.8-7.8"/></svg>
-        </button>
-        <button class="btn azul">Perguntar</button>
-      </div>
-      <div class="nota">As alterações são sempre mostradas antes de executadas e passam pelas mesmas regras dos ecrãs.</div>
-    </div>
-
-
+    <div class="assist"></div>
   </div>
 </div>
+<script src="casca.js"></script>
 </body>
 </html>

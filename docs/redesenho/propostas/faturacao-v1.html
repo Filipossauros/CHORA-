@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>CHORA+ — Faturação (proposta)</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/*
+ * PROPOSTA — «Faturação»: registar · conferir · decidir.
+ *
+ * O ecrã atual abre num formulário de registo. Está trocado: registar é o passo
+ * barato e mecânico; o que custa — e o que a lei obriga a fundamentar — é a
+ * DECISÃO sobre uma fatura que não bate certo. Por isso o veredicto passa a ser
+ * o centro do ecrã e o formulário de registo recolhe para um botão.
+ *
+ * A conferência mostra as duas colunas que a regra compara: o que a fatura diz e
+ * o que os registos aprovados sustentam. A diferença fica marcada linha a linha,
+ * porque é essa linha que vai ser citada no relatório de evidência.
+ *
+ * Conteúdo real do cenário «Capacidades da faturação».
+ */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.tile{background:var(--superficie);border:1px solid var(--linha);border-radius:var(--r);padding:14px 16px;
+  box-shadow:var(--sombra-s);display:flex;gap:12px;align-items:center;cursor:pointer}
+.tile.on{border-color:var(--azul);box-shadow:0 0 0 3px var(--azul-b),var(--sombra-s)}
+.tile .quad{width:38px;height:38px;flex:0 0 38px;border-radius:11px;display:flex;align-items:center;justify-content:center}
+.tile b{display:block;font-size:20px;font-weight:750;letter-spacing:-.5px;line-height:1.15}
+.tile span{font-size:11.5px;color:var(--texto-suave)}
+.tile.laranja .quad{background:var(--laranja-b);color:var(--laranja-forte)}
+.tile.amarela .quad{background:var(--amarelo-b);color:var(--amarelo-forte)}
+.tile.verde .quad{background:var(--verde-b);color:var(--verde-forte)}
+.tile.azul .quad{background:var(--azul-b);color:var(--azul-forte)}
+
+/* Cartão de veredicto */
+.veredicto{background:var(--superficie);border:1px solid var(--laranja-c);border-radius:var(--r);
+  box-shadow:var(--sombra);overflow:hidden;margin-bottom:20px}
+.veredicto .topo{display:flex;align-items:center;gap:14px;padding:16px 20px;background:var(--laranja-b);
+  border-bottom:1px solid var(--laranja-c)}
+.veredicto .topo .quad{width:46px;height:46px;flex:0 0 46px;border-radius:12px;background:#F9DCC4;
+  color:var(--laranja-forte);display:flex;align-items:center;justify-content:center}
+.veredicto .topo h2{font-size:17px;font-weight:700;letter-spacing:-.3px;line-height:1.2}
+.veredicto .topo .sub{font-size:12.5px;color:#8A5A22;margin-top:3px}
+.veredicto .topo .dir{margin-left:auto;text-align:right}
+.veredicto .topo .dir b{display:block;font-size:19px;font-weight:750;letter-spacing:-.4px}
+.veredicto .topo .dir span{font-size:11.5px;color:#8A5A22}
+
+.meta{display:flex;gap:0;border-bottom:1px solid var(--linha)}
+.meta > div{flex:1;padding:13px 20px}
+.meta > div + div{border-left:1px solid var(--linha)}
+.meta .et{font-size:10.5px;letter-spacing:.7px;text-transform:uppercase;color:var(--texto-fraco);font-weight:700;margin-bottom:4px}
+.meta .vl{font-size:13.5px;font-weight:600}
+.meta .vl .sec{font-weight:400}
+
+.conf{padding:0}
+.conf h3{font-size:13.5px;font-weight:700;padding:14px 20px 10px;display:flex;align-items:center;gap:9px}
+.conf h3 .qt{font-weight:400;color:var(--texto-fraco);font-size:12.5px}
+tr.diverge td{background:var(--vermelho-b)}
+tr.diverge td:first-child{box-shadow:inset 4px 0 0 var(--vermelho)}
+.dif{font-weight:700;color:var(--vermelho-forte)}
+.dif.zero{color:var(--verde-forte)}
+tfoot td{padding:13px 20px;font-weight:700;border-top:2px solid var(--linha-forte);background:var(--superficie-2)}
+
+.docs{display:flex;gap:10px;padding:14px 20px;border-top:1px solid var(--linha);flex-wrap:wrap}
+.doc{display:flex;align-items:center;gap:10px;border:1px solid var(--linha-forte);border-radius:var(--r-s);
+  padding:9px 13px;background:var(--superficie-2);min-width:264px}
+.doc .ico{width:30px;height:30px;flex:0 0 30px;border-radius:8px;background:var(--vermelho-b);color:var(--vermelho-forte);
+  display:flex;align-items:center;justify-content:center}
+.doc b{display:block;font-size:12.5px}
+.doc span{font-size:10.5px;color:var(--texto-fraco);font-family:ui-monospace,Menlo,monospace}
+
+.decidir{padding:16px 20px;border-top:1px solid var(--linha);background:var(--superficie-2);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.decidir .rot{margin:0 8px 0 0;font-size:12.5px}
+.decidir .nota{margin-left:auto;font-size:11.5px;color:var(--texto-fraco);text-align:right;max-width:330px}
+</style>
+</head>
+<body>
+<div class="app" data-ativo="faturacao" data-hoje="11">
+  <div class="principal">
+
+    <header class="cabeca">
+      <div>
+        <h1>Faturação</h1>
+        <div class="sub">Registar · conferir · decidir — 1 fatura à espera de decisão</div>
+      </div>
+      <div class="dir">
+        <div class="linha1">
+          <span class="chip-dados">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/></svg>
+            Dados: capacidades da faturação
+          </span>
+          <span class="utilizador">Gestor de Contrato
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--texto-fraco)" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
+            <span class="av">GC</span>
+          </span>
+        </div>
+        <button class="btn azul">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+          Registar fatura
+        </button>
+      </div>
+    </header>
+
+    <div class="conteudo">
+
+      <div class="tiles">
+        <div class="tile laranja on">
+          <div class="quad"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4M12 17.2h.01"/></svg></div>
+          <div><b class="tab">1</b><span>com divergência</span></div>
+        </div>
+        <div class="tile amarela">
+          <div class="quad"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.4 2"/></svg></div>
+          <div><b class="tab">1</b><span>a aguardar nota de crédito</span></div>
+        </div>
+        <div class="tile azul">
+          <div class="quad"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6V3Z"/><path d="M14 3v5h5"/></svg></div>
+          <div><b class="tab">0</b><span>por conferir</span></div>
+        </div>
+        <div class="tile verde">
+          <div class="quad"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12.5 4.4 4.4L19 7"/></svg></div>
+          <div><b class="tab">5</b><span>validadas este ano<br>78 930,00 €</span></div>
+        </div>
+      </div>
+
+      <!-- ═══ VEREDICTO ═════════════════════════════════════════════════ -->
+      <section class="veredicto">
+        <div class="topo">
+          <div class="quad">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4M12 17.2h.01"/></svg>
+          </div>
+          <div>
+            <h2>FT-003 fatura 10 h acima do que os registos aprovados sustentam</h2>
+            <div class="sub">Conferência automática de 29 mai 2026, 14:07 · comparação com os registos <b>aprovados</b> do período — <code class="cod">RN-603</code></div>
+          </div>
+          <div class="dir">
+            <b class="tab">100,00 €</b>
+            <span>a corrigir · nota de crédito esperada</span>
+          </div>
+        </div>
+
+        <div class="meta">
+          <div><div class="et">Contrato</div><div class="vl">C-2026-001 <span class="sec">· bolsa de horas</span></div></div>
+          <div><div class="et">Prestador</div><div class="vl">Prestador Alfa, Lda. <span class="sec">· 500000001</span></div></div>
+          <div><div class="et">Período faturado</div><div class="vl tab">1 — 31 mai 2026</div></div>
+          <div><div class="et">Montante s/ IVA</div><div class="vl tab">500,00 €</div></div>
+          <div><div class="et">Registada em</div><div class="vl tab">29 mai 2026</div></div>
+        </div>
+
+        <div class="conf">
+          <h3>Linha a linha <span class="qt">o que a fatura diz, ao lado do que a execução aprovada suporta</span></h3>
+          <table>
+            <thead><tr>
+              <th>Perfil</th>
+              <th class="num">Horas faturadas</th>
+              <th class="num">Horas aprovadas</th>
+              <th class="num">Diferença</th>
+              <th class="num">Preço/hora</th>
+              <th class="num">Valor faturado</th>
+              <th class="num">Valor suportado</th>
+            </tr></thead>
+            <tbody>
+              <tr class="diverge">
+                <td><div class="prim">Programador Júnior</div><div class="sec">10 h sem registo aprovado no período</div></td>
+                <td class="num tab">50 h</td>
+                <td class="num tab">40 h</td>
+                <td class="num dif">+10 h</td>
+                <td class="num tab">10,00 €</td>
+                <td class="num tab">500,00 €</td>
+                <td class="num tab">400,00 €</td>
+              </tr>
+              <tr>
+                <td><div class="prim">Arquiteto de Software Sénior</div><div class="sec">confere</div></td>
+                <td class="num tab">0 h</td>
+                <td class="num tab">0 h</td>
+                <td class="num dif zero">0 h</td>
+                <td class="num tab">55,00 €</td>
+                <td class="num tab">0,00 €</td>
+                <td class="num tab">0,00 €</td>
+              </tr>
+            </tbody>
+            <tfoot><tr>
+              <td>Total</td>
+              <td class="num tab">50 h</td>
+              <td class="num tab">40 h</td>
+              <td class="num dif">+10 h</td>
+              <td></td>
+              <td class="num tab">500,00 €</td>
+              <td class="num tab">400,00 €</td>
+            </tr></tfoot>
+          </table>
+        </div>
+
+        <div class="aviso-rn vermelha" style="margin:14px 20px 0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 16px;margin-top:1px"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+          <div><b>Validar assim não é possível.</b> A fatura só pode ser validada até ao valor que a execução aprovada
+          sustenta <code>RN-603</code>. Restam três saídas: devolver ao prestador, pedir nota de crédito de 100,00 €,
+          ou aprovar primeiro os registos em falta — se existirem e forem devidos.</div>
+        </div>
+
+        <div class="docs">
+          <div class="doc">
+            <div class="ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l4 4v14H7V3Z"/><path d="M15 3v5h4"/></svg></div>
+            <div><b>FT-003.pdf</b><span>sha256 4f9c…a17e</span></div>
+          </div>
+          <div class="doc">
+            <div class="ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l4 4v14H7V3Z"/><path d="M15 3v5h4"/></svg></div>
+            <div><b>relatorio-horas-mai.pdf</b><span>sha256 be21…70c4</span></div>
+          </div>
+          <div style="display:flex;align-items:center;font-size:11.5px;color:var(--texto-fraco);max-width:400px;line-height:1.6">
+            Os dois PDF ficam selados pelo hash no momento do registo <code class="cod" style="margin:0 4px">RN-602-A</code>.
+            Trocar o ficheiro depois da decisão deixa rasto.
+          </div>
+        </div>
+
+        <div class="decidir">
+          <span class="rot">Decisão</span>
+          <button class="btn laranja">Pedir nota de crédito de 100,00 €</button>
+          <button class="btn">Devolver ao prestador</button>
+          <button class="btn">Ir aos registos por aprovar</button>
+          <button class="btn" disabled title="Bloqueado pela RN-603 enquanto houver divergência">Validar</button>
+          <span class="nota">A decisão produz o relatório de evidência <code class="cod">RN-604</code> e regista o
+          nº da fatura automaticamente.</span>
+        </div>
+      </section>
+
+      <!-- ═══ REGISTADAS ════════════════════════════════════════════════ -->
+      <div class="cartao">
+        <h3>Faturas registadas <span class="qt">7 este ano</span>
+          <span class="dir">
+            <button class="btn sm">2026</button>
+            <button class="btn sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg>
+              Excel
+            </button>
+          </span>
+        </h3>
+        <table>
+          <thead><tr>
+            <th>Nº</th><th>Contrato</th><th>Tipo de faturação</th><th>Período</th>
+            <th class="num">Montante s/ IVA</th><th>Decisão</th><th>Estado</th><th></th>
+          </tr></thead>
+          <tbody>
+            <tr class="clicavel"><td class="prim">FT-003</td><td>C-2026-001</td><td>Bolsa de horas</td>
+              <td class="tab">mai 2026</td><td class="num tab">500,00 €</td>
+              <td class="tab">— <span class="sec">em espera desde 29 mai</span></td>
+              <td><span class="pill amarela">Aguarda nota de crédito</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td></tr>
+            <tr class="clicavel"><td class="prim">FT-004</td><td>C-2026-001</td><td>Bolsa de horas</td>
+              <td class="tab">abr 2026</td><td class="num tab">200,00 €</td>
+              <td class="tab">3 mai 2026</td>
+              <td><span class="pill verde">Validada</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td></tr>
+            <tr class="clicavel"><td class="prim">FT-001</td><td>C-2026-001</td><td>Bolsa de horas</td>
+              <td class="tab">mar 2026</td><td class="num tab">400,00 €</td>
+              <td class="tab">4 abr 2026</td>
+              <td><span class="pill verde">Validada</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td></tr>
+            <tr class="clicavel"><td class="prim">FT-CM-001</td><td>C-2026-CM1</td><td>Entregável</td>
+              <td class="tab">Marco 1 · fev 2026</td><td class="num tab">30 000,00 €</td>
+              <td class="tab">20 fev 2026</td>
+              <td><span class="pill verde">Validada</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td></tr>
+            <tr class="clicavel"><td class="prim">FT-2026/0910</td><td>C-2026-LIC1</td><td>Licenciamento</td>
+              <td class="tab">anuidade 2026</td><td class="num tab">48 000,00 €</td>
+              <td class="tab">12 jan 2026</td>
+              <td><span class="pill verde">Validada</span></td>
+              <td class="num"><span class="kebab"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></span></td></tr>
+          </tbody>
+        </table>
+        <div class="rodape">O tipo de faturação do contrato é que manda nos documentos exigidos e na forma de conferir <code class="cod">RN-613</code>: bolsa de horas confere contra registos aprovados; entregável, contra aceitação do marco; licenciamento, contra a vigência da licença.</div>
+      </div>
+    </div>
+
+    <div class="assist" data-dica="Pergunte ao Choramingas — ex.: quanto foi faturado neste contrato desde janeiro?"></div>
+  </div>
+</div>
+<script src="casca.js"></script>
+</body>
+</html>
