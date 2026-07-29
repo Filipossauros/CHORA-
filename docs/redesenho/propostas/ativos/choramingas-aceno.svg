@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Choramingas">
+  <!--
+    CHORAMINGAS — pose de aceno. MARCADOR DE POSIÇÃO.
+    Substituir pelo ficheiro definitivo com este mesmo nome; o CSS não muda.
+    Usado em: avatar do assistente (42 px) e rodapé da lateral (36 px).
+  -->
+  <defs>
+    <linearGradient id="cAceno" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4E7BE8"/><stop offset="1" stop-color="#3560D4"/>
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="62" cy="116" rx="30" ry="4.5" fill="#0F1E3D" opacity=".07"/>
+
+  <!-- tentáculos de apoio -->
+  <g fill="url(#cAceno)" stroke="#1B3A86" stroke-width="2.2" stroke-linejoin="round">
+    <path d="M40 92c-11 1-19 8-21 18-1 5 8 6 9 1 2-7 7-11 14-12z"/>
+    <path d="M52 100c-7 3-11 9-11 16 0 5 8 5 8 0 0-4 3-8 7-10z"/>
+    <path d="M66 102c-3 4-4 9-3 14 1 5 8 4 8-1 0-3 0-7 2-9z"/>
+    <path d="M80 100c7 3 11 9 11 16 0 5-8 5-8 0 0-4-3-8-7-10z"/>
+  </g>
+
+  <!-- tentáculo levantado (aceno) -->
+  <path d="M92 66c9-6 17-4 21 3 3 6-1 11-6 9-4-2-3-6-7-6-3 0-6 2-8 5z"
+        fill="url(#cAceno)" stroke="#1B3A86" stroke-width="2.2" stroke-linejoin="round"/>
+  <g fill="#8FB4F2" opacity=".9">
+    <circle cx="103" cy="66" r="1.9"/><circle cx="109" cy="69" r="1.7"/>
+  </g>
+
+  <!-- camisola -->
+  <path d="M42 68h44c4 0 7 3 7 7v16c0 8-7 13-15 13H50c-8 0-15-5-15-13V75c0-4 3-7 7-7z"
+        fill="#17264E" stroke="#0E1A38" stroke-width="2"/>
+  <path d="M56 68h16l-8 10z" fill="#0E1A38"/>
+  <g fill="#6CC188"><rect x="60" y="82" width="7" height="18" rx="2.2"/><rect x="54" y="88" width="19" height="7" rx="2.2"/></g>
+
+  <!-- cabeça -->
+  <ellipse cx="64" cy="43" rx="38" ry="35" fill="url(#cAceno)" stroke="#1B3A86" stroke-width="2.4"/>
+  <ellipse cx="49" cy="26" rx="14" ry="8" fill="#fff" opacity=".2" transform="rotate(-20 49 26)"/>
+
+  <path d="M39 29c4-3 9-3 13-1" stroke="#1B3A86" stroke-width="2.6" stroke-linecap="round" fill="none" opacity=".6"/>
+  <path d="M76 28c4-2 9-2 13 1" stroke="#1B3A86" stroke-width="2.6" stroke-linecap="round" fill="none" opacity=".6"/>
+
+  <ellipse cx="50" cy="45" rx="9.5" ry="11.5" fill="#fff"/>
+  <ellipse cx="78" cy="45" rx="9.5" ry="11.5" fill="#fff"/>
+  <circle cx="51" cy="47" r="6.4" fill="#17264E"/>
+  <circle cx="79" cy="47" r="6.4" fill="#17264E"/>
+  <circle cx="53.4" cy="44" r="2.5" fill="#fff"/>
+  <circle cx="81.4" cy="44" r="2.5" fill="#fff"/>
+  <circle cx="48.8" cy="50.4" r="1.2" fill="#fff" opacity=".85"/>
+  <circle cx="76.8" cy="50.4" r="1.2" fill="#fff" opacity=".85"/>
+
+  <ellipse cx="34" cy="56" rx="6" ry="3.8" fill="#F2A3A6" opacity=".85"/>
+  <ellipse cx="94" cy="56" rx="6" ry="3.8" fill="#F2A3A6" opacity=".85"/>
+  <path d="M58 58c2 3.4 10 3.4 12 0-1.4 4.4-10.6 4.4-12 0z" fill="#E8724C"/>
+
+  <!-- brilhos -->
+  <g fill="#F2C14E">
+    <path d="M108 26 110.4 32 116 34 110.4 36 108 42 105.6 36 100 34 105.6 32z"/>
+    <path d="M117 43 118.4 46.6 122 48 118.4 49.4 117 53 115.6 49.4 112 48 115.6 46.6z"/>
+  </g>
+</svg>
