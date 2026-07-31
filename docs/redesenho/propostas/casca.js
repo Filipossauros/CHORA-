@@ -7,7 +7,10 @@
  *
  * Uso, no corpo do documento:
  *   <div class="app" data-ativo="contratos" data-hoje="11"> … </div>
- * e, dentro de .principal, um <div class="assist" data-dica="…"></div> vazio.
+ *
+ * O Choramingas fica recolhido no fundo da lateral em todos os ecrãs. Para
+ * mostrar a barra aberta, acrescente `data-choramingas="aberto"` ao .app e, se
+ * quiser mudar o texto do campo, `data-dica="…"`.
  *
  * Nota: isto é andaime de maqueta. Na aplicação a casca é o componente Shell.
  */
@@ -61,39 +64,66 @@
       h += `<div class="nav${it.id === ativo ? ' on' : ''}">${ic(it.ic)}${it.rot}${cnt}</div>`;
     }
     if (emGaveta) h += '</div>';
+    const aberto = document.querySelector('.app')?.dataset.choramingas === 'aberto';
     h += `<div class="fim"></div>
-      <div class="ajuda">
+      <div class="lancador${aberto ? ' on' : ''}">
         <div class="fig"><img class="mascote" src="ativos/choramingas-aceno.png" alt="Choramingas"></div>
-        <div><b>Choramingas</b><span>Pergunte-lhe o que quiser</span></div>
+        <div><b>Choramingas</b><span>${aberto ? 'A conversar' : 'Perguntar ou pedir'}</span></div>
         <svg class="seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 6 6 6-6 6"/></svg>
       </div>`;
     return h;
   }
 
-  const DICA_OMISSAO = 'Pergunte ao Choramingas — ex.: onde posso colocar mais um arquiteto?';
-  const NOTA_OMISSAO = 'As alterações são sempre mostradas antes de executadas e passam pelas mesmas regras dos ecrãs.';
+  const DICA_OMISSAO = 'Pergunte ou peça — ex.: onde posso colocar mais um arquiteto?';
+  const SUGS_OMISSAO = [
+    'Que contratos estão em risco?',
+    'Onde posso colocar mais um arquiteto?',
+    'Que registos estão por aprovar?',
+  ];
 
-  function assistente(el) {
-    el.innerHTML = `<div class="caixa">
-        <div class="avatar"><img class="mascote" src="ativos/choramingas-aceno.png" alt="Choramingas"></div>
-        <input placeholder="${el.dataset.dica || DICA_OMISSAO}">
-        <button class="btn ico sm" title="Carregar documentos">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21.4 11.1 12.9 2.6a4 4 0 0 0-5.7 5.7l8.5 8.5a2.5 2.5 0 0 0 3.5-3.5l-7.8-7.8"/></svg>
-        </button>
-        <button class="btn azul">Perguntar</button>
-      </div>
-      <div class="nota">${el.dataset.nota || NOTA_OMISSAO}</div>`;
+  /** A barra do Choramingas, aberta a partir do lançador da lateral. */
+  function choramingas(dica, sugs) {
+    const el = document.createElement('div');
+    el.className = 'choro';
+    el.innerHTML = `<div class="painel">
+        <div class="topo">
+          <div class="fig"><img class="mascote" src="ativos/choramingas-aceno.png" alt="Choramingas"></div>
+          <b>Choramingas</b>
+          <span class="sub">33 capacidades · responde com os dados a que tem acesso</span>
+          <span class="fechar" title="Fechar">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </span>
+        </div>
+        <div class="linha">
+          <input placeholder="${dica}">
+          <button class="btn ico sm" title="Carregar documentos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21.4 11.1 12.9 2.6a4 4 0 0 0-5.7 5.7l8.5 8.5a2.5 2.5 0 0 0 3.5-3.5l-7.8-7.8"/></svg>
+          </button>
+          <button class="btn azul">Perguntar</button>
+        </div>
+        <div class="sugs">${sugs.map((s) => `<span class="sug">${s}</span>`).join('')}</div>
+        <div class="nota">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 14px"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+          Mostra sempre antes de executar; as regras são as mesmas dos ecrãs.
+          <span class="dir">Abrir a conversa inteira →</span>
+        </div>
+      </div>`;
+    return el;
   }
 
   function montar() {
     const app = document.querySelector('.app');
-    if (app && !app.querySelector('.lateral')) {
+    if (!app) return;
+    if (!app.querySelector('.lateral')) {
       const aside = document.createElement('aside');
       aside.className = 'lateral';
       aside.innerHTML = lateral(app.dataset.ativo, app.dataset.hoje);
       app.prepend(aside);
     }
-    document.querySelectorAll('.assist').forEach((el) => { if (!el.children.length) assistente(el); });
+    if (app.dataset.choramingas === 'aberto' && !app.querySelector('.choro')) {
+      const sugs = app.dataset.sugestoes ? app.dataset.sugestoes.split('|') : SUGS_OMISSAO;
+      app.querySelector('.principal')?.append(choramingas(app.dataset.dica || DICA_OMISSAO, sugs));
+    }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montar);

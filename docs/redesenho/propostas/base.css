@@ -62,12 +62,47 @@ svg{display:block}
 .gaveta{margin-top:26px}
 .gaveta .grupo{display:flex;align-items:center;gap:6px}
 .lateral .fim{margin-top:auto}
-.ajuda{margin-top:12px;background:var(--navy-2);border-radius:var(--r-s);padding:11px 13px;
-  display:flex;gap:11px;align-items:center;cursor:pointer}
-.ajuda .fig{flex:0 0 36px}
-.ajuda b{display:block;color:#fff;font-size:12.5px}
-.ajuda span{font-size:11px;color:#8496C4;display:block}
-.ajuda .seta{margin-left:auto;color:#6C7EB2}
+
+/* ── CHORAMINGAS: o lançador ────────────────────────────────────────────────
+   O assistente vive recolhido no fundo da lateral, em TODOS os ecrãs. Antes só
+   existia no «Hoje», e só como barra permanente: ocupava uma faixa em todos os
+   ecrãs onde estava e faltava em todos os outros. Recolhido, está sempre à mão
+   e nunca a estorvar. */
+.lancador{margin-top:12px;background:var(--navy-2);border-radius:var(--r-s);padding:9px 11px;
+  display:flex;gap:10px;align-items:center;cursor:pointer;border:1px solid transparent}
+.lancador .fig{flex:0 0 34px}
+.lancador b{display:block;color:#fff;font-size:12.5px;line-height:1.3}
+.lancador span{font-size:11px;color:#8496C4;display:block}
+.lancador .seta{margin-left:auto;color:#6C7EB2;transition:transform .18s ease}
+.lancador.on{background:var(--navy-3);border-color:#4A67AE;box-shadow:0 0 0 3px rgba(74,103,174,.3)}
+.lancador.on .seta{transform:rotate(-90deg);color:#fff}
+
+/* ── CHORAMINGAS: a barra aberta ────────────────────────────────────────────
+   Cresce a partir do lançador — encostada à esquerda, com um bico a apontar
+   para ele — e é DELIBERADAMENTE mais estreita do que os cartões, com sombra
+   mais funda. Com a mesma largura e a mesma sombra passava por cartão. */
+.choro{position:sticky;bottom:0;z-index:4;padding:26px 30px 22px;
+  background:linear-gradient(to bottom,rgba(247,249,252,0),var(--fundo) 44%)}
+.choro .painel{position:relative;width:min(760px,100%);background:var(--superficie);
+  border:1px solid #C4D5F2;border-radius:16px;
+  box-shadow:0 4px 10px rgba(22,41,92,.07), 0 26px 52px -16px rgba(22,41,92,.42)}
+.choro .painel::before{content:"";position:absolute;left:-7px;bottom:30px;width:13px;height:13px;
+  background:var(--superficie);border-left:1px solid #C4D5F2;border-bottom:1px solid #C4D5F2;
+  transform:rotate(45deg)}
+.choro .topo{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--linha)}
+.choro .topo .fig{flex:0 0 26px}
+.choro .topo b{font-size:12.5px}
+.choro .topo .sub{font-size:11.5px;color:var(--texto-fraco)}
+.choro .topo .fechar{margin-left:auto;color:var(--texto-fraco);cursor:pointer;padding:3px}
+.choro .linha{display:flex;align-items:center;gap:11px;padding:11px 13px 11px 16px}
+.choro input{flex:1;border:none;background:transparent;font:inherit;font-size:13.5px;color:var(--texto);outline:none}
+.choro input::placeholder{color:var(--texto-fraco)}
+.choro .sugs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 13px}
+.choro .sug{font-size:11.5px;color:var(--texto-suave);background:var(--superficie-2);
+  border:1px solid var(--linha-forte);border-radius:20px;padding:4px 11px;cursor:pointer}
+.choro .nota{font-size:11.5px;color:var(--texto-fraco);padding:9px 16px;border-top:1px solid var(--linha);
+  background:var(--superficie-2);border-radius:0 0 16px 16px;display:flex;align-items:center;gap:8px}
+.choro .nota .dir{margin-left:auto;color:var(--azul-forte);font-weight:600;cursor:pointer;white-space:nowrap}
 
 /* ── PRINCIPAL ─────────────────────────────────────────────────────────── */
 .principal{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -263,12 +298,14 @@ td .sec{font-size:11.5px;color:var(--texto-fraco);margin-top:2px}
 .vazio .fig{width:150px;margin:0 auto 14px}
 .vazio b{display:block;font-size:15px;color:var(--texto);margin-bottom:5px}
 
-/* ── ASSISTENTE ────────────────────────────────────────────────────────── */
-.assist{position:sticky;bottom:0;padding:14px 30px 26px;margin-top:22px;
-  background:linear-gradient(to bottom,rgba(247,249,252,0) 0%,var(--fundo) 42%)}
-.assist .caixa{display:flex;align-items:center;gap:14px;background:var(--superficie);
-  border:1px solid var(--linha);border-radius:16px;padding:11px 13px 11px 16px;box-shadow:var(--sombra-alta)}
-.assist .avatar{flex:0 0 42px}
-.assist input{flex:1;border:none;background:transparent;font:inherit;font-size:13.5px;color:var(--texto);outline:none}
-.assist input::placeholder{color:var(--texto-fraco)}
-.assist .nota{font-size:11.5px;color:var(--texto-fraco);margin-top:9px;text-align:center}
+/* ── FAMÍLIA DE DECISÃO ────────────────────────────────────────────────────
+   As cinco famílias de `FAMILIAS_ALERTAS`. É o «tipo de problema» pelo qual se
+   filtra e se ordena. */
+.fam{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;
+  padding:3px 9px;border-radius:6px;background:var(--cinza-b);color:var(--texto-suave);white-space:nowrap}
+.fam::before{content:"";width:6px;height:6px;border-radius:2px;background:currentColor}
+.fam.f-tempo{background:#EAF1FE;color:#1D4FD8}
+.fam.f-cobertura{background:#F1ECFB;color:#6B46C6}
+.fam.f-capacidade{background:#E9F6EE;color:#2F7E4E}
+.fam.f-ciclo{background:#FDEFE2;color:#DC6B18}
+.fam.f-higiene{background:#FDF6E2;color:#CE9209}

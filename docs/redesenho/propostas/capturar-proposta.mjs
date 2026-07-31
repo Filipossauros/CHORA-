@@ -31,7 +31,7 @@ for (const f of ficheiros.sort()) {
 
   // Na página inteira o que é «sticky» tem de deixar de o ser: o Chromium
   // desenha-o na posição de scroll e a lateral apareceria só no fundo.
-  await p.addStyleTag({ content: '.lateral,.assist,.doca,.doca-inf{position:static!important;background-image:none!important} .lateral{height:auto!important}' });
+  await p.addStyleTag({ content: '.lateral,.choro,.doca,.doca-inf{position:static!important;background-image:none!important} .lateral{height:auto!important}' });
   await p.evaluate(() => window.scrollTo(0, 0));
   await p.screenshot({ path: `${DIR}/${base}-completo.png`, fullPage: true });
   const h = await p.evaluate(() => document.body.scrollHeight);

@@ -1,13 +1,14 @@
 # Propostas de redesenho — ecrãs principais
 
-Sete maquetas HTML, com conteúdo real dos cenários de demonstração. Abrem
+Oito maquetas HTML, com conteúdo real dos cenários de demonstração. Abrem
 diretamente no browser (`file://`), sem servidor nem dependências.
 
 ## Os ficheiros
 
 | Maqueta | Ecrã | O que a proposta muda |
 |---|---|---|
-| `hoje-v5.html` | **Hoje** — a fila de decisões | Faixa de boas-vindas com a mascote; decisões planas, sem painel interior; grupos por família de alerta |
+| `hoje-v6.html` | **Hoje** — a fila de decisões | Sem saudação: só o resumo. Ordenação e filtro por **tipo de problema**, além do prazo |
+| `hoje-v6-choramingas.html` | **Hoje**, com o assistente aberto | O mesmo ecrã com a barra do Choramingas expandida a partir da lateral |
 | `contratos-v1.html` | **Contratos** — a carteira | A coluna de consumo dá lugar a **duas barras**: tempo decorrido e valor executado |
 | `afetacoes-v1.html` | **Contrato › Afetações** | Perfis, pessoas afetas e histórico de encerradas, com a entidade executante marcada |
 | `registos-v1.html` | **Registos e aprovações** | A fila de aprovação é o ecrã; cada linha traz o **veredicto das regras antes** de se aprovar |
@@ -30,7 +31,21 @@ Para cada um há duas imagens: `nome.png` (o que se vê ao abrir, 1440×1000) e
 - **`capturar-proposta.mjs`** — regera as imagens:
   `node docs/redesenho/propostas/capturar-proposta.mjs [nome…]`
 
-## As três regras que atravessam os sete ecrãs
+## O Choramingas
+
+Vive **recolhido no fundo da lateral**, em todos os ecrãs. Clicar expande-o numa
+barra que cresce a partir do lançador — encostada à esquerda, com um bico a
+apontar-lhe e o lançador realçado enquanto está aberta.
+
+Antes existia só no «Hoje», e só como barra permanente: ocupava uma faixa fixa
+no único ecrã onde estava e faltava em todos os outros. Recolhido, está sempre à
+mão e nunca a estorvar.
+
+A barra é **deliberadamente mais estreita do que os cartões** (760 px) e tem
+sombra mais funda. Com a mesma largura e a mesma sombra passava por mais um
+cartão da página, que era o problema.
+
+## As três regras que atravessam todos os ecrãs
 
 1. **A mascote aparece no máximo uma vez por ecrã**, e nunca ao lado de um ato
    irreversível — simulação, decisão de fatura, substituição. Num painel que
