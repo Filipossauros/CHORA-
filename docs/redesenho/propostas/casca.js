@@ -64,13 +64,17 @@
       h += `<div class="nav${it.id === ativo ? ' on' : ''}">${ic(it.ic)}${it.rot}${cnt}</div>`;
     }
     if (emGaveta) h += '</div>';
+    h += '<div class="fim"></div>';
+    // Com a janela aberta o lançador não fica ao lado dela: some-se. Ele não
+    // abre a janela — torna-se a janela, e volta quando ela fecha.
     const aberto = document.querySelector('.app')?.dataset.choramingas === 'aberto';
-    h += `<div class="fim"></div>
-      <div class="lancador${aberto ? ' on' : ''}">
+    if (!aberto) {
+      h += `<div class="lancador">
         <div class="fig"><img class="mascote" src="ativos/choramingas-aceno.png" alt="Choramingas"></div>
-        <div><b>Choramingas</b><span>${aberto ? 'A conversar' : 'Perguntar ou pedir'}</span></div>
+        <div><b>Choramingas</b><span>Perguntar ou pedir</span></div>
         <svg class="seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 6 6 6-6 6"/></svg>
       </div>`;
+    }
     return h;
   }
 
@@ -89,9 +93,13 @@
         <div class="topo">
           <div class="fig"><img class="mascote" src="ativos/choramingas-aceno.png" alt="Choramingas"></div>
           <b>Choramingas</b>
-          <span class="sub">33 capacidades · responde com os dados a que tem acesso</span>
-          <span class="fechar" title="Fechar">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          <span class="dir">
+            <span class="ico-t" title="Abrir em ecrã inteiro">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-7.4 7.4M10 20H4v-6M4 20l7.4-7.4"/></svg>
+            </span>
+            <span class="ico-t" title="Fechar">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </span>
           </span>
         </div>
         <div class="linha">
@@ -105,7 +113,6 @@
         <div class="nota">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 14px"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
           Mostra sempre antes de executar; as regras são as mesmas dos ecrãs.
-          <span class="dir">Abrir a conversa inteira →</span>
         </div>
       </div>`;
     return el;

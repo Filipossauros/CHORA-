@@ -77,32 +77,37 @@ svg{display:block}
 .lancador.on{background:var(--navy-3);border-color:#4A67AE;box-shadow:0 0 0 3px rgba(74,103,174,.3)}
 .lancador.on .seta{transform:rotate(-90deg);color:#fff}
 
-/* ── CHORAMINGAS: a barra aberta ────────────────────────────────────────────
-   Cresce a partir do lançador — encostada à esquerda, com um bico a apontar
-   para ele — e é DELIBERADAMENTE mais estreita do que os cartões, com sombra
-   mais funda. Com a mesma largura e a mesma sombra passava por cartão. */
+/* ── CHORAMINGAS: a janela aberta ───────────────────────────────────────────
+   O lançador não fica ao lado da janela: DESAPARECE. Ele não abre a janela —
+   ele TORNA-SE a janela, e volta quando ela fecha. Ter os dois ao mesmo tempo
+   é mostrar duas vezes a mesma coisa.
+
+   Largura de 960 px: mais folgada do que a primeira versão, mas ainda ~150 px
+   aquém dos cartões e encostada à esquerda, com sombra bem mais funda e um topo
+   tingido. É o conjunto — largura, alinhamento, sombra, tinta — que a separa da
+   página; nenhum dos quatro chegava sozinho.
+
+   Para conversar a sério há o ecrã inteiro, a um clique no canto. */
 .choro{position:sticky;bottom:0;z-index:4;padding:26px 30px 22px;
   background:linear-gradient(to bottom,rgba(247,249,252,0),var(--fundo) 44%)}
-.choro .painel{position:relative;width:min(760px,100%);background:var(--superficie);
-  border:1px solid #C4D5F2;border-radius:16px;
-  box-shadow:0 4px 10px rgba(22,41,92,.07), 0 26px 52px -16px rgba(22,41,92,.42)}
-.choro .painel::before{content:"";position:absolute;left:-7px;bottom:30px;width:13px;height:13px;
-  background:var(--superficie);border-left:1px solid #C4D5F2;border-bottom:1px solid #C4D5F2;
-  transform:rotate(45deg)}
-.choro .topo{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--linha)}
-.choro .topo .fig{flex:0 0 26px}
-.choro .topo b{font-size:12.5px}
-.choro .topo .sub{font-size:11.5px;color:var(--texto-fraco)}
-.choro .topo .fechar{margin-left:auto;color:var(--texto-fraco);cursor:pointer;padding:3px}
-.choro .linha{display:flex;align-items:center;gap:11px;padding:11px 13px 11px 16px}
+.choro .painel{width:min(960px,100%);background:var(--superficie);
+  border:1px solid #BFD2F1;border-radius:18px;
+  box-shadow:0 6px 14px rgba(22,41,92,.08), 0 32px 64px -18px rgba(22,41,92,.5)}
+.choro .topo{display:flex;align-items:center;gap:10px;padding:11px 12px 11px 15px;
+  border-bottom:1px solid var(--linha);background:var(--azul-b2);border-radius:18px 18px 0 0}
+.choro .topo .fig{flex:0 0 28px}
+.choro .topo b{font-size:13px}
+.choro .topo .dir{margin-left:auto;display:flex;align-items:center;gap:4px}
+.choro .topo .ico-t{color:var(--texto-fraco);cursor:pointer;padding:5px;border-radius:7px;display:flex}
+.choro .topo .ico-t:hover{background:#E3ECFC;color:var(--texto)}
+.choro .linha{display:flex;align-items:center;gap:11px;padding:12px 13px 12px 16px}
 .choro input{flex:1;border:none;background:transparent;font:inherit;font-size:13.5px;color:var(--texto);outline:none}
 .choro input::placeholder{color:var(--texto-fraco)}
-.choro .sugs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 13px}
+.choro .sugs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 14px}
 .choro .sug{font-size:11.5px;color:var(--texto-suave);background:var(--superficie-2);
   border:1px solid var(--linha-forte);border-radius:20px;padding:4px 11px;cursor:pointer}
 .choro .nota{font-size:11.5px;color:var(--texto-fraco);padding:9px 16px;border-top:1px solid var(--linha);
-  background:var(--superficie-2);border-radius:0 0 16px 16px;display:flex;align-items:center;gap:8px}
-.choro .nota .dir{margin-left:auto;color:var(--azul-forte);font-weight:600;cursor:pointer;white-space:nowrap}
+  background:var(--superficie-2);border-radius:0 0 18px 18px;display:flex;align-items:center;gap:8px}
 
 /* ── PRINCIPAL ─────────────────────────────────────────────────────────── */
 .principal{flex:1;min-width:0;display:flex;flex-direction:column}

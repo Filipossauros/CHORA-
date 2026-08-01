@@ -33,17 +33,20 @@ Para cada um há duas imagens: `nome.png` (o que se vê ao abrir, 1440×1000) e
 
 ## O Choramingas
 
-Vive **recolhido no fundo da lateral**, em todos os ecrãs. Clicar expande-o numa
-barra que cresce a partir do lançador — encostada à esquerda, com um bico a
-apontar-lhe e o lançador realçado enquanto está aberta.
+Vive **recolhido no fundo da lateral**, em todos os ecrãs. Antes existia só no
+«Hoje», e só como barra permanente: ocupava uma faixa fixa no único ecrã onde
+estava e faltava em todos os outros.
 
-Antes existia só no «Hoje», e só como barra permanente: ocupava uma faixa fixa
-no único ecrã onde estava e faltava em todos os outros. Recolhido, está sempre à
-mão e nunca a estorvar.
+Ao abrir, **o lançador desaparece**. Ele não abre a janela — torna-se a janela, e
+volta quando ela fecha. Ter os dois ao mesmo tempo seria mostrar duas vezes a
+mesma coisa.
 
-A barra é **deliberadamente mais estreita do que os cartões** (760 px) e tem
-sombra mais funda. Com a mesma largura e a mesma sombra passava por mais um
-cartão da página, que era o problema.
+A janela tem **960 px**, encostada à esquerda: ~150 px aquém dos cartões, com
+sombra bem mais funda e o topo tingido. É o conjunto — largura, alinhamento,
+sombra, tinta — que a separa da página; nenhum dos quatro chegava sozinho.
+
+No canto do topo há **ecrã inteiro** (leva a `assistente-v1.html`, onde vivem a
+conversa e a mesa de trabalho) e **fechar**.
 
 ## As três regras que atravessam todos os ecrãs
 
