@@ -9,6 +9,16 @@ import { lerDocumento, ROT_TIPO_DOC, type DocumentoLido } from '../assistente/do
 import { configModelo } from '../assistente/config-modelo.js';
 
 const ROT_PROV: Record<Proveniencia, string> = { REGRA: 'Regra', PROJECAO: 'Projeção', MODELO: 'Modelo' };
+
+/**
+ * Arranques de conversa, saídos dos exemplos do catálogo de capacidades. Uma
+ * caixa de texto vazia não diz o que se lhe pode pedir; três frases dizem.
+ */
+const SUGESTOES = [
+  'Que contratos estão em risco?',
+  'Onde posso colocar mais um arquiteto?',
+  'Que registos estão por aprovar?',
+];
 const COR_PROV: Record<Proveniencia, string> = { REGRA: 'p-azul', PROJECAO: 'p-ard', MODELO: 'p-ambar' };
 
 /** Uma entrada da conversa. */
@@ -166,9 +176,16 @@ export function Perguntar(): ReactNode {
   }
 
   return (
-    <div>
-      {turnos.length > 0 && (
-        <div style={{ maxHeight: '55vh', overflowY: 'auto', marginBottom: 12, display: 'grid', gap: 10 }}>
+    <>
+      <div className="rolo">
+        <div className="interior" style={{ padding: '14px 16px', display: 'grid', gap: 10 }}>
+          {turnos.length === 0 && (
+            <div className="sec" style={{ fontSize: 12.5 }}>
+              Experimente: {SUGESTOES.map((s) => (
+                <button key={s} className="btn sm" style={{ fontWeight: 400, marginRight: 7, marginTop: 6 }} onClick={() => void perguntar(s)}>{s}</button>
+              ))}
+            </div>
+          )}
           {turnos.map((t) => (
             <TurnoConversa
               key={t.id} turno={t}
@@ -179,11 +196,11 @@ export function Perguntar(): ReactNode {
             />
           ))}
         </div>
-      )}
+      </div>
 
       {tabela !== undefined && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, fontSize: 12.5 }}>
-          <span className="pill p-azul">Lista em curso</span>
+        <div className="mesa">
+          <span className="pill p-verde">Mesa de trabalho</span>
           <span className="prim">{tabela.titulo}</span>
           <span className="sec">{tabela.linhas.length} linha(s) · {tabela.colunas.length} coluna(s)</span>
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 7 }}>
@@ -195,24 +212,28 @@ export function Perguntar(): ReactNode {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 9, alignItems: 'center', background: 'var(--superficie)', border: '1px solid var(--linha-forte)', borderRadius: 9, padding: '8px 12px', boxShadow: 'var(--sombra)' }}>
-        <span style={{ fontSize: 15, color: 'var(--marca)' }} aria-hidden="true">⌕</span>
-        <input
-          aria-label="Perguntar ou pedir uma ação sobre os contratos"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') void perguntar(q); }}
-          placeholder="Pergunte ou peça — ex.: onde posso colocar mais um arquiteto?"
-          style={{ flex: 1, border: 'none', background: 'transparent', padding: 0, fontSize: 13 }}
-        />
-        <button className="btn sm" title="Carregar documentos" onClick={() => refFicheiro.current?.click()}>📎</button>
-        <button className="btn sm pri" disabled={aPensar || q.trim() === ''} onClick={() => void perguntar(q)}>{aPensar ? 'A pensar…' : 'Perguntar'}</button>
-        <input
-          ref={refFicheiro} type="file" accept="application/pdf" multiple style={{ display: 'none' }}
-          onChange={(e) => { void receberFicheiros(e.target.files); e.target.value = ''; }}
-        />
+      <div className="linha-perg">
+        <div className="interior">
+          <input
+            aria-label="Perguntar ou pedir uma ação sobre os contratos"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void perguntar(q); }}
+            placeholder="Pergunte ou peça — ex.: onde posso colocar mais um arquiteto?"
+          />
+          <button className="btn ico sm" title="Carregar documentos" onClick={() => refFicheiro.current?.click()}>📎</button>
+          <button className="btn pri" disabled={aPensar || q.trim() === ''} onClick={() => void perguntar(q)}>{aPensar ? 'A pensar…' : 'Perguntar'}</button>
+          <input
+            ref={refFicheiro} type="file" accept="application/pdf" multiple style={{ display: 'none' }}
+            onChange={(e) => { void receberFicheiros(e.target.files); e.target.value = ''; }}
+          />
+        </div>
       </div>
-    </div>
+      <div className="nota">
+        <span aria-hidden="true">ⓘ</span>
+        Mostra sempre antes de executar; as regras são as mesmas dos ecrãs.
+      </div>
+    </>
   );
 }
 

@@ -5,8 +5,8 @@ import { CATALOGO_ALERTAS, FAMILIAS_ALERTAS, diasUteisDeMinutos, formatarDiasUte
 import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { eurosParaCent, formatarMoeda, hoje, mensagemErro, notificarMudanca, useAsync } from '../comum.js';
-import { Perguntar } from '../componentes/Perguntar.js';
 import { gerarMapaProjecaoXlsx } from '../projecoes.js';
+import hero from '../ativos/choramingas-hero.png';
 
 const ROT_VIAB: Record<string, string> = { VIAVEL: 'Viável', CONDICIONADA: 'Condicionada', INVIAVEL: 'Inviável' };
 
@@ -59,6 +59,39 @@ function grupoDe(a: Alerta): Grupo {
 const ORDEM_GRUPOS: Grupo[] = ['Prazo esgotado', 'Próximos 30 dias', 'Mais tarde', 'Sem prazo definido'];
 
 /**
+ * A FAMÍLIA da decisão — o «tipo de problema». Não vive no alerta guardado: vive
+ * no catálogo, indexada pelo código. Serve de filtro, de segunda ordenação e de
+ * etiqueta no cartão.
+ */
+const CLASSE_FAMILIA: Record<string, string> = {
+  'Tempo × dinheiro': 'f-tempo',
+  'Cobertura orçamental plurianual': 'f-cobertura',
+  'Capacidade e perfis': 'f-capacidade',
+  'Fim de ciclo': 'f-ciclo',
+  'Higiene e risco de auditoria': 'f-higiene',
+};
+function familiaDe(a: Alerta): string | undefined {
+  return CATALOGO_ALERTAS.find((d) => d.codigo === a.codigo)?.familia;
+}
+
+/** Por que ordem se lê a fila. O prazo é o padrão: é o que se perde primeiro. */
+type Ordem = 'prazo' | 'exposicao' | 'tipo';
+
+/** Ícone de traço, para os ladrilhos do resumo e para a busca. */
+function IcS({ d, tam = 18 }: { d: string; tam?: number }): ReactNode {
+  return (
+    <svg width={tam} height={tam} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+  );
+}
+
+/** Etiqueta de família, para o cartão de decisão e para os filtros. */
+export function EtiquetaFamilia({ familia }: { familia?: string }): ReactNode {
+  if (familia === undefined) return null;
+  return <span className={`fam ${CLASSE_FAMILIA[familia] ?? ''}`}>{familia}</span>;
+}
+
+/**
  * HOJE — a fila única de decisões, e a entrada da aplicação.
  *
  * Colapsa Alertas, Previsões e Recomendações: eram três destinos para a mesma
@@ -78,6 +111,9 @@ export function Hoje(): ReactNode {
   }, []);
   const [erro, setErro] = useState<string>();
   const [aberta, setAberta] = useState<string>();
+  const [ordem, setOrdem] = useState<Ordem>('prazo');
+  const [familia, setFamilia] = useState<string>();
+  const [procura, setProcura] = useState('');
 
   async function reconciliar(): Promise<void> {
     setErro(undefined);
@@ -85,14 +121,49 @@ export function Hoje(): ReactNode {
     catch (e) { setErro(mensagemErro(e)); }
   }
 
-  const pendentes = base.dados?.pendentes ?? [];
+  const todas = base.dados?.pendentes ?? [];
   const contratos = base.dados?.contratos ?? [];
-  const vencidas = pendentes.filter((a) => (a.diasParaLimite ?? 1) < 0).length;
+  const vencidas = todas.filter((a) => (a.diasParaLimite ?? 1) < 0).length;
+  const proximas = todas.filter((a) => { const d = a.diasParaLimite; return d !== undefined && d >= 0 && d <= 30; }).length;
+  const exposicao = todas.reduce((t, a) => t + (a.impactoValor ?? 0), 0);
 
-  // Agrupa por janela e, dentro dela, por contrato.
-  const porGrupo = new Map<Grupo, Map<string, Alerta[]>>();
-  for (const a of [...pendentes].sort((x, y) => (x.diasParaLimite ?? 9e9) - (y.diasParaLimite ?? 9e9))) {
-    const g = grupoDe(a);
+  // Quantas decisões por família — a contagem que os filtros mostram.
+  const porFamilia = new Map<string, number>();
+  for (const a of todas) {
+    const f = familiaDe(a);
+    if (f !== undefined) porFamilia.set(f, (porFamilia.get(f) ?? 0) + 1);
+  }
+
+  /*
+   * O filtro corre sobre o que já está carregado: número do contrato, título e
+   * código da decisão. Procurar pelo código (`AL-FOLGA-SEM-TEMPO`) é o que
+   * permite a quem conhece o catálogo saltar direito ao que quer.
+   */
+  const termo = procura.trim().toLowerCase();
+  const numeroDe = (id: string): string => contratos.find((c) => c.id === id)?.numero ?? '';
+  const pendentes = todas.filter((a) => {
+    if (familia !== undefined && familiaDe(a) !== familia) return false;
+    if (termo === '') return true;
+    return `${numeroDe(a.contratoId)} ${a.titulo} ${a.codigo}`.toLowerCase().includes(termo);
+  });
+
+  /*
+   * Agrupa por janela e, dentro dela, por contrato — salvo quando se pede a
+   * leitura por tipo, e aí o grupo passa a ser a família. A ordenação por
+   * exposição mantém os grupos temporais e troca só o critério dentro deles: é
+   * o que responde a «por onde começo, dentro do que já é urgente».
+   */
+  const comparar = ordem === 'exposicao'
+    ? (x: Alerta, y: Alerta) => (y.impactoValor ?? 0) - (x.impactoValor ?? 0)
+    : (x: Alerta, y: Alerta) => (x.diasParaLimite ?? 9e9) - (y.diasParaLimite ?? 9e9);
+  const rotuloGrupo = (a: Alerta): string => (ordem === 'tipo' ? familiaDe(a) ?? 'Sem família' : grupoDe(a));
+  const ordemDosGrupos: string[] = ordem === 'tipo'
+    ? [...FAMILIAS_ALERTAS, 'Sem família']
+    : ORDEM_GRUPOS;
+
+  const porGrupo = new Map<string, Map<string, Alerta[]>>();
+  for (const a of [...pendentes].sort(comparar)) {
+    const g = rotuloGrupo(a);
     if (!porGrupo.has(g)) porGrupo.set(g, new Map());
     const porContrato = porGrupo.get(g)!;
     if (!porContrato.has(a.contratoId)) porContrato.set(a.contratoId, []);
@@ -100,7 +171,7 @@ export function Hoje(): ReactNode {
   }
 
   // Contratos sem decisões pendentes — mostram-se no fim, para dar sossego.
-  const comDecisoes = new Set(pendentes.map((a) => a.contratoId));
+  const comDecisoes = new Set(todas.map((a) => a.contratoId));
   const tranquilos = contratos.filter((c) => (c.estado === 'EM_VIGOR' || c.estado === 'SUSPENSO') && !comDecisoes.has(c.id));
 
   return (
@@ -112,11 +183,81 @@ export function Hoje(): ReactNode {
       />
       {erro !== undefined && <div className="erro-cx">⚠ {erro}</div>}
 
-      {pendentes.length === 0 && (
-        <div className="cartao" style={{ marginTop: 16 }}><div className="vazio">Nada a decidir. A execução de todos os contratos está dentro do previsto.</div></div>
+      {/*
+        RESUMO, não boas-vindas. A saudação ocupava um terço da faixa para dizer
+        o que o relógio do sistema já diz; o que interessa é quantas decisões
+        perderam o prazo, quantas o perdem este mês e quanto dinheiro está preso
+        nelas.
+      */}
+      {todas.length > 0 && (
+        <section className="faixa">
+          <div className="ladrilhos">
+            <div className={`est ${vencidas > 0 ? 'laranja' : 'verde'}`}>
+              <div className="quad"><IcS d={vencidas > 0 ? 'M12 3 2.5 20h19L12 3ZM12 10v4M12 17.2h.01' : 'm5 12.5 4.4 4.4L19 7'} /></div>
+              <div><b>{vencidas} com prazo esgotado</b><span>{vencidas > 0 ? 'a opção já se perdeu' : 'nenhuma opção perdida'}</span></div>
+            </div>
+            <div className="est ambar">
+              <div className="quad"><IcS d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 7v5.2l3.4 2" /></div>
+              <div><b>{proximas} nos próximos 30 dias</b><span>exigem ato este mês</span></div>
+            </div>
+            <div className="est azul">
+              <div className="quad"><IcS d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM14.6 9.3A3 3 0 1 0 12 15M9.4 11.2h5M9.4 13.4h5" /></div>
+              <div><b className="tabnum">{formatarMoeda(exposicao)}</b><span>exposição das {todas.length} decisões</span></div>
+            </div>
+            <div className="est verde">
+              <div className="quad"><IcS d="M6 3h9l4 4v14H6V3Zm3.5 10.5 1.8 1.8 3.4-3.8" /></div>
+              <div><b>{CATALOGO_ALERTAS.length} verificações</b><span>automáticas, por contrato</span></div>
+            </div>
+          </div>
+          <div className="fig"><img className="mascote" src={hero} alt="" /></div>
+        </section>
       )}
 
-      {ORDEM_GRUPOS.filter((g) => porGrupo.has(g)).map((g) => (
+      {/*
+        ORDENAR E FILTRAR POR TIPO DE PROBLEMA. O prazo continua a mandar por
+        omissão — é o que se perde primeiro. Mas quem quer atacar o dinheiro, ou
+        despachar de uma vez tudo o que é da mesma natureza, deixa de ter de
+        percorrer a fila inteira a olho.
+      */}
+      {todas.length > 0 && (
+        <>
+          <div className="barra-acoes">
+            <div className="busca">
+              <span className="lupa"><IcS d="M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0Zm2 9-3.6-3.6" tam={15} /></span>
+              <input value={procura} onChange={(e) => setProcura(e.target.value)}
+                placeholder="Procurar por contrato, título ou código…" aria-label="Procurar decisões" />
+            </div>
+            <span className="dir" style={{ alignItems: 'center' }}>
+              <span className="rot-seg">Ordenar por</span>
+              <span className="seg">
+                <button className={ordem === 'prazo' ? 'ativo' : ''} onClick={() => setOrdem('prazo')}>Prazo</button>
+                <button className={ordem === 'exposicao' ? 'ativo' : ''} onClick={() => setOrdem('exposicao')}>Exposição</button>
+                <button className={ordem === 'tipo' ? 'ativo' : ''} onClick={() => setOrdem('tipo')}>Tipo de problema</button>
+              </span>
+            </span>
+          </div>
+          <div className="barra-acoes">
+            <button className={`fchip${familia === undefined ? ' ativo' : ''}`} onClick={() => setFamilia(undefined)}>
+              Todos os tipos <span className="n">{todas.length}</span>
+            </button>
+            {FAMILIAS_ALERTAS.filter((f) => (porFamilia.get(f) ?? 0) > 0).map((f) => (
+              <button key={f} className={`fchip${familia === f ? ' ativo' : ''}`} onClick={() => setFamilia(familia === f ? undefined : f)}>
+                <span className={`pt ${CLASSE_FAMILIA[f] ?? ''}`} style={{ background: 'currentColor' }} />
+                {f} <span className="n">{porFamilia.get(f)}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {todas.length === 0 && (
+        <div className="cartao" style={{ marginTop: 16 }}><div className="vazio">Nada a decidir. A execução de todos os contratos está dentro do previsto.</div></div>
+      )}
+      {todas.length > 0 && pendentes.length === 0 && (
+        <div className="cartao"><div className="vazio">Nenhuma decisão corresponde ao que procura. <button className="ligacao" onClick={() => { setProcura(''); setFamilia(undefined); }}>Limpar filtros</button></div></div>
+      )}
+
+      {ordemDosGrupos.filter((g) => porGrupo.has(g)).map((g) => (
         <Fragment key={g}>
           <LinhaGrupo rotulo={g} />
           {[...porGrupo.get(g)!.entries()].map(([contratoId, decisoes]) => {
@@ -154,24 +295,6 @@ export function Hoje(): ReactNode {
 
       <AdvertenciaJuridica />
 
-      {/*
-        O «Perguntar» fecha a página em vez de a abrir: quem chega ao «Hoje» vem
-        ver o que tem de decidir, não fazer uma pergunta. Fica colado ao fundo do
-        ecrã para continuar ao alcance sem disputar o topo com a fila.
-
-        A faixa é OPACA e tem linha própria: em cima de um fundo transparente o
-        conteúdo passava por trás da caixa e lia-se sobreposto. O espaço abaixo
-        do último cartão é reservado à altura da faixa, para nada ficar escondido.
-      */}
-      <div style={{ height: 30 }} />
-      <div style={{
-        position: 'sticky', bottom: 0, zIndex: 6, marginTop: 'auto',
-        paddingTop: 15, paddingBottom: 24,
-        background: 'var(--fundo)', borderTop: '1px solid var(--linha)',
-        boxShadow: '0 -10px 18px -12px rgba(0,0,0,.28)',
-      }}>
-        <Perguntar />
-      </div>
     </>
   );
 }
@@ -189,7 +312,7 @@ export function DecisoesDoContrato({ contrato, decisoes, podeGerir, onMudou, onE
 
   return (
     <>
-      <div className="cartao" style={{ overflow: 'hidden' }}>
+      <div>
         {ordenadas.map((d) => (
           <Decisao
             key={d.id} alerta={d} contrato={contrato} podeGerir={podeGerir}
@@ -252,46 +375,52 @@ function Dispensadas({ alertas, contratos, podeGerir, onMudou, onErro }: {
 
 function LinhaGrupo({ rotulo }: { rotulo: string }): ReactNode {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 11, margin: '18px 0 12px', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--texto-fraco)', fontWeight: 700 }}>
-      {rotulo}<span style={{ flex: 1, height: 1, background: 'var(--linha)' }} />
+    <div className="grp" style={{ marginTop: 22 }}>
+      <b>{rotulo}</b><span style={{ flex: 1, height: 1, background: 'var(--linha)' }} />
     </div>
   );
 }
 
+/**
+ * As decisões de um contrato. Já foi um cartão branco a envolvê-las, com o
+ * contrato em cabeçalho; agora cada decisão é um cartão seu e o contrato é uma
+ * etiqueta dentro dele. O contentor dizia «estas cinco são do mesmo contrato»,
+ * que é verdade e não é o que se decide — decide-se uma de cada vez, e o
+ * contentor punha uma moldura à volta de cada leitura.
+ */
 function CartaoContrato({ contrato, decisoes, podeGerir, aberta, onAbrir, onMudou, onErro }: {
   contrato: Contrato; decisoes: Alerta[]; podeGerir: boolean;
   aberta: string | undefined; onAbrir: (id: string) => void; onMudou: () => void; onErro: (m?: string) => void;
 }): ReactNode {
-  const navegar = useNavigate();
-  const urgencia = urgenciaMaior(decisoes);
-
   return (
-    <div className="cartao" style={{ overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid var(--linha)', background: 'var(--superficie-2)' }}>
-        <div style={{ width: 3, alignSelf: 'stretch', minHeight: 26, borderRadius: 3, background: COR_URGENCIA[urgencia] }} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, cursor: 'pointer' }} onClick={() => navegar(`/contratos/${contrato.id}`)}>{contrato.numero}</div>
-          <div className="sec" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contrato.objeto}</div>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className={`pill ${PILL_URGENCIA[urgencia]}`}>{decisoes.length} decisõe(s)</span>
-          <button className="btn sm" onClick={() => navegar(`/contratos/${contrato.id}`)}>Ver contrato</button>
-        </div>
-      </div>
+    <>
       {decisoes.map((d) => (
         <Decisao
-          key={d.id} alerta={d} contrato={contrato} podeGerir={podeGerir}
+          key={d.id} alerta={d} contrato={contrato} podeGerir={podeGerir} mostrarContrato
           aberta={aberta === d.id} onAbrir={() => onAbrir(d.id)} onMudou={onMudou} onErro={onErro}
         />
       ))}
-    </div>
+    </>
   );
 }
 
-function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro }: {
-  alerta: Alerta; contrato: Contrato; podeGerir: boolean; aberta: boolean;
+/** Ícone da família, para o quadrado do cartão de decisão. */
+const IC_FAMILIA: Record<string, string> = {
+  'Tempo × dinheiro': 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM14.6 9.3A3 3 0 1 0 12 15M9.4 11.2h5M9.4 13.4h5',
+  'Cobertura orçamental plurianual': 'M3 7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5v-11ZM3 10h18M8 3v4M16 3v4',
+  'Capacidade e perfis': 'M12.4 8a3.4 3.4 0 1 1-6.8 0 3.4 3.4 0 0 1 6.8 0ZM2.8 20c0-3.4 2.8-5.2 6.2-5.2s6.2 1.8 6.2 5.2M16.4 5.6a3.4 3.4 0 0 1 0 5M21.2 20c0-2.7-1.1-4.2-2.8-4.8',
+  'Fim de ciclo': 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 7v5.2l3.4 2',
+  'Higiene e risco de auditoria': 'M7 3h10a2 2 0 0 1 2 2v16l-7-3.4L5 21V5a2 2 0 0 1 2-2Z',
+};
+const CLASSE_URGENCIA: Record<Urgencia, string> = {
+  ESGOTADO: 'u-esgotado', PROXIMO: 'u-proximo', FOLGA: 'u-folga', SEM_PRAZO: '',
+};
+
+function Decisao({ alerta, contrato, podeGerir, aberta, mostrarContrato, onAbrir, onMudou, onErro }: {
+  alerta: Alerta; contrato: Contrato; podeGerir: boolean; aberta: boolean; mostrarContrato?: boolean;
   onAbrir: () => void; onMudou: () => void; onErro: (m?: string) => void;
 }): ReactNode {
+  const navegar = useNavigate();
   const [aDispensar, setADispensar] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [dias, setDias] = useState('30');
@@ -317,19 +446,25 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
   // escolhas, e ficam recolhidas dentro da escada.
   const disponiveis = (alerta.opcoes ?? []).filter((o) => (o.diasParaLimite ?? 0) >= 0).length;
 
+  const fam = familiaDe(alerta);
   return (
-    <div style={{ display: 'flex', gap: 12, padding: '12px 14px', borderBottom: '1px solid var(--linha)', alignItems: 'flex-start', background: aberta ? 'var(--superficie-2)' : undefined }}>
-      <div style={{ flex: '0 0 3px', alignSelf: 'stretch', borderRadius: 3, background: COR_URGENCIA[urgencia] }} title={rotuloPrazo(alerta)} />
+    <article className={`dec ${CLASSE_URGENCIA[urgencia]}`} style={aberta ? { background: 'var(--superficie-2)' } : undefined}>
+      <div className="rail" title={rotuloPrazo(alerta)} />
+      <div className="quad"><IcS d={IC_FAMILIA[fam ?? ''] ?? 'M12 3 2.5 20h19L12 3ZM12 10v4M12 17.2h.01'} tam={24} /></div>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 650, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {alerta.titulo}
+      <div className="miolo">
+        <div className="cab">
+          <h3>{alerta.titulo}</h3>
+          {mostrarContrato === true && (
+            <button className="chip" style={{ border: 'none', cursor: 'pointer' }} onClick={() => navegar(`/contratos/${contrato.id}`)}>{contrato.numero}</button>
+          )}
           {alerta.estado === 'EM_CURSO' && <span className="pill p-azul">Em curso</span>}
+          <EtiquetaFamilia familia={fam} />
           <code style={{ fontSize: 10.5 }}>{alerta.codigo}</code>
         </div>
-        <div className="sec" style={{ marginTop: 4, fontSize: 12.5, color: 'var(--texto-suave)', lineHeight: 1.5 }}>{alerta.detalhe}</div>
+        <p className="txt">{alerta.detalhe}</p>
 
-        <div style={{ display: 'flex', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 7, marginTop: 11, flexWrap: 'wrap' }}>
           {podeGerir && !temEscada && <AcaoPrincipal alerta={alerta} contrato={contrato} onFeito={onMudou} onErro={onErro} onEmCurso={marcarEmCurso} />}
           {temEscada && (
             <button className="btn sm" onClick={onAbrir}>{aberta ? 'Fechar ações' : disponiveis === 0 ? 'Ver ações' : `Ver ${disponiveis} ${disponiveis === 1 ? 'ação' : 'ações'}`}</button>
@@ -365,8 +500,8 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
         {aberta && temEscada && <Escada opcoes={alerta.opcoes!} contratoId={contrato.id} numeroContrato={contrato.numero} onEmCurso={marcarEmCurso} />}
       </div>
 
-      <Impacto alerta={alerta} />
-    </div>
+      {temImpacto(alerta) && <div className="lado"><Impacto alerta={alerta} /></div>}
+    </article>
   );
 }
 
@@ -375,19 +510,22 @@ function Decisao({ alerta, contrato, podeGerir, aberta, onAbrir, onMudou, onErro
  * fazer contas; «restam 2 meses e 3 dias» diz de imediato se há tempo para
  * instruir o ato antes de a capacidade acabar.
  */
+function diasDoImpacto(a: Alerta): number | undefined {
+  return a.diasUteisRestantes ?? (a.impactoMinutos !== undefined ? diasUteisDeMinutos(a.impactoMinutos) : undefined);
+}
+/** Sem impacto não há coluna: uma coluna vazia é um buraco de 216 px. */
+function temImpacto(a: Alerta): boolean {
+  return a.impactoValor !== undefined || diasDoImpacto(a) !== undefined;
+}
+
 function Impacto({ alerta }: { alerta: Alerta }): ReactNode {
-  const dias = alerta.diasUteisRestantes ?? (alerta.impactoMinutos !== undefined ? diasUteisDeMinutos(alerta.impactoMinutos) : undefined);
+  const dias = diasDoImpacto(alerta);
   const temValor = alerta.impactoValor !== undefined;
-  if (!temValor && dias === undefined) return <div style={{ flex: '0 0 108px' }} />;
+  if (!temValor && dias === undefined) return null;
   return (
-    <div
-      style={{ flex: '0 0 108px', textAlign: 'right' }}
-      title={temValor ? 'Impacto financeiro' : 'Dias úteis restantes'}
-    >
-      <div className="tabnum" style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-.2px' }}>
-        {temValor ? formatarMoeda(alerta.impactoValor!) : formatarDiasUteis(dias!)}
-      </div>
-      {!temValor && <div className="sec">dias úteis</div>}
+    <div className="valor" title={temValor ? 'Impacto financeiro' : 'Dias úteis restantes'}>
+      <div className="v tabnum">{temValor ? formatarMoeda(alerta.impactoValor!) : formatarDiasUteis(dias!)}</div>
+      <div className="r">{temValor ? 'Impacto financeiro' : 'dias úteis restantes'}</div>
     </div>
   );
 }
