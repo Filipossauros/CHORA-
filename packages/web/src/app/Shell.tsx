@@ -221,6 +221,10 @@ function BarraSessao(): ReactNode {
         </select>
         <span className="av">{iniciais}</span>
       </label>
+      {/* Havendo entrada tem de haver saída, e no sítio onde se vê quem entrou. */}
+      <button className="btn ico" title="Terminar sessão" onClick={() => { app.terminarSessao(); location.reload(); }}>
+        <Ic d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h11" tam={17} largura={1.8} />
+      </button>
     </>
   );
 }

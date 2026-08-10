@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { StrictMode, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createHashRouter, RouterProvider } from 'react-router-dom';
 import './estilo.css';
@@ -17,6 +17,7 @@ import { Regras } from './telas/Regras.js';
 import { Auditoria } from './telas/Auditoria.js';
 import { Acessos } from './telas/Acessos.js';
 import { DadosDemonstracao } from './telas/DadosDemonstracao.js';
+import { Login } from './telas/Login.js';
 
 const rotas = [
   // "Hoje" é a entrada: a fila única de decisões.
@@ -39,9 +40,28 @@ const rotas = [
 
 const router = createHashRouter(rotas.map((r) => ({ ...r, element: <Shell>{r.element}</Shell> })));
 
+/**
+ * Dentro do Azure DevOps quem autentica é o host, pelo SDK: a extensão já chega
+ * com o utilizador resolvido. Pedir-lhe que entre outra vez seria pedir duas
+ * vezes a mesma coisa.
+ */
+const embebido = new URLSearchParams(location.search).get('host') === 'ado';
+
+/**
+ * A porta. Sem sessão iniciada não há aplicação — nem sequer as rotas são
+ * montadas, para não haver caminho por onde um ecrã apareça a quem não entrou.
+ */
+function Raiz(): ReactNode {
+  const [sessao, setSessao] = useState(app.sessao());
+  if (sessao === undefined && !embebido) {
+    return <Login onEntrar={(id) => { app.setUtilizador(id); setSessao(id); }} />;
+  }
+  return <RouterProvider router={router} />;
+}
+
 async function arrancar(): Promise<void> {
   await app.inicializar();
   const el = document.getElementById('raiz');
-  if (el !== null) createRoot(el).render(<StrictMode><RouterProvider router={router} /></StrictMode>);
+  if (el !== null) createRoot(el).render(<StrictMode><Raiz /></StrictMode>);
 }
 void arrancar();

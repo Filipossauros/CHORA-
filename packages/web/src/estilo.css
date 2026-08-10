@@ -378,3 +378,28 @@ code{font-family:ui-monospace,Menlo,monospace;background:var(--ardosia-b);color:
 .mesa .dir{margin-left:auto;display:flex;gap:7px;align-items:center}
 .ligacao{background:none;border:none;padding:0;font:inherit;font-size:12.5px;color:var(--marca-forte);
   font-weight:600;cursor:pointer;text-decoration:underline}
+
+/* ── ENTRADA ────────────────────────────────────────────────────────────────
+   A única página sem menu. O cartão flutua sobre o azul-marinho da lateral —
+   é a oportunidade que a marca tem de aparecer ao tamanho a que foi desenhada,
+   sem competir com trabalho nenhum. */
+.entrada{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 24px;
+  background:linear-gradient(165deg,#20386F 0%,var(--marca-2) 55%,#0E1A38 100%)}
+.cartao-login{width:100%;max-width:470px;background:var(--superficie);border:1px solid var(--linha);
+  border-radius:20px;box-shadow:var(--sombra-alta);padding:32px 36px 28px;text-align:center}
+.cartao-login .fig img{width:100%;max-width:250px;height:auto;display:block;margin:0 auto 6px}
+.cartao-login .marca-topo{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:6px}
+.cartao-login .marca-topo .logo{width:38px;height:38px;border-radius:11px;color:#fff;font-weight:800;font-size:15px;
+  background:linear-gradient(150deg,#4E7BE8,#2E55C4);display:flex;align-items:center;justify-content:center;
+  letter-spacing:-.5px}
+.cartao-login .marca-topo b{font-size:17px;letter-spacing:-.3px}
+.cartao-login h1{font-size:23px;font-weight:700;letter-spacing:-.5px;line-height:1.2;margin:12px 0 8px}
+.cartao-login .sub{font-size:13.5px;color:var(--texto-suave);line-height:1.6;margin-bottom:22px}
+.btn-entrar{width:100%;height:48px;justify-content:center;font-size:14px;border-radius:12px}
+.btn-entrar .ms{display:grid;grid-template-columns:1fr 1fr;gap:2px;width:16px;height:16px;flex:0 0 16px}
+.btn-entrar .ms i{display:block;border-radius:1px}
+.rodape-login{font-size:11.5px;color:var(--texto-fraco);line-height:1.6;margin-top:16px}
+.separa{display:flex;align-items:center;gap:12px;margin:22px 0 14px;color:var(--texto-fraco);font-size:11px;
+  text-transform:uppercase;letter-spacing:1.2px;font-weight:700}
+.separa::before,.separa::after{content:"";flex:1;height:1px;background:var(--linha)}
+.perfis{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}

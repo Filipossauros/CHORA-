@@ -41,6 +41,12 @@ const CHAVE_VERSAO = 'chora:versao';
  * contratos da cobertura por ter havido uma atualização entretanto.
  */
 const CHAVE_CENARIO = 'chora:cenario';
+/**
+ * Sessão iniciada. Guardada para que recarregar a página não devolva ninguém ao
+ * ecrã de entrada — que é o que aconteceria se a sessão só vivesse em memória.
+ * Enquanto não houver Entra ID, isto é o que faz de sessão.
+ */
+const CHAVE_SESSAO = 'chora:sessao';
 
 function criarReposLocais(): Repositorios {
   const r = <T extends { id: string }>(nome: string) => new RepositorioLocalStorage<T>(nome);
@@ -69,7 +75,7 @@ export class AplicacaoLocal {
   readonly entregaveis: ServicoEntregaveis;
   readonly orcamentos: ServicoOrcamentos;
   readonly relatoriosAdHoc: ServicoRelatoriosAdHoc;
-  private utilizadorId = 'oid-gestor-contrato';
+  private utilizadorId = localStorage.getItem(CHAVE_SESSAO) ?? 'oid-gestor-contrato';
 
   constructor() {
     const tokenValidator = new FakeTokenValidator(UTILIZADORES_DEV, relogioSistema);
@@ -155,6 +161,16 @@ export class AplicacaoLocal {
 
   setUtilizador(id: string): void {
     this.utilizadorId = id;
+    localStorage.setItem(CHAVE_SESSAO, id);
+  }
+
+  /** Quem está com sessão iniciada, ou `undefined` se ninguém entrou. */
+  sessao(): string | undefined {
+    return localStorage.getItem(CHAVE_SESSAO) ?? undefined;
+  }
+
+  terminarSessao(): void {
+    localStorage.removeItem(CHAVE_SESSAO);
   }
 
   papeisAtuais(): PapelAplicacional[] {
