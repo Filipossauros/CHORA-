@@ -23,9 +23,10 @@ import aceno from '../ativos/choramingas-aceno.png';
  * custam. Vive na gaveta porque é trabalho de uma época do ano, não do dia a dia.
  */
 /**
- * Quem entra em cada destino. O validador e o elemento têm UM destino cada —
- * a validação de horas e o registo de horas — e para um destino só a navegação
- * é decoração: nesses casos a lateral não aparece de todo.
+ * Quem entra em cada destino. A lateral aparece a toda a gente — é a moldura da
+ * aplicação, e sem ela o ecrã fica a pairar — mas mostra a cada um só o que lhe
+ * compete: o validador vê a validação de horas, o elemento vê o registo de
+ * horas, e mais nada.
  *
  * Isto é a UI. Quem recusa a sério são os serviços, que verificam o papel antes
  * de qualquer efeito: forçar a rota pela consola mostra a recusa, não os dados.
@@ -42,7 +43,7 @@ const NAV = [
   { grupo: 'Trabalho', itens: [
     { to: '/', rot: 'Hoje', fim: true, acesso: 'gestao' as Acesso, ic: 'M3 9.6 12 3l9 6.6V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.6Z' },
     { to: '/contratos', rot: 'Contratos', acesso: 'gestao' as Acesso, ic: 'M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM14 3v5h5' },
-    { to: '/registos', rot: 'Registos e aprovações', acesso: 'aprovacao' as Acesso, ic: 'M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13ZM8.5 12.5l2.4 2.4 4.6-5' },
+    { to: '/registos', rot: 'Registos e aprovações', acesso: 'registo' as Acesso, ic: 'M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13ZM8.5 12.5l2.4 2.4 4.6-5' },
     { to: '/faturacao', rot: 'Faturação', acesso: 'gestao' as Acesso, ic: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM14.6 9.3A3 3 0 1 0 12 15M9.4 11.2h5M9.4 13.4h5' },
   ] },
   { grupo: 'Análise', itens: [{ to: '/relatorios', rot: 'Relatórios', acesso: 'gestao' as Acesso, ic: 'M5 20V11M12 20V4M19 20v-6' }] },
@@ -57,6 +58,19 @@ const GAVETA = [
   { to: '/acessos', rot: 'Acessos', ic: 'M4 12.5A2.5 2.5 0 0 1 6.5 10h11a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-6ZM8.4 10V7a3.6 3.6 0 0 1 7.2 0v3' },
   { to: '/dados', rot: 'Dados de demonstração', ic: 'M19.5 6c0 1.8-3.4 3.2-7.5 3.2S4.5 7.8 4.5 6 7.9 2.8 12 2.8 19.5 4.2 19.5 6ZM4.5 6v12c0 1.8 3.4 3.2 7.5 3.2s7.5-1.4 7.5-3.2V6M4.5 12c0 1.8 3.4 3.2 7.5 3.2s7.5-1.4 7.5-3.2' },
 ];
+
+/**
+ * O destino operacional chama-se — e aponta para — coisas diferentes conforme
+ * quem olha: o gestor tem os dois passos do fluxo, o validador só decide, o
+ * elemento só regista. Um item de menu que promete o que o ecrã não dá é pior
+ * do que um menu curto; e apontar para a rota errada deixava-o por acender,
+ * porque quem valida entra em `/aprovacoes` e não em `/registos`.
+ */
+function destinoOperacao(gere: boolean, aprova: boolean): { to: string; rot: string } {
+  if (gere) return { to: '/registos', rot: 'Registos e aprovações' };
+  if (aprova) return { to: '/aprovacoes', rot: 'Aprovações' };
+  return { to: '/registos', rot: 'Registos de tempo' };
+}
 
 /** Ícone de traço do menu e dos botões. */
 function Ic({ d, tam = 18, largura = 1.9, classe }: { d: string; tam?: number; largura?: number; classe?: string }): ReactNode {
@@ -101,15 +115,14 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
   const naRaiz = local.pathname === '/';
   const papeis = app.papeisAtuais();
   const gere = app.podeGerir();
+  const aprova = app.podeAprovar();
   /*
-    Um destino só não merece um menu: o validador e o elemento entram direitos
-    no seu ecrã e a lateral não aparece. O Choramingas acompanha — com o âmbito
-    reduzido a uma tarefa, quase tudo o que ele sabe fazer estaria vedado, e um
+    O Choramingas e a gaveta ficam para quem gere: com o âmbito reduzido a uma
+    tarefa, quase tudo o que o assistente sabe fazer estaria vedado, e um
     assistente que responde «não posso» à maioria das perguntas é pior do que
     não estar lá. Quem o forçar pela consola leva a recusa das capacidades, que
     é onde ela conta.
   */
-  const comMenu = gere;
 
   // Contagem de decisões pendentes no menu — o sinal que traz o gestor de volta.
   const contar = useCallback(() => {
@@ -130,21 +143,26 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
 
   return (
     <CtxSessao.Provider value={{ uid, trocar: trocarUtilizador }}>
-      <div className={`app${embebido || !comMenu ? ' embebido' : ''}`}>
+      <div className={`app${embebido ? ' embebido' : ''}`}>
         <aside className="lateral">
           <div className="marca"><div className="logo">C+</div><div><b>CHORA+</b><span>Controlo de horas</span></div></div>
-          {NAV.map((g) => (
+          {/* Um grupo sem destinos visíveis é um título sobre o vazio: não se desenha. */}
+          {NAV.map((g) => ({ ...g, itens: g.itens.filter((i) => temAcesso(papeis, i.acesso)) }))
+            .filter((g) => g.itens.length > 0).map((g) => (
             <div key={g.grupo}>
               <div className="grupo">{g.grupo}</div>
-              {g.itens.filter((i) => temAcesso(papeis, i.acesso)).map((i) => (
-                <NavLink key={i.to} to={i.to} end={('fim' in i && i.fim) || false} className={({ isActive }) => `nav-i${isActive ? ' ativo' : ''}`}>
-                  <Ic d={i.ic} classe="ic" />
-                  {i.rot}
-                  {i.to === '/' && pendentes > 0 && (
-                    <span className="cnt" style={vencidas > 0 ? undefined : { background: 'var(--marca-3)' }}>{pendentes}</span>
-                  )}
-                </NavLink>
-              ))}
+              {g.itens.map((i) => {
+                const d = i.to === '/registos' ? destinoOperacao(gere, aprova) : { to: i.to, rot: i.rot };
+                return (
+                  <NavLink key={i.to} to={d.to} end={('fim' in i && i.fim) || false} className={({ isActive }) => `nav-i${isActive ? ' ativo' : ''}`}>
+                    <Ic d={i.ic} classe="ic" />
+                    {d.rot}
+                    {i.to === '/' && pendentes > 0 && (
+                      <span className="cnt" style={vencidas > 0 ? undefined : { background: 'var(--marca-3)' }}>{pendentes}</span>
+                    )}
+                  </NavLink>
+                );
+              })}
             </div>
           ))}
           {gere && <div>
@@ -181,7 +199,7 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
 
         <div className="principal">
           <div className="conteudo" key={uid}>
-            {comMenu && !naRaiz && <div style={{ marginBottom: 14 }}><button className="btn sm" onClick={() => navegar(-1)} title="Voltar ao ecrã anterior">← Voltar</button></div>}
+            {gere && !naRaiz && <div style={{ marginBottom: 14 }}><button className="btn sm" onClick={() => navegar(-1)} title="Voltar ao ecrã anterior">← Voltar</button></div>}
             {children}
           </div>
           {gere && choro !== 'fechado' && (
