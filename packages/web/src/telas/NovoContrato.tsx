@@ -157,7 +157,7 @@ export function NovoContrato(): ReactNode {
           <div className="campo"><label>13 · Nº portaria de extensão de encargos (opcional)</label><input value={f.numeroPortaria} onChange={(e) => upd('numeroPortaria', e.target.value)} /></div>
         </div>
         <div className="g2">
-          <div className="campo"><label>14 · Gestor do contrato (utilizador Azure)</label><select value={f.gestor} onChange={(e) => upd('gestor', e.target.value)}>{AZURE_USERS.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
+          <div className="campo"><label>14 · Gestor do contrato (utilizador Azure) · obrigatório <code>RN-116</code></label><select value={f.gestor} onChange={(e) => upd('gestor', e.target.value)}>{AZURE_USERS.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
           <div className="campo"><label>15 · Tipologia do contrato</label><select value={f.tipologia} onChange={(e) => upd('tipologia', e.target.value)}><option value="BOLSA_HORAS">Bolsa de horas</option><option value="CHAVE_NA_MAO">Chave-na-mão</option><option value="LICENCIAMENTO">Licenciamento</option></select></div>
         </div>
         {f.visto && !vistoOk && <div className="aviso" style={{ marginTop: 2 }}>Visto necessário e ainda sem data de obtenção: o contrato será criado no estado <b>Aguarda visto TdC</b> (não pode entrar em vigor sem visto obtido ou tácito).</div>}

@@ -61,7 +61,7 @@ export function ContratoDetalhe(): ReactNode {
   // formulário abre já nesse tipo, em vez de o obrigar a procurar na lista.
   const tipoPedido = params.get('modificacao') ?? undefined;
   const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(tabPedido ?? '') ? (tabPedido as Tab) : 'Ficha');
-  const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
+  const podeGerir = app.podeGerir();
   // O ciclo de vida do contrato (estado) é competência do gestor de contrato (RN-501).
   const ehGestorContrato = app.papeisAtuais().includes('GESTOR_CONTRATO');
   const [erro, setErro] = useState<string>();

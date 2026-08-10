@@ -5,7 +5,7 @@ import { Estado, formatarHoras, horasParaMin, hoje, mensagemErro, useAsync } fro
 
 export function Registos(): ReactNode {
   const u = app.utilizador();
-  const podeVerTodos = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
+  const podeVerTodos = app.podeAprovar();
   const [erro, setErro] = useState<string>();
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
   // Por omissão: hoje e 8 horas de trabalho (unidade = hora, sem minutos).

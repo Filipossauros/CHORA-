@@ -5,7 +5,8 @@ import {
 
 describe('RN-501 competência de aprovação', () => {
   it('positivo — gestor de contrato', () => expect(RN_501.avaliar({ papel: 'GESTOR_CONTRATO' }).ok).toBe(true));
-  it('positivo — gestor técnico', () => expect(RN_501.avaliar({ papel: 'GESTOR_TECNICO' }).ok).toBe(true));
+  it('positivo — validador', () => expect(RN_501.avaliar({ papel: 'VALIDADOR' }).ok).toBe(true));
+  it('positivo — administrador', () => expect(RN_501.avaliar({ papel: 'ADMINISTRADOR' }).ok).toBe(true));
   it('negativo — elemento', () => expect(RN_501.avaliar({ papel: 'ELEMENTO_EQUIPA_TECNICA' }).ok).toBe(false));
 });
 

@@ -224,6 +224,6 @@ function publica(c: Capacidade<never>): CapacidadePublica {
   return {
     nome: c.nome, titulo: c.titulo, descricao: c.descricao, tipo: c.tipo,
     parametros: c.parametrosDescricao, regras: c.regras, exemplos: c.exemplos,
-    papeis: c.operacao !== undefined ? [...MATRIZ[c.operacao]] : ['GESTOR_CONTRATO', 'GESTOR_TECNICO', 'ELEMENTO_EQUIPA_TECNICA'],
+    papeis: c.operacao !== undefined ? [...MATRIZ[c.operacao]] : ['ADMINISTRADOR', 'GESTOR_CONTRATO', 'VALIDADOR', 'ELEMENTO_EQUIPA_TECNICA'],
   };
 }

@@ -75,9 +75,20 @@ export const ESTADOS_REGISTO_TEMPO = [
 export type EstadoRegistoTempo = (typeof ESTADOS_REGISTO_TEMPO)[number];
 export const zEstadoRegistoTempo = z.enum(ESTADOS_REGISTO_TEMPO);
 
+/**
+ * Papéis aplicacionais do contraente público (secção 9.3).
+ *
+ * O VALIDADOR substitui o antigo GESTOR_TECNICO e é mais estreito: aprova e
+ * rejeita horas, e mais nada. O GESTOR_TECNICO geria contratos, perfis e
+ * afetações — poderes que agora são só do gestor de contrato.
+ *
+ * O ADMINISTRADOR é o único que atribui papéis. Sem ele não haveria como dar
+ * acesso a ninguém: o gestor só mexe nos contratos e o validador só nas horas.
+ */
 export const PAPEIS_APLICACIONAIS = [
+  'ADMINISTRADOR',
   'GESTOR_CONTRATO',
-  'GESTOR_TECNICO',
+  'VALIDADOR',
   'ELEMENTO_EQUIPA_TECNICA',
 ] as const;
 export type PapelAplicacional = (typeof PAPEIS_APLICACIONAIS)[number];

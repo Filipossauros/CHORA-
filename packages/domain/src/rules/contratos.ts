@@ -316,6 +316,26 @@ export const RN_115: Regra<{
   },
 };
 
+/**
+ * RN-116 — um contrato tem de ter, a todo o tempo, pelo menos um gestor em
+ * funções. Não é burocracia de formulário: as decisões que a aplicação levanta
+ * têm destinatário, e um contrato sem gestor produz decisões que não chegam a
+ * ninguém. Quem cessou funções conta para o histórico, não para o mínimo.
+ */
+export const RN_116: Regra<{ gestoresEmFuncoes: number }> = {
+  codigo: 'RN-116',
+  descricao: 'O contrato tem de ter pelo menos um gestor em funções.',
+  requisito: 'novo',
+  base: 'Sem gestor designado não há a quem dirigir as decisões de execução nem quem responda por elas.',
+  excecaoFundamentavel: false,
+  avaliar({ gestoresEmFuncoes }) {
+    if (gestoresEmFuncoes < 1) {
+      return violada('Designe pelo menos um gestor para o contrato.');
+    }
+    return conforme;
+  },
+};
+
 export const REGRAS_CONTRATOS = [
   RN_101,
   RN_102,
@@ -330,4 +350,5 @@ export const REGRAS_CONTRATOS = [
   RN_113,
   RN_114,
   RN_115,
+  RN_116,
 ] as const;

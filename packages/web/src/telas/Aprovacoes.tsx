@@ -4,7 +4,7 @@ import { Cabecalho } from '../app/Shell.js';
 import { Estado, formatarDuracao, mensagemErro, useAsync } from '../comum.js';
 
 export function Aprovacoes(): ReactNode {
-  const podeAprovar = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
+  const podeAprovar = app.podeAprovar();
   const [estado, setEstado] = useState('SUBMETIDO');
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [resultados, setResultados] = useState<Array<{ id: string; ok: boolean; regra?: string; detalhe?: string }>>([]);

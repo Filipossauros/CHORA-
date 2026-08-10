@@ -101,7 +101,7 @@ export function EtiquetaFamilia({ familia }: { familia?: string }): ReactNode {
  * venceu vem primeiro.
  */
 export function Hoje(): ReactNode {
-  const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
+  const podeGerir = app.podeGerir();
   const base = useAsync(async () => {
     const servico = new ServicoAlertas(app.ctx);
     const pendentes = await servico.pendentes();

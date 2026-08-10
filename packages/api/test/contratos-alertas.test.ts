@@ -250,11 +250,17 @@ describe('alertas e auditoria', () => {
     expect(alertas.some((a) => a.codigo === 'AL-PORTARIA-REPROGRAMAR' && a.contratoId === c.id)).toBe(true);
   });
 
-  it('só o gestor de contrato consulta auditoria (403 para técnico)', async () => {
+  it('o validador não consulta auditoria nem gere contratos (403)', async () => {
     const { app } = await montarApp();
     fechar = () => app.close();
-    const r = await app.inject({ method: 'GET', url: '/api/v1/auditoria', headers: { 'x-dev-user': 'oid-gestor-tecnico' } });
-    expect(r.statusCode).toBe(403);
+    const auditoria = await app.inject({ method: 'GET', url: '/api/v1/auditoria', headers: { 'x-dev-user': 'oid-validador' } });
+    expect(auditoria.statusCode).toBe(403);
+    // O papel é estreito por desenho: aprova horas, não gere o contrato.
+    const contrato = await app.inject({
+      method: 'POST', url: '/api/v1/contratos', headers: { 'x-dev-user': 'oid-validador' },
+      payload: { numero: 'C-X', objeto: 'x' },
+    });
+    expect(contrato.statusCode).toBe(403);
   });
 
   it('a auditoria regista as mutações', async () => {

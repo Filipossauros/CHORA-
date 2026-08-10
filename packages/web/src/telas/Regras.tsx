@@ -98,7 +98,8 @@ export function Regras(): ReactNode {
 
 const ROT_PAPEL: Record<string, string> = {
   GESTOR_CONTRATO: 'Gestor de contrato',
-  GESTOR_TECNICO: 'Gestor técnico',
+  ADMINISTRADOR: 'Administrador',
+  VALIDADOR: 'Validador',
   ELEMENTO_EQUIPA_TECNICA: 'Elemento da equipa',
 };
 

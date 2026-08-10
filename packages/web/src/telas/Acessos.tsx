@@ -5,7 +5,8 @@ import { mensagemErro, useAsync } from '../comum.js';
 
 const PAPEIS = [
   { v: 'GESTOR_CONTRATO', r: 'Gestor de Contrato' },
-  { v: 'GESTOR_TECNICO', r: 'Gestor Técnico' },
+  { v: 'ADMINISTRADOR', r: 'Administrador' },
+  { v: 'VALIDADOR', r: 'Validador' },
   { v: 'ELEMENTO_EQUIPA_TECNICA', r: 'Elemento' },
 ];
 

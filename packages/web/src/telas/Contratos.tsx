@@ -22,7 +22,7 @@ interface ResumoLista {
 
 export function Contratos(): ReactNode {
   const navegar = useNavigate();
-  const podeGerir = app.papeisAtuais().some((p) => p === 'GESTOR_CONTRATO' || p === 'GESTOR_TECNICO');
+  const podeGerir = app.podeGerir();
   const { dados } = useAsync(async () => {
     const contratos = await app.ctx.repos.contratos.todos();
     const pendentes = decisoesPendentes(await app.ctx.repos.alertas.todos());

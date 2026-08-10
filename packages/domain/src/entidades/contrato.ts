@@ -93,8 +93,14 @@ export const zContrato = zAuditavel.extend({
    */
   vigenciaLicenciamento: z.object({ de: zDataISO, ate: zDataISO }).optional(),
 
-  // Gestão
-  gestores: z.array(zGestorContrato),
+  /**
+   * Gestão — PELO MENOS UM. Um contrato sem gestor não tem quem decida por ele:
+   * as decisões que a aplicação levanta ficam sem destinatário e ninguém dá por
+   * isso. Admite mais do que um por causa de férias, substituição e transição
+   * de pasta; quem cessou fica com `cessouEm` e conta para o histórico, não
+   * para o mínimo (RN-116).
+   */
+  gestores: z.array(zGestorContrato).min(1),
 
   // Inativação com motivo
   motivoInativacao: z.string().optional(),

@@ -1,5 +1,5 @@
 import {
-  RN_101, RN_113, RN_114, RN_201, RN_202, exigir,
+  RN_101, RN_113, RN_114, RN_116, RN_201, RN_202, exigir,
   maquinaContrato, complementaresAcumulados, percentagemComplementares,
   calcularConsumoPerfil, valorPrevistoPerfil, vistoAssegurado, AgenteCCPStub,
   type Contrato, type EstadoContrato, type Alteracao, type Cent, type DataISO,
@@ -41,9 +41,7 @@ export class ServicoContratos {
       contratoDe: contrato.dataInicioVigencia,
       contratoAte: contrato.dataTerminoContratual,
     });
-    if (contrato.gestores.length === 0) {
-      throw new ErroValidacao('O contrato tem de ter um gestor designado.');
-    }
+    exigir(RN_116, { gestoresEmFuncoes: contrato.gestores.filter((g) => g.cessouEm === undefined).length });
   }
 
   /** Um contrato que exija visto prévio do TdC só pode estar EM_VIGOR com o visto assegurado. */

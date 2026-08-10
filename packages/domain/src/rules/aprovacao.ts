@@ -2,13 +2,13 @@ import type { PapelAplicacional } from '../enums/index.js';
 import type { Cent, Minutos } from '../tipos/primitivos.js';
 import { conforme, violada, type Regra } from '../erros/regra.js';
 
-const PAPEIS_QUE_APROVAM: ReadonlyArray<PapelAplicacional> = ['GESTOR_CONTRATO', 'GESTOR_TECNICO'];
+const PAPEIS_QUE_APROVAM: ReadonlyArray<PapelAplicacional> = ['ADMINISTRADOR', 'GESTOR_CONTRATO', 'VALIDADOR'];
 
-/** RN-501 — aprovação é competência de GESTOR_CONTRATO ou GESTOR_TECNICO; perfilDeGestao não confere poder. */
+/** RN-501 — aprovação é competência de GESTOR_CONTRATO ou VALIDADOR; perfilDeGestao não confere poder. */
 export const RN_501: Regra<{ papel: PapelAplicacional }> = {
   codigo: 'RN-501',
   descricao:
-    'A aprovação de registos é competência de GESTOR_CONTRATO ou GESTOR_TECNICO — papéis aplicacionais do contraente público. A flag perfilDeGestao não confere poder de aprovação.',
+    'A aprovação de registos é competência de GESTOR_CONTRATO ou VALIDADOR — papéis aplicacionais do contraente público. A flag perfilDeGestao não confere poder de aprovação.',
   requisito: 'RF5 (corrigido)',
   base: 'A aprovação é ato do contraente público; não pode depender de um perfil do adjudicatário.',
   excecaoFundamentavel: false,

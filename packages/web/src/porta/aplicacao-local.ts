@@ -11,8 +11,9 @@ import { RepositorioLocalStorage } from '../persistencia/repositorio-localstorag
 
 /** Utilizadores de demonstração (papéis fixos; espelham o seed). */
 export const UTILIZADORES = [
+  { id: 'oid-administrador', nome: 'Administrador', papeis: ['ADMINISTRADOR'] as PapelAplicacional[] },
   { id: 'oid-gestor-contrato', nome: 'Gestor de Contrato', papeis: ['GESTOR_CONTRATO'] as PapelAplicacional[] },
-  { id: 'oid-gestor-tecnico', nome: 'Gestor Técnico', papeis: ['GESTOR_TECNICO'] as PapelAplicacional[] },
+  { id: 'oid-validador', nome: 'Validador', papeis: ['VALIDADOR'] as PapelAplicacional[] },
   { id: 'oid-recurso-01', nome: 'Elemento — recurso 01', papeis: ['ELEMENTO_EQUIPA_TECNICA'] as PapelAplicacional[] },
   { id: 'oid-recurso-02', nome: 'Elemento — recurso 02', papeis: ['ELEMENTO_EQUIPA_TECNICA'] as PapelAplicacional[] },
 ];
@@ -171,6 +172,23 @@ export class AplicacaoLocal {
 
   terminarSessao(): void {
     localStorage.removeItem(CHAVE_SESSAO);
+  }
+
+  /**
+   * Gere contratos — perfis, dotações, afetações, faturação. O validador não
+   * entra aqui: aprova horas e mais nada.
+   *
+   * Vive na porta e não em cada ecrã porque estava escrito à mão em cinco
+   * sítios: mudar um papel obrigava a acertar os cinco, e bastava falhar um
+   * para um ecrã ficar a mostrar botões que a API recusa.
+   */
+  podeGerir(): boolean {
+    return this.papeisAtuais().some((p) => p === 'ADMINISTRADOR' || p === 'GESTOR_CONTRATO');
+  }
+
+  /** Decide horas submetidas. */
+  podeAprovar(): boolean {
+    return this.papeisAtuais().some((p) => p === 'ADMINISTRADOR' || p === 'GESTOR_CONTRATO' || p === 'VALIDADOR');
   }
 
   papeisAtuais(): PapelAplicacional[] {

@@ -6,7 +6,8 @@ import type { UtilizadorDev } from '../auth/fake-token-validator.js';
  */
 export const UTILIZADORES_DEV: UtilizadorDev[] = [
   { utilizadorId: 'oid-gestor-contrato', papeis: ['GESTOR_CONTRATO'] },
-  { utilizadorId: 'oid-gestor-tecnico', papeis: ['GESTOR_TECNICO'] },
+  { utilizadorId: 'oid-validador', papeis: ['VALIDADOR'] },
+  { utilizadorId: 'oid-administrador', papeis: ['ADMINISTRADOR'] },
   { utilizadorId: 'oid-recurso-01', papeis: ['ELEMENTO_EQUIPA_TECNICA'] },
   { utilizadorId: 'oid-recurso-02', papeis: ['ELEMENTO_EQUIPA_TECNICA'] },
   { utilizadorId: 'oid-recurso-03', papeis: ['ELEMENTO_EQUIPA_TECNICA'] },

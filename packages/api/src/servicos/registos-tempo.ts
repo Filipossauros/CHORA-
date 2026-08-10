@@ -181,7 +181,7 @@ export class ServicoRegistosTempo {
 
   /** Aprova um lote de registos, congelando valor/hora e valor imputado (RN-506). */
   async aprovar(ids: string[], utilizador: ContextoUtilizador): Promise<ResultadoItem[]> {
-    exigir(RN_501, { papel: utilizador.papeis.includes('GESTOR_CONTRATO') ? 'GESTOR_CONTRATO' : utilizador.papeis.includes('GESTOR_TECNICO') ? 'GESTOR_TECNICO' : 'ELEMENTO_EQUIPA_TECNICA' });
+    exigir(RN_501, { papel: utilizador.papeis.find((p) => p !== 'ELEMENTO_EQUIPA_TECNICA') ?? 'ELEMENTO_EQUIPA_TECNICA' });
 
     const resultados: ResultadoItem[] = [];
     // Tally por perfil, para não exceder ao aprovar vários no mesmo lote.
