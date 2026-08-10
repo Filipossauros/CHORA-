@@ -6,7 +6,7 @@ import { app } from '../porta/aplicacao-local.js';
 import { Cabecalho } from '../app/Shell.js';
 import { eurosParaCent, formatarMoeda, hoje, mensagemErro, notificarMudanca, useAsync } from '../comum.js';
 import { gerarMapaProjecaoXlsx } from '../projecoes.js';
-import hero from '../ativos/choramingas-hero.png';
+import polvoInicio from '../ativos/polvo-inicio.png';
 
 const ROT_VIAB: Record<string, string> = { VIAVEL: 'Viável', CONDICIONADA: 'Condicionada', INVIAVEL: 'Inviável' };
 
@@ -209,7 +209,7 @@ export function Hoje(): ReactNode {
               <div><b>{CATALOGO_ALERTAS.length} verificações</b><span>automáticas, por contrato</span></div>
             </div>
           </div>
-          <div className="fig"><img className="mascote" src={hero} alt="" /></div>
+          <div className="fig"><img className="mascote" src={polvoInicio} alt="" /></div>
         </section>
       )}
 

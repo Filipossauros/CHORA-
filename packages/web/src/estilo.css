@@ -242,8 +242,10 @@ code{font-family:ui-monospace,Menlo,monospace;background:var(--ardosia-b);color:
   padding:12px 16px 12px 20px;margin-bottom:18px}
 .faixa .ladrilhos{display:flex;gap:10px;flex:1;min-width:0}
 .faixa .ladrilhos .est{flex:1;min-width:0;background:rgba(255,255,255,.72)}
-.faixa .fig{flex:0 0 150px;display:flex;justify-content:flex-end}
-.faixa .fig img{max-width:150px}
+/* A ilustração é limitada pela ALTURA, não pela largura: assim a faixa mede
+   sempre o mesmo, seja qual for a proporção do desenho que lá esteja. */
+.faixa .fig{flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center}
+.faixa .fig img{max-height:132px;width:auto;max-width:180px}
 :root[data-theme="dark"] .faixa,
 :root[data-theme="dark"] .faixa .ladrilhos .est{border-color:var(--linha-forte)}
 :root[data-theme="dark"] .faixa .ladrilhos .est{background:rgba(255,255,255,.05)}
