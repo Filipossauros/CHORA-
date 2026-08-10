@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>CHORA+ — Entrar (proposta B)</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/*
+ * PROPOSTA B — ecrã de entrada centrado, num só cartão.
+ *
+ * A ilustração fica por cima do botão, no eixo do olhar: é inequivocamente a
+ * imagem principal. Ocupa menos ecrã do que na proposta A e lê-se igual em
+ * portátil pequeno, onde duas colunas ficariam apertadas.
+ *
+ * Traz ainda o seletor de perfil do protótipo — o botão do Entra entra sempre
+ * como gestor, mas sem isto não há maneira de ver os ecrãs do validador e do
+ * elemento. É andaime declarado, não funcionalidade.
+ */
+body{background:var(--fundo);
+  background-image:radial-gradient(1100px 520px at 50% -10%, var(--azul-b) 0%, transparent 70%)}
+.entrada{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 24px}
+.cartao-login{width:100%;max-width:470px;background:var(--superficie);border:1px solid var(--linha);
+  border-radius:20px;box-shadow:var(--sombra);padding:32px 36px 28px;text-align:center}
+.cartao-login .fig img{width:100%;max-width:250px;height:auto;display:block;margin:0 auto 6px}
+.cartao-login .marca-topo{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:6px}
+.cartao-login .marca-topo .logo{width:38px;height:38px;border-radius:11px;color:#fff;font-weight:800;font-size:15px;
+  background:linear-gradient(150deg,#4E7BE8,#2E55C4);display:flex;align-items:center;justify-content:center;letter-spacing:-.5px}
+.cartao-login .marca-topo b{font-size:17px;letter-spacing:-.3px}
+.cartao-login h1{font-size:23px;font-weight:700;letter-spacing:-.5px;line-height:1.2;margin:12px 0 8px}
+.cartao-login .sub{font-size:13.5px;color:var(--texto-suave);line-height:1.6;margin-bottom:22px}
+.btn-entrar{width:100%;height:48px;justify-content:center;font-size:14px;border-radius:12px}
+.btn-entrar .ms{display:grid;grid-template-columns:1fr 1fr;gap:2px;width:16px;height:16px;flex:0 0 16px}
+.btn-entrar .ms i{display:block;border-radius:1px}
+.rodape-login{font-size:11.5px;color:var(--texto-fraco);line-height:1.6;margin-top:16px}
+.separa{display:flex;align-items:center;gap:12px;margin:22px 0 14px;color:var(--texto-fraco);font-size:11px;
+  text-transform:uppercase;letter-spacing:1.2px;font-weight:700}
+.separa::before,.separa::after{content:"";flex:1;height:1px;background:var(--linha)}
+.perfis{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="entrada">
+  <div class="cartao-login">
+
+    <div class="marca-topo">
+      <div class="logo">C+</div>
+      <b>CHORA+</b>
+    </div>
+
+    <div class="fig"><img src="ativos/polvo-faturas.png" alt=""></div>
+
+    <h1>Entrar no CHORA+</h1>
+    <div class="sub">
+      A autenticação é a da sua organização.<br>
+      Não há palavra-passe própria nem conta a criar.
+    </div>
+
+    <button class="btn azul btn-entrar">
+      <span class="ms">
+        <i style="background:#F25022"></i><i style="background:#7FBA00"></i>
+        <i style="background:#00A4EF"></i><i style="background:#FFB900"></i>
+      </span>
+      Entrar com a conta da organização
+    </button>
+
+    <div class="rodape-login">
+      Os seus papéis vêm do que estiver atribuído no CHORA+, não do Azure.
+    </div>
+
+    <div class="separa">Protótipo</div>
+    <div class="perfis">
+      <button class="fchip on">Gestor de contrato</button>
+      <button class="fchip">Validador</button>
+      <button class="fchip">Elemento</button>
+    </div>
+    <div class="rodape-login">
+      A ligação ao Entra ID ainda não está feita. Estas pastilhas escolhem o
+      papel com que se entra, para se poderem ver os três percursos.
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>CHORA+ — Entrar (proposta A)</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/*
+ * PROPOSTA A — ecrã de entrada, em duas colunas.
+ *
+ * À esquerda a ilustração, grande, sobre o azul-marinho da lateral: é a única
+ * página da aplicação sem menu, e é a oportunidade que a marca tem de aparecer
+ * ao tamanho a que foi desenhada. À direita, o mínimo — um botão.
+ *
+ * O botão é um só de propósito. Não há campo de utilizador nem palavra-passe
+ * porque não vai haver: quem autentica é o Entra ID da organização. Pôr campos
+ * agora seria desenhar um ecrã que teria de ser desfeito.
+ */
+body{background:var(--fundo)}
+.login{display:flex;min-height:100vh}
+
+/* ── Coluna da arte ─────────────────────────────────────────────────────── */
+.arte{flex:1.1;min-width:0;position:relative;padding:40px 48px;
+  background:linear-gradient(165deg,#20386F 0%,var(--navy) 55%,#0E1A38 100%);
+  display:flex;flex-direction:column}
+.arte .marca{padding:0}
+.arte .fig{flex:1;display:flex;align-items:center;justify-content:center;padding:12px 0}
+.arte .fig img{width:100%;max-width:460px;height:auto;display:block}
+.arte .legenda{color:#A9B6D8;font-size:14.5px;line-height:1.65;max-width:460px;margin:0 auto}
+.arte .legenda b{color:#fff;font-weight:700;display:block;font-size:19px;letter-spacing:-.3px;margin-bottom:7px}
+
+/* ── Coluna da porta ────────────────────────────────────────────────────── */
+.porta{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;padding:48px}
+.cartao-login{width:100%;max-width:376px}
+.cartao-login .logo{width:52px;height:52px;border-radius:15px;color:#fff;font-weight:800;font-size:20px;
+  background:linear-gradient(150deg,#4E7BE8,#2E55C4);display:flex;align-items:center;justify-content:center;
+  letter-spacing:-.6px;margin-bottom:22px}
+.cartao-login h1{font-size:28px;font-weight:700;letter-spacing:-.7px;line-height:1.15;margin:0 0 8px}
+.cartao-login .sub{font-size:13.5px;color:var(--texto-suave);line-height:1.6;margin-bottom:26px}
+.btn-entrar{width:100%;height:48px;justify-content:center;font-size:14px;border-radius:12px}
+.btn-entrar .ms{display:grid;grid-template-columns:1fr 1fr;gap:2px;width:16px;height:16px;flex:0 0 16px}
+.btn-entrar .ms i{display:block;border-radius:1px}
+.rodape-login{font-size:11.5px;color:var(--texto-fraco);line-height:1.6;margin-top:18px}
+.rodape-login code{font-size:10.5px}
+.separa{display:flex;align-items:center;gap:12px;margin:22px 0;color:var(--texto-fraco);font-size:11.5px}
+.separa::before,.separa::after{content:"";flex:1;height:1px;background:var(--linha)}
+</style>
+</head>
+<body>
+<div class="login">
+
+  <!-- ═══ ARTE ═════════════════════════════════════════════════════════ -->
+  <section class="arte">
+    <div class="marca">
+      <div class="logo">C+</div>
+      <div><b>CHORA+</b><span>Controlo de horas</span></div>
+    </div>
+    <div class="fig"><img src="ativos/polvo-faturas.png" alt=""></div>
+    <div class="legenda">
+      <b>Alguém tem de olhar para isto.</b>
+      Contratos de outsourcing em execução: horas registadas, horas aprovadas,
+      faturas conferidas contra o que foi mesmo trabalhado — e os prazos que se
+      perdem enquanto ninguém está a ver.
+    </div>
+  </section>
+
+  <!-- ═══ PORTA ════════════════════════════════════════════════════════ -->
+  <section class="porta">
+    <div class="cartao-login">
+      <div class="logo">C+</div>
+      <h1>Entrar no CHORA+</h1>
+      <div class="sub">
+        A autenticação é a da sua organização. Não há palavra-passe própria nem
+        conta a criar.
+      </div>
+
+      <button class="btn azul btn-entrar">
+        <span class="ms">
+          <i style="background:#F25022"></i><i style="background:#7FBA00"></i>
+          <i style="background:#00A4EF"></i><i style="background:#FFB900"></i>
+        </span>
+        Entrar com a conta da organização
+      </button>
+
+      <div class="rodape-login">
+        Os seus papéis — gestor de contrato, validador ou elemento — vêm do que
+        estiver atribuído no CHORA+, não do Azure. O nome nunca é guardado: fica
+        só o identificador da conta.
+      </div>
+
+      <div class="separa">protótipo</div>
+      <div class="rodape-login" style="margin-top:0">
+        A ligação ao Entra ID ainda não está feita. Por agora o botão entra
+        sempre como <b>gestor de contrato</b>.
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
