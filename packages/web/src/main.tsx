@@ -10,9 +10,6 @@ import { ContratoDetalhe } from './telas/ContratoDetalhe.js';
 import { NovoContrato } from './telas/NovoContrato.js';
 import { Recursos } from './telas/Recursos.js';
 import { Operacao } from './telas/Operacao.js';
-import { Faturacao } from './telas/Faturacao.js';
-import { Relatorios } from './telas/Relatorios.js';
-import { Orcamentacao } from './telas/Orcamentacao.js';
 import { Regras } from './telas/Regras.js';
 import { Auditoria } from './telas/Auditoria.js';
 import { Acessos } from './telas/Acessos.js';
@@ -43,10 +40,9 @@ const rotas = [
   { path: '/recursos', element: <Protegida acesso="gestao"><Recursos /></Protegida> },
   { path: '/registos', element: <Protegida acesso="registo"><Operacao /></Protegida> },
   { path: '/aprovacoes', element: <Protegida acesso="aprovacao"><Operacao so="Aprovações" /></Protegida> },
-  { path: '/faturacao', element: <Protegida acesso="gestao"><Faturacao /></Protegida> },
-  { path: '/faturacao/:id', element: <Protegida acesso="gestao"><Faturacao /></Protegida> },
-  { path: '/relatorios', element: <Protegida acesso="gestao"><Relatorios /></Protegida> },
-  { path: '/orcamentacao', element: <Protegida acesso="gestao"><Orcamentacao /></Protegida> },
+  // Em espera: /faturacao, /relatorios e /orcamentacao não têm rota. Caem no
+  // `*` e voltam ao início, em vez de darem uma recusa — não é uma proibição,
+  // é um ecrã que ainda não existe.
   { path: '/regras', element: <Protegida acesso="gestao"><Regras /></Protegida> },
   { path: '/auditoria', element: <Protegida acesso="gestao"><Auditoria /></Protegida> },
   { path: '/acessos', element: <Protegida acesso="admin"><Acessos /></Protegida> },

@@ -10,7 +10,20 @@ export const RN_301: Regra<{ precoContratualInicial: Cent; complementaresAcumula
   descricao:
     'O valor acumulado de serviços complementares não pode exceder 50 % do preço contratual inicial.',
   requisito: 'RF7 (corrigido)',
-  base: 'CCP, art. 370.º n.º 4. A base é o preço contratual inicial, não a soma de horas base com bolsa.',
+  /*
+    REFERÊNCIA POR REVER. O DL n.º 177/2026, de 4 de setembro, em vigor desde
+    1 de outubro de 2026, revogou os n.ºs 2 a 5 do art. 370.º e ligou os
+    trabalhos, serviços e bens complementares ao regime geral da modificação
+    objetiva (art. 312.º n.º 1 al. c)). O limite de 50 % mantém-se, mas passa a
+    depender de a mudança de cocontratante não ser viável — condição que esta
+    regra ainda não avalia —, e a acumulação conta-se nas modificações
+    sucessivas dessa alínea (art. 312.º n.º 4).
+
+    A regra NÃO foi alterada: sem o Código republicado à mão, trocar o artigo
+    por outro seria substituir uma referência caducada por uma inventada. O que
+    se fez foi dizê-lo onde alguém a vai ler. Ver `docs/legal/revisao-ccp-2026.md`.
+  */
+  base: 'CCP, art. 370.º n.º 4 — n.ºs 2 a 5 revogados pelo DL n.º 177/2026; referência por rever. A base é o preço contratual inicial, não a soma de horas base com bolsa.',
   excecaoFundamentavel: false,
   avaliar({ precoContratualInicial, complementaresAcumulados }) {
     const limite = Math.floor(precoContratualInicial * LIMITE_COMPLEMENTARES);

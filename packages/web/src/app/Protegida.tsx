@@ -2,7 +2,6 @@ import { type ReactNode } from 'react';
 import type { PapelAplicacional } from '@chora/domain';
 import { app } from '../porta/aplicacao-local.js';
 import { temAcesso } from './Shell.js';
-import polvoFaturas from '../ativos/polvo-faturas.png';
 
 /**
  * GUARDA DE ROTA — o que esconder um item de menu não faz.
@@ -41,7 +40,6 @@ export function SemAcesso({ papeis }: { papeis: ReadonlyArray<PapelAplicacional>
   return (
     <div className="entrada" style={{ background: 'var(--fundo)' }}>
       <div className="cartao-login">
-        <div className="fig"><img src={polvoFaturas} alt="" /></div>
         <h1>Este ecrã não é seu</h1>
         <div className="sub">
           Entrou como <b>{papeis.map((p) => ROTULO[p]).join(' e ')}</b>, e este papel

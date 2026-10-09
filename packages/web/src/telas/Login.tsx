@@ -1,6 +1,5 @@
 import { type ReactNode } from 'react';
 import { UTILIZADORES } from '../porta/aplicacao-local.js';
-import polvoFaturas from '../ativos/polvo-faturas.png';
 
 /**
  * ENTRADA — a única página sem menu.
@@ -20,12 +19,14 @@ export function Login({ onEntrar }: { onEntrar: (utilizadorId: string) => void }
   return (
     <div className="entrada">
       <div className="cartao-login">
+        {/*
+          Sem ilustração, o nome fica sozinho a carregar a marca — e por isso
+          aparece ao tamanho a que foi desenhado, não como ícone de canto.
+        */}
         <div className="marca-topo">
           <div className="logo">C+</div>
           <b>CHORA+</b>
         </div>
-
-        <div className="fig"><img src={polvoFaturas} alt="" /></div>
 
         <h1>Entrar no CHORA+</h1>
         <div className="sub">

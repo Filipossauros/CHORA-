@@ -27,7 +27,11 @@ export const BASE_LEGAL: ReadonlyArray<ParametroLegal> = [
   // aqui, versionados e ajustáveis sem tocar no código dos alertas.
   { chave: 'INSTRUCAO_TRANSICAO_DIAS', valor: 45, vigenteDe: '2012-02-14', referencia: 'Prazo de instrução do pedido de transição de saldo antes do fecho do ano económico (LCPA / DL n.º 127/2012).' },
   { chave: 'INSTRUCAO_PORTARIA_DIAS', valor: 75, vigenteDe: '2012-08-21', referencia: 'Prazo de instrução da reprogramação de portaria de extensão de encargos (envolve tutela e Finanças).' },
-  { chave: 'INSTRUCAO_MODIFICACAO_DIAS', valor: 30, vigenteDe: '2008-07-30', referencia: 'Prazo de instrução de uma modificação objetiva (complementares / prorrogação), CCP art. 311.º e ss.' },
+  // O DL n.º 177/2026 reescreveu os arts. 311.º a 315.º e autonomizou a
+  // alteração anormal e imprevisível das circunstâncias nos novos arts. 314.º-A
+  // e 314.º-B. O PRAZO de instrução é organizacional e não muda por lei; o que
+  // caducou é a referência. Ver `docs/legal/revisao-ccp-2026.md`.
+  { chave: 'INSTRUCAO_MODIFICACAO_DIAS', valor: 30, vigenteDe: '2008-07-30', referencia: 'Prazo de instrução de uma modificação objetiva (complementares / prorrogação), CCP art. 311.º e ss. — artigos reescritos pelo DL n.º 177/2026; referência por rever.' },
   { chave: 'INSTRUCAO_PROCEDIMENTO_MESES', valor: 5, vigenteDe: '2008-07-30', referencia: 'Duração típica de um procedimento concursal até à celebração do contrato (CCP).' },
   { chave: 'INSTRUCAO_VISTO_MESES', valor: 3, vigenteDe: '1997-08-26', referencia: 'Acréscimo de prazo por fiscalização prévia do Tribunal de Contas (LOPTC, Lei n.º 98/97).' },
 ];

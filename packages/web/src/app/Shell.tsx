@@ -4,23 +4,25 @@ import { decisoesPendentes, type PapelAplicacional } from '@chora/domain';
 import { CATALOGO_CENARIOS } from '@chora/api/nucleo';
 import { app, UTILIZADORES } from '../porta/aplicacao-local.js';
 import { useMudancas } from '../comum.js';
-import { Perguntar } from '../componentes/Perguntar.js';
-import aceno from '../ativos/choramingas-aceno.png';
 
 /**
  * Navegação orientada ao TRABALHO, não à arquitetura.
  *
- * Passou de 13 destinos para 6: «Hoje» colapsa Alertas, Previsões e
- * recomendações — eram a mesma pergunta separada por quem a produzia: as opções
- * de atuação vivem hoje dentro da própria decisão, com prazo e destino. O que é
- * documentação (Regras e alertas), administração (Auditoria, Acessos) ou
- * consulta (Recursos) vive numa gaveta, acessível mas fora do caminho do
- * trabalho diário.
+ * TRÊS destinos de trabalho. Eram onze — cinco no menu e seis na gaveta — e a
+ * conta não era de arrumação: eram ecrãs a mais para uma aplicação que ainda
+ * não faz bem o essencial. A conferência de faturas, os relatórios e a
+ * orçamentação ficaram EM ESPERA: saiu a interface, ficaram os serviços, as
+ * regras e os testes. O assistente saiu pela mesma razão, e volta quando o que
+ * está debaixo dele for indispensável.
  *
- * A «Orçamentação» substituiu as «Previsões»: projetar o ritmo de execução por
- * contrato já se lê nas decisões do «Hoje» e no consumo da lista de contratos.
- * O que faltava era a pergunta anual — que contratos vão ser precisos e quanto
- * custam. Vive na gaveta porque é trabalho de uma época do ano, não do dia a dia.
+ * Os relatórios não foram uma escolha difícil: metade do ecrã eram as perguntas
+ * compostas no assistente, e a outra metade — consumo de um contrato, faturação
+ * do ano — pertence à ficha do contrato e à faturação. Sem o assistente, o ecrã
+ * dissolvia-se sozinho.
+ *
+ * O que é documentação (Regras e alertas), administração (Auditoria, Acessos) ou
+ * consulta (Recursos) continua numa gaveta, acessível mas fora do caminho do
+ * trabalho diário.
  */
 /**
  * Quem entra em cada destino. A lateral aparece a toda a gente — é a moldura da
@@ -44,15 +46,12 @@ const NAV = [
     { to: '/', rot: 'Hoje', fim: true, acesso: 'gestao' as Acesso, ic: 'M3 9.6 12 3l9 6.6V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.6Z' },
     { to: '/contratos', rot: 'Contratos', acesso: 'gestao' as Acesso, ic: 'M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM14 3v5h5' },
     { to: '/registos', rot: 'Registos e aprovações', acesso: 'registo' as Acesso, ic: 'M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13ZM8.5 12.5l2.4 2.4 4.6-5' },
-    { to: '/faturacao', rot: 'Faturação', acesso: 'gestao' as Acesso, ic: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM14.6 9.3A3 3 0 1 0 12 15M9.4 11.2h5M9.4 13.4h5' },
   ] },
-  { grupo: 'Análise', itens: [{ to: '/relatorios', rot: 'Relatórios', acesso: 'gestao' as Acesso, ic: 'M5 20V11M12 20V4M19 20v-6' }] },
 ];
 
 /** Gaveta: transparência, administração e consulta. */
 const GAVETA = [
   { to: '/regras', rot: 'Regras e alertas', ic: 'M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8ZM10.3 21a2 2 0 0 0 3.4 0' },
-  { to: '/orcamentacao', rot: 'Orçamentação', ic: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 3v9l6.5 3.4' },
   { to: '/recursos', rot: 'Recursos', ic: 'M12.4 8a3.4 3.4 0 1 1-6.8 0 3.4 3.4 0 0 1 6.8 0ZM2.8 20c0-3.4 2.8-5.2 6.2-5.2s6.2 1.8 6.2 5.2M16.4 5.6a3.4 3.4 0 0 1 0 5M21.2 20c0-2.7-1.1-4.2-2.8-4.8' },
   { to: '/auditoria', rot: 'Auditoria', ic: 'M7 3h10a2 2 0 0 1 2 2v16l-7-3.4L5 21V5a2 2 0 0 1 2-2Z' },
   { to: '/acessos', rot: 'Acessos', ic: 'M4 12.5A2.5 2.5 0 0 1 6.5 10h11a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-6ZM8.4 10V7a3.6 3.6 0 0 1 7.2 0v3' },
@@ -109,20 +108,12 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
   const [gavetaAberta, setGavetaAberta] = useState(false);
   const [pendentes, setPendentes] = useState(0);
   const [vencidas, setVencidas] = useState(0);
-  const [choro, setChoro] = useState<'fechado' | 'aberto' | 'inteiro'>('fechado');
   const navegar = useNavigate();
   const local = useLocation();
   const naRaiz = local.pathname === '/';
   const papeis = app.papeisAtuais();
   const gere = app.podeGerir();
   const aprova = app.podeAprovar();
-  /*
-    O Choramingas e a gaveta ficam para quem gere: com o âmbito reduzido a uma
-    tarefa, quase tudo o que o assistente sabe fazer estaria vedado, e um
-    assistente que responde «não posso» à maioria das perguntas é pior do que
-    não estar lá. Quem o forçar pela consola leva a recusa das capacidades, que
-    é onde ela conta.
-  */
 
   // Contagem de decisões pendentes no menu — o sinal que traz o gestor de volta.
   const contar = useCallback(() => {
@@ -182,19 +173,11 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
             ))}
           </div>}
 
-          {/*
-            O Choramingas mora aqui, recolhido, em todos os ecrãs — antes existia
-            só no «Hoje». Com a janela aberta o lançador DESAPARECE: ele não abre
-            a janela, torna-se a janela, e volta quando ela fecha.
-          */}
           <div className="fim" />
-          {gere && choro === 'fechado' && (
-            <button className="lancador" onClick={() => setChoro('aberto')}>
-              <span className="fig"><img className="mascote" src={aceno} alt="" /></span>
-              <span><b>Choramingas</b><span>Perguntar ou pedir</span></span>
-              <Ic d="m9 6 6 6-6 6" tam={16} largura={2.2} classe="seta" />
-            </button>
-          )}
+          <div className="quem">
+            <b>{UTILIZADORES.find((u) => u.id === uid)?.nome ?? '—'}</b>
+            Sessão iniciada
+          </div>
         </aside>
 
         <div className="principal">
@@ -202,45 +185,9 @@ export function Shell({ children }: { children: ReactNode }): ReactNode {
             {gere && !naRaiz && <div style={{ marginBottom: 14 }}><button className="btn sm" onClick={() => navegar(-1)} title="Voltar ao ecrã anterior">← Voltar</button></div>}
             {children}
           </div>
-          {gere && choro !== 'fechado' && (
-            <JanelaChoramingas
-              inteiro={choro === 'inteiro'}
-              onAlternarTamanho={() => setChoro(choro === 'inteiro' ? 'aberto' : 'inteiro')}
-              onFechar={() => setChoro('fechado')}
-            />
-          )}
         </div>
       </div>
     </CtxSessao.Provider>
-  );
-}
-
-/**
- * A janela do assistente. Ao lado da doca ocupa 960 px; em ecrã inteiro toma a
- * página. Quem responde é o mesmo componente nos dois casos — a diferença é só
- * quanto espaço a conversa tem para respirar.
- */
-function JanelaChoramingas({ inteiro, onAlternarTamanho, onFechar }: {
-  inteiro: boolean; onAlternarTamanho: () => void; onFechar: () => void;
-}): ReactNode {
-  return (
-    <div className={`choro${inteiro ? ' inteiro' : ''}`}>
-      <div className="painel">
-        <div className="topo-p">
-          <span className="fig"><img className="mascote" src={aceno} alt="" /></span>
-          <b>Choramingas</b>
-          <span className="dir">
-            <button className="ico-t" onClick={onAlternarTamanho} title={inteiro ? 'Reduzir' : 'Abrir em ecrã inteiro'}>
-              <Ic d={inteiro ? 'M10 4v6H4M10 10 3 3M14 20v-6h6M14 14l7 7' : 'M14 4h6v6M20 4l-7.4 7.4M10 20H4v-6M4 20l7.4-7.4'} tam={15} largura={2} />
-            </button>
-            <button className="ico-t" onClick={onFechar} title="Fechar">
-              <Ic d="M6 6l12 12M18 6 6 18" tam={15} largura={2.2} />
-            </button>
-          </span>
-        </div>
-        <Perguntar />
-      </div>
-    </div>
   );
 }
 

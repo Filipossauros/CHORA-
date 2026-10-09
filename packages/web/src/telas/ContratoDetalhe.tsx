@@ -5,7 +5,6 @@ import { app, AZURE_USERS, nomeAzure, prestadorAzure } from '../porta/aplicacao-
 import { Cabecalho } from '../app/Shell.js';
 import { Barra, Estado, centParaEuros, eurosParaCent, formatarHoras, formatarMoeda, hoje, horasParaMin, mensagemErro, notificarMudanca, pct, useAsync } from '../comum.js';
 import { calcularCapacidade } from '../capacidade.js';
-import { ExtrairDocumento } from '../componentes/ExtrairDocumento.js';
 import { Entregaveis } from './Entregaveis.js';
 import { DecisoesDoContrato } from './Hoje.js';
 
@@ -37,20 +36,20 @@ function resumirEvento(e: { operacao: string; regraViolada?: string; depois?: un
  * aconteceu. «Entregáveis» só existe nos contratos chave-na-mão, onde o preço se
  * reparte por resultados em vez de horas.
  */
-const TABS = ['Ficha', 'Ações', 'Afetações', 'Entregáveis', 'Modificações'] as const;
+const TABS = ['Ficha', 'Equipa e perfis', 'Execução'] as const;
 type Tab = (typeof TABS)[number];
 /**
- * «Ações» só existe quando há decisões pendentes — um separador vazio é ruído.
- * «Entregáveis» só nos contratos de preço fixo.
+ * TRÊS separadores, que eram cinco. A pergunta que cada um responde:
+ * o que o contrato É (Ficha), QUEM o executa (Equipa e perfis), COMO VAI e o
+ * que lhe ACONTECEU (Execução — consumo, modificações, entregáveis).
+ *
+ * «Ações» desapareceu como separador e subiu a faixa no topo, visível em
+ * qualquer separador: era o único conteúdo do ecrã que ninguém devia ter de
+ * procurar, e estava escondido atrás de um clique como todos os outros.
  */
-function tabsDe(c: Contrato, decisoes: number): readonly Tab[] {
-  return TABS.filter((t) => {
-    if (t === 'Entregáveis') return c.tipologia === 'CHAVE_NA_MAO';
-    // O licenciamento não tem execução por perfis: não há quem afetar.
-    if (t === 'Afetações') return c.tipologia !== 'LICENCIAMENTO';
-    if (t === 'Ações') return decisoes > 0;
-    return true;
-  });
+function tabsDe(c: Contrato): readonly Tab[] {
+  // O licenciamento não tem execução por perfis: não há quem afetar.
+  return TABS.filter((t) => (t === 'Equipa e perfis' ? c.tipologia !== 'LICENCIAMENTO' : true));
 }
 
 export function ContratoDetalhe(): ReactNode {
@@ -66,6 +65,7 @@ export function ContratoDetalhe(): ReactNode {
   const ehGestorContrato = app.papeisAtuais().includes('GESTOR_CONTRATO');
   const [erro, setErro] = useState<string>();
   const [editar, setEditar] = useState(false);
+  const [verDecisoes, setVerDecisoes] = useState(false);
 
   // A mesma rota /contratos/:id é reutilizada entre contratos (não remonta):
   // ao mudar de contrato, repõe o separador pedido no URL (ou a Ficha) e fecha a edição.
@@ -93,26 +93,43 @@ export function ContratoDetalhe(): ReactNode {
   const dados = base.dados;
   if (dados === undefined || dados.contrato === null) return <p className="vazio">A carregar…</p>;
   const c = dados.contrato;
-  const tabs = tabsDe(c, dados.decisoes.length);
+  const tabs = tabsDe(c);
   // Um separador pedido no URL que não exista nesta tipologia cai na Ficha.
   const tabAtiva: Tab = tabs.includes(tab) ? tab : 'Ficha';
+  const vencidas = dados.decisoes.filter((a) => (a.diasParaLimite ?? 1) < 0).length;
 
   return (
     <>
-      <Cabecalho titulo={`${c.numero} · ${c.objeto}`} sub="Detalhe do contrato (fase de execução)" acoes={<><DecisoesResumo alertas={dados.decisoes} /><Estado v={c.estado} /></>} />
+      <Cabecalho titulo={`${c.numero} · ${c.objeto}`} sub="Detalhe do contrato (fase de execução)" acoes={<Estado v={c.estado} />} />
       {erro !== undefined && erro !== '' && <div className="erro-cx">⚠ {erro}</div>}
-      <div className="seps">{tabs.map((t) => <button key={t} className={`sep${tabAtiva === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
 
-      {tabAtiva === 'Entregáveis' && <Entregaveis contrato={c} podeGerir={podeGerir} onErro={setErro} />}
-
-      {tabAtiva === 'Ações' && (
-        <DecisoesDoContrato
-          contrato={c} decisoes={dados.decisoes} podeGerir={podeGerir}
-          onMudou={() => { base.recarregar(); notificarMudanca(); }} onErro={setErro}
-        />
+      {/*
+        As decisões abertas do contrato, em faixa e acima dos separadores. Um
+        separador escondia justamente aquilo que não deve ser preciso procurar.
+      */}
+      {dados.decisoes.length > 0 && (
+        <div className={vencidas > 0 ? 'erro-cx' : 'aviso'} style={{ marginBottom: 16 }}>
+          <span style={{ flex: 1 }}>
+            <b>{dados.decisoes.length} decisõe(s) aberta(s)</b>
+            {vencidas > 0 ? `, ${vencidas} com prazo esgotado` : ''} neste contrato.
+          </span>
+          <button className="btn sm" onClick={() => setVerDecisoes(!verDecisoes)}>
+            {verDecisoes ? 'Esconder' : 'Ver decisões'}
+          </button>
+        </div>
+      )}
+      {verDecisoes && dados.decisoes.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <DecisoesDoContrato
+            contrato={c} decisoes={dados.decisoes} podeGerir={podeGerir}
+            onMudou={() => { base.recarregar(); notificarMudanca(); }} onErro={setErro}
+          />
+        </div>
       )}
 
-      {/* FICHA — o contrato e como vai: dados contratuais e, a seguir, a execução. */}
+      <div className="seps">{tabs.map((t) => <button key={t} className={`sep${tabAtiva === t ? ' ativo' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
+
+      {/* FICHA — o que o contrato é. */}
       {tabAtiva === 'Ficha' && (editar ? <FichaEdicao contrato={c} podeAlterarEstado={ehGestorContrato} onGravado={() => { setEditar(false); base.recarregar(); }} onErro={setErro} /> : (
         <>
           <div className="cartao" style={{ marginBottom: 16 }}>
@@ -128,35 +145,12 @@ export function ContratoDetalhe(): ReactNode {
             {c.notaAlteracaoEstado !== undefined && <Campo k="Nota da última alteração de estado" v={c.notaAlteracaoEstado} />}
           </div></div>
 
-          <LinhaSeccao rotulo="Execução física e financeira" />
-
-          <div className="grelha-kpi">
-            <div className="kpi"><div className="rot">Valor inicial do contrato</div><div className="val">{formatarMoeda(dados.resumo.valorInicialContrato)}</div></div>
-            <div className="kpi"><div className="rot">Valor atual do contrato</div><div className="val">{formatarMoeda(dados.resumo.valorAtualContrato)}</div></div>
-            <div className="kpi"><div className="rot">Valor executado</div><div className="val">{formatarMoeda(dados.resumo.valorExecutado)}</div><div className="sub">{pct(dados.resumo.valorAtualContrato > 0 ? dados.resumo.valorExecutado / dados.resumo.valorAtualContrato : 0)} do valor atual</div></div>
-            <div className="kpi"><div className="rot">Valor disponível</div><div className="val" style={{ color: dados.resumo.valorDisponivel <= dados.resumo.valorAtualContrato * 0.4 ? 'var(--ambar)' : undefined }}>{formatarMoeda(dados.resumo.valorDisponivel)}</div><div className="sub">{pct(dados.resumo.valorAtualContrato > 0 ? dados.resumo.valorDisponivel / dados.resumo.valorAtualContrato : 0)} do valor atual</div></div>
-          </div>
-
-          <div className="cartao" style={{ marginBottom: 16 }}><h3>Trabalhos complementares (limite legal 50% — RN-301)</h3><div className="corpo">
-            <Barra fracao={dados.resumo.complementares.percentagem} />
-            <div className="sec" style={{ marginTop: 6 }}>{dados.resumo.complementares.atingido ? 'Limite de 50% ATINGIDO' : `Máximo admissível disponível: ${formatarMoeda(dados.resumo.complementares.disponivel)}`}</div>
-          </div></div>
-
           {c.portariaExtensaoEncargos !== undefined && <Portaria contrato={c} />}
-
-          <div className="cartao" style={{ marginBottom: 16 }}><h3>Saldos por perfil — horas e valor restantes</h3><table>
-            <thead><tr><th>Perfil</th><th className="num">Horas restantes</th><th style={{ width: 130 }}>Consumo horas</th><th className="num">Valor restante</th></tr></thead>
-            <tbody>{dados.resumo.saldosPerfis.map((s) => { const frac = s.minutosPrevistos > 0 ? s.minutosConsumidos / s.minutosPrevistos : 0; return (
-              <tr key={s.perfilId}><td className="prim">{s.nome}</td><td className="num">{formatarHoras(s.minutosRestantes)}<div className="sec">de {formatarHoras(s.minutosPrevistos)}</div></td><td><Barra fracao={frac} /></td><td className="num">{formatarMoeda(s.valorRestante)}<div className="sec">de {formatarMoeda(s.valorPrevisto)}</div></td></tr>
-            ); })}{dados.resumo.saldosPerfis.length === 0 && <tr><td colSpan={4} className="vazio">Sem perfis.</td></tr>}</tbody>
-          </table></div>
-
-          {dados.perfis.length > 0 && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
         </>
       ))}
 
-      {/* AFETAÇÕES — quem trabalha no contrato: perfis, pessoas e o histórico. */}
-      {tabAtiva === 'Afetações' && (
+      {/* EQUIPA E PERFIS — quem trabalha no contrato, com que perfis e a que ritmo. */}
+      {tabAtiva === 'Equipa e perfis' && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: podeGerir ? '1fr 320px' : '1fr', gap: 16 }}>
             <div className="cartao"><h3>Perfis contratuais{c.tipologia === 'CHAVE_NA_MAO' ? ' (bolsa de horas do contrato)' : ' (bolsa de horas)'}</h3><table>
@@ -171,11 +165,43 @@ export function ContratoDetalhe(): ReactNode {
           <GestaoAfetacoes contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} podeGerir={podeGerir} onMudou={() => base.recarregar()} onErro={setErro} />
 
           <HistoricoAfetacoes eventos={dados.eventosAfetacoes} afetacoes={dados.afetacoes} perfis={dados.perfis} />
+
+          {dados.perfis.length > 0 && <Capacidade contrato={c} perfis={dados.perfis} afetacoes={dados.afetacoes} aprovados={dados.aprovados} />}
         </>
       )}
 
-      {tabAtiva === 'Modificações' && (
+      {/*
+        EXECUÇÃO — como vai e o que lhe aconteceu. O consumo estava na Ficha,
+        as modificações num separador só delas e os entregáveis noutro: são as
+        três faces da mesma pergunta, e liam-se em três sítios.
+      */}
+      {tabAtiva === 'Execução' && (
         <>
+
+          <div className="grelha-kpi">
+            <div className="kpi"><div className="rot">Valor inicial do contrato</div><div className="val">{formatarMoeda(dados.resumo.valorInicialContrato)}</div></div>
+            <div className="kpi"><div className="rot">Valor atual do contrato</div><div className="val">{formatarMoeda(dados.resumo.valorAtualContrato)}</div></div>
+            <div className="kpi"><div className="rot">Valor executado</div><div className="val">{formatarMoeda(dados.resumo.valorExecutado)}</div><div className="sub">{pct(dados.resumo.valorAtualContrato > 0 ? dados.resumo.valorExecutado / dados.resumo.valorAtualContrato : 0)} do valor atual</div></div>
+            <div className="kpi"><div className="rot">Valor disponível</div><div className="val" style={{ color: dados.resumo.valorDisponivel <= dados.resumo.valorAtualContrato * 0.4 ? 'var(--ambar)' : undefined }}>{formatarMoeda(dados.resumo.valorDisponivel)}</div><div className="sub">{pct(dados.resumo.valorAtualContrato > 0 ? dados.resumo.valorDisponivel / dados.resumo.valorAtualContrato : 0)} do valor atual</div></div>
+          </div>
+
+          <div className="cartao" style={{ marginBottom: 16 }}><h3>Trabalhos complementares (limite legal 50% — RN-301)</h3><div className="corpo">
+            <Barra fracao={dados.resumo.complementares.percentagem} />
+            <div className="sec" style={{ marginTop: 6 }}>{dados.resumo.complementares.atingido ? 'Limite de 50% ATINGIDO' : `Máximo admissível disponível: ${formatarMoeda(dados.resumo.complementares.disponivel)}`}</div>
+          </div></div>
+
+
+          <div className="cartao" style={{ marginBottom: 16 }}><h3>Saldos por perfil — horas e valor restantes</h3><table>
+            <thead><tr><th>Perfil</th><th className="num">Horas restantes</th><th style={{ width: 130 }}>Consumo horas</th><th className="num">Valor restante</th></tr></thead>
+            <tbody>{dados.resumo.saldosPerfis.map((s) => { const frac = s.minutosPrevistos > 0 ? s.minutosConsumidos / s.minutosPrevistos : 0; return (
+              <tr key={s.perfilId}><td className="prim">{s.nome}</td><td className="num">{formatarHoras(s.minutosRestantes)}<div className="sec">de {formatarHoras(s.minutosPrevistos)}</div></td><td><Barra fracao={frac} /></td><td className="num">{formatarMoeda(s.valorRestante)}<div className="sec">de {formatarMoeda(s.valorPrevisto)}</div></td></tr>
+            ); })}{dados.resumo.saldosPerfis.length === 0 && <tr><td colSpan={4} className="vazio">Sem perfis.</td></tr>}</tbody>
+          </table></div>
+
+          {c.tipologia === 'CHAVE_NA_MAO' && <Entregaveis contrato={c} podeGerir={podeGerir} onErro={setErro} />}
+
+          <LinhaSeccao rotulo="Modificações" />
+
           {ehGestorContrato && <GestaoAlteracoes contrato={c} resumo={dados.resumo} alteracoes={dados.alteracoes} tipoInicial={tipoPedido} onMudou={() => base.recarregar()} onErro={setErro} />}
           <div className="cartao" style={{ marginBottom: 16 }}><h3>Registo de modificações (auditoria do contrato)</h3><table>
             <thead><tr><th>Quando</th><th>Operação</th><th>Detalhe</th><th>Autor</th></tr></thead>
@@ -287,17 +313,13 @@ function FichaEdicao({ contrato, podeAlterarEstado, onGravado, onErro }: { contr
         )}
       </div></div>
     </div>
-    <div style={{ marginTop: 16 }}>
-      <ExtrairDocumento
-        tipo="PORTARIA"
-        onConfirmar={async (campos) => {
-          const numero = campos['numero'];
-          if (numero !== undefined && numero.trim() !== '') {
-            setF((prev) => ({ ...prev, numeroPortariaExtensaoEncargos: numero }));
-          }
-        }}
-      />
-    </div>
+    {/*
+      Aqui estava a extração do número da portaria a partir do documento. Saiu
+      com a conferência de faturas: era a mesma peça de OCR por baixo, e é a
+      parte mais especulativa do que a aplicação se propunha fazer. O campo
+      continua a ser preenchido à mão, que é como já era preenchido quando a
+      extração não acertava.
+    */}
     {podeAlterarEstado && <EliminarContrato contrato={contrato} onErro={onErro} />}
     </>
   );
@@ -330,21 +352,6 @@ function NovoPerfil({ contrato, onCriado, onErro }: { contrato: Contrato; onCria
       <div className="aviso" style={{ marginBottom: 10 }}>O total dos perfis não pode exceder o valor do contrato <code>RN-105</code>.</div>
       <button className="btn pri" style={{ width: '100%', justifyContent: 'center' }} onClick={() => void criar()}>Criar perfil</button>
     </div></div>
-  );
-}
-
-/** Decisões pendentes do contrato, no cabeçalho — o detalhe abre já a dizer o que está mal. */
-function DecisoesResumo({ alertas }: { alertas: Alerta[] }): ReactNode {
-  const navegar = useNavigate();
-  if (alertas.length === 0) return <span className="pill p-verde">Sem decisões pendentes</span>;
-  const criticas = alertas.filter((a) => a.severidade === 'CRITICO').length;
-  return (
-    <button
-      className={`pill ${criticas > 0 ? 'p-verm' : 'p-ambar'}`}
-      style={{ border: 'none', cursor: 'pointer', font: 'inherit', fontWeight: 600 }}
-      title={alertas.map((a) => a.titulo).join(' · ')}
-      onClick={() => navegar('/')}
-    >{alertas.length} decisõe(s) pendente(s)</button>
   );
 }
 
