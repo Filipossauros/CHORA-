@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>Contratos — proposta v2</title>
+<link rel="stylesheet" href="base.css">
+</head>
+<body data-ativo="Contratos" data-decisoes="7">
+
+<header class="cab">
+  <div>
+    <h1>Contratos</h1>
+    <div class="sub">Em execução · 12 contratos</div>
+  </div>
+  <div class="dir"><button class="btn pri">Novo contrato</button></div>
+</header>
+
+<div class="filtros">
+  <input type="text" placeholder="Número, título ou adjudicatário…" style="min-width:280px">
+  <select><option>Todos os estados</option><option>Em vigor</option><option>Suspenso</option><option>Terminado</option></select>
+</div>
+
+<div class="cx">
+  <table>
+    <colgroup>
+      <col style="width:120px"><col><col style="width:112px"><col style="width:188px">
+      <col style="width:126px"><col style="width:152px"><col style="width:88px">
+    </colgroup>
+    <thead><tr>
+      <th>Número</th><th>Título</th><th>Estado</th><th>Vigência</th>
+      <th class="num">Valor</th><th>Consumo</th><th class="num">Decisões</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td class="cod">C-2026-FC1</td>
+        <td><a class="ref" href="contrato.html">Fornecimento contínuo — manutenção aplicacional</a></td>
+        <td><span class="est v">Em vigor</span></td>
+        <td class="cod">2025-10-10 · 2026-10-10</td>
+        <td class="num">1 240 000 €</td>
+        <td><div class="consumo"><div class="barra"><i class="a" style="width:81%"></i></div><span>81 %</span></div></td>
+        <td class="num"><b>4</b></td>
+      </tr>
+      <tr>
+        <td class="cod">C-2026-LIC1</td>
+        <td><a class="ref" href="contrato.html">Licenciamento de plataforma documental</a></td>
+        <td><span class="est v">Em vigor</span></td>
+        <td class="cod">2026-01-02 · 2026-11-10</td>
+        <td class="num">96 400 €</td>
+        <td><div class="consumo"><div class="barra"><i style="width:54%"></i></div><span>54 %</span></div></td>
+        <td class="num"><b>1</b></td>
+      </tr>
+      <tr>
+        <td class="cod">C-2025-AQ3</td>
+        <td><a class="ref" href="contrato.html">Aquisição de serviços de desenvolvimento — lote 3</a></td>
+        <td><span class="est v">Em vigor</span></td>
+        <td class="cod">2025-03-01 · 2027-02-28</td>
+        <td class="num">702 000 €</td>
+        <td><div class="consumo"><div class="barra"><i class="r" style="width:94%"></i></div><span>94 %</span></div></td>
+        <td class="num"><b>3</b></td>
+      </tr>
+      <tr>
+        <td class="cod">C-2025-AQ2</td>
+        <td><a class="ref" href="contrato.html">Aquisição de serviços de desenvolvimento — lote 2</a></td>
+        <td><span class="est a">Suspenso</span></td>
+        <td class="cod">2025-03-01 · 2027-02-28</td>
+        <td class="num">540 000 €</td>
+        <td><div class="consumo"><div class="barra"><i style="width:38%"></i></div><span>38 %</span></div></td>
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td class="cod">C-2024-SUP1</td>
+        <td><a class="ref" href="contrato.html">Suporte de infraestrutura — nível 2</a></td>
+        <td><span class="est n">Terminado</span></td>
+        <td class="cod">2024-01-01 · 2025-12-31</td>
+        <td class="num">318 000 €</td>
+        <td><div class="consumo"><div class="barra"><i style="width:100%"></i></div><span>100 %</span></div></td>
+        <td class="num">—</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<script src="casca.js"></script>
+</body>
+</html>

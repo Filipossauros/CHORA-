@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>Registos e aprovações — proposta v2</title>
+<link rel="stylesheet" href="base.css">
+</head>
+<body data-ativo="Registos e aprovações" data-decisoes="7">
+
+<header class="cab">
+  <div>
+    <h1>Registos e aprovações</h1>
+    <div class="sub">Registar tempo e decidir sobre o tempo registado</div>
+  </div>
+</header>
+
+<div class="abas">
+  <button class="aba on">Registos de tempo</button>
+  <button class="aba">Aprovações <span style="color:var(--vermelho);font-weight:700">2</span></button>
+</div>
+
+<div class="g32">
+  <div class="cx">
+    <div class="cx-t"><h2>Registar tempo</h2></div>
+    <div class="cx-c">
+      <div class="pares" style="grid-template-columns:1fr 1fr">
+        <div class="par"><div class="r">Data</div><input type="date" value="2026-10-09" style="width:100%"></div>
+        <div class="par"><div class="r">Horas</div><input type="number" value="8" style="width:100%"></div>
+      </div>
+      <div class="par" style="margin-top:16px">
+        <div class="r">Afetação</div>
+        <select style="width:100%"><option>C-2026-FC1 · Arquiteto de Software Sénior</option></select>
+      </div>
+      <div class="par" style="margin-top:16px">
+        <div class="r">Work item</div>
+        <input type="text" value="1001" style="width:100%">
+      </div>
+      <div class="par" style="margin-top:16px">
+        <div class="r">Descrição da atividade</div>
+        <input type="text" placeholder="O que foi feito" style="width:100%">
+      </div>
+      <!--
+        A regra aparece onde é aplicada, não num painel à parte. O código fica
+        legível para quem precisar de o citar, sem gritar.
+      -->
+      <div style="margin-top:14px;font-size:12.5px;color:var(--tinta-2)">
+        O registo é submetido de imediato, sem rascunho. Não é permitido registar
+        tempo em datas futuras. <span class="cod">RN-409</span>
+      </div>
+      <button class="btn pri" style="margin-top:16px;width:100%;justify-content:center">
+        Registar e submeter
+      </button>
+    </div>
+  </div>
+
+  <div class="cx">
+    <div class="cx-t">
+      <h2>Os meus registos</h2>
+      <select class="btn sm" style="box-shadow:none"><option>Últimos 30 dias</option><option>Este contrato</option></select>
+    </div>
+    <table>
+      <colgroup><col style="width:104px"><col style="width:62px"><col><col style="width:112px"></colgroup>
+      <thead><tr><th>Data</th><th class="num">Horas</th><th>Atividade</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td class="cod">2026-10-08</td><td class="num">8</td><td>Desenvolvimento</td><td><span class="est a">Submetido</span></td></tr>
+        <tr><td class="cod">2026-10-07</td><td class="num">8</td><td>Desenvolvimento</td><td><span class="est a">Submetido</span></td></tr>
+        <tr><td class="cod">2026-10-06</td><td class="num">6</td><td>Análise</td><td><span class="est v">Aprovado</span></td></tr>
+        <tr><td class="cod">2026-10-03</td><td class="num">8</td><td>Desenvolvimento</td><td><span class="est v">Aprovado</span></td></tr>
+        <tr><td class="cod">2026-10-02</td><td class="num">8</td><td>Desenvolvimento</td><td><span class="est r">Rejeitado</span></td></tr>
+        <tr><td class="cod">2026-10-01</td><td class="num">4</td><td>Reunião de ponto de situação</td><td><span class="est v">Aprovado</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="casca.js"></script>
+</body>
+</html>

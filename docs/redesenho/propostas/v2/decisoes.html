@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>Decisões — proposta v2</title>
+<link rel="stylesheet" href="base.css">
+</head>
+<body data-ativo="Decisões" data-decisoes="7">
+
+<header class="cab">
+  <div>
+    <h1>Decisões</h1>
+    <div class="sub">O que exige um ato, por ordem do que se perde primeiro</div>
+  </div>
+  <div class="dir"><button class="btn">Reavaliar</button></div>
+</header>
+
+<!--
+  O resumo numa linha substitui os quatro ladrilhos. Diz os mesmos três números
+  e ocupa 24 px em vez de 150.
+-->
+<div class="resumo">
+  <b class="al">7</b> com prazo esgotado <span class="pt">·</span>
+  <b>2</b> exigem ato este mês <span class="pt">·</span>
+  <b>4 895 800 €</b> de exposição em 74 decisões
+</div>
+
+<div class="filtros">
+  <span class="et">Tipo</span>
+  <select>
+    <option>Todos (74)</option>
+    <option>Tempo × dinheiro (32)</option>
+    <option>Cobertura orçamental plurianual (5)</option>
+    <option>Capacidade e perfis (22)</option>
+    <option>Fim de ciclo (10)</option>
+    <option>Higiene e risco de auditoria (5)</option>
+  </select>
+  <span class="et">Contrato</span>
+  <select>
+    <option>Todos (12)</option>
+    <option>C-2026-FC1</option>
+    <option>C-2026-LIC1</option>
+  </select>
+</div>
+
+<div class="sec">Prazo esgotado <span class="n">7</span></div>
+<div class="fila">
+
+  <div class="dec r">
+    <i class="urg"></i>
+    <div class="ttl">
+      <b>Perfil «Gestor de Projeto» esgota-se antes do término</b>
+      <span>C-2026-FC1 · Fornecimento contínuo — manutenção aplicacional</span>
+    </div>
+    <div class="tipo">Capacidade e perfis</div>
+    <div class="qd"><b>−182 dias</b><span>prazo de ato</span></div>
+    <div class="vlr">184 500 €</div>
+  </div>
+  <!-- A decisão aberta: o texto e as opções, sem sair da fila. -->
+  <div class="aberto">
+    <p>Ao ritmo recente, as horas do perfil esgotam-se a <b>2026-08-16</b>, antes do
+      término da vigência (2026-10-10). Restam 100 h. O prazo da primeira opção
+      terminou a 2026-02-09; as restantes mantêm-se, cada uma com o seu prazo.</p>
+    <div class="opcs">
+      <div class="opc">
+        <div class="o-t"><b>Preparar novo procedimento</b><span>Prazo esgotado a 2026-02-09 · incluía o visto prévio do TdC</span></div>
+        <span class="est r">Perdida</span>
+      </div>
+      <div class="opc">
+        <div class="o-t"><b>Transferir horas de outro perfil</b><span>Até 2026-07-15 · 240 h disponíveis em «Analista Sénior»</span></div>
+        <button class="btn sm pri">Abrir</button>
+      </div>
+      <div class="opc">
+        <div class="o-t"><b>Reduzir ritmo de consumo</b><span>Sem prazo · exige acordo com o adjudicatário</span></div>
+        <button class="btn sm">Abrir</button>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn sm">Mapa de projeção (Excel)</button>
+      <button class="btn sm lim">Dispensar</button>
+    </div>
+  </div>
+
+  <div class="dec r">
+    <i class="urg"></i>
+    <div class="ttl">
+      <b>Novo procedimento a lançar em tempo útil</b>
+      <span>C-2026-FC1 · término da vigência a 2026-10-10</span>
+    </div>
+    <div class="tipo">Fim de ciclo</div>
+    <div class="qd"><b>−182 dias</b><span>prazo de ato</span></div>
+    <div class="vlr">1 240 000 €</div>
+  </div>
+  <div class="aberto" hidden></div>
+
+  <div class="dec r">
+    <i class="urg"></i>
+    <div class="ttl">
+      <b>Licenciamento a expirar</b>
+      <span>C-2026-LIC1 · as licenças cobrem até 2026-11-10</span>
+    </div>
+    <div class="tipo">Fim de ciclo</div>
+    <div class="qd"><b>−60 dias</b><span>prazo de ato</span></div>
+    <div class="vlr">96 400 €</div>
+  </div>
+  <div class="aberto" hidden></div>
+
+  <div class="dec r">
+    <i class="urg"></i>
+    <div class="ttl">
+      <b>Dotação de 2027 por cabimentar</b>
+      <span>C-2025-AQ3 · encargo plurianual sem cobertura inscrita</span>
+    </div>
+    <div class="tipo">Cobertura orçamental</div>
+    <div class="qd"><b>−31 dias</b><span>prazo de ato</span></div>
+    <div class="vlr">702 000 €</div>
+  </div>
+  <div class="aberto" hidden></div>
+
+  <button class="mais">Mostrar as restantes 3 com prazo esgotado</button>
+</div>
+
+<div class="sec">Próximos 30 dias <span class="n">2</span></div>
+<div class="fila">
+  <div class="dec a">
+    <i class="urg"></i>
+    <div class="ttl">
+      <b>Folga de horas sem tempo para a consumir</b>
+      <span>C-2026-FC1 · 1 180 h por consumir em 51 dias úteis</span>
+    </div>
+    <div class="tipo">Tempo × dinheiro</div>
+    <div class="qd"><b>12 dias</b><span>prazo de ato</span></div>
+    <div class="vlr">58 900 €</div>
+  </div>
+  <div class="aberto" hidden></div>
+
+  <div class="dec a">
+    <i class="urg"></i>
+    <div class="ttl">
+      <b>Registos por submeter há mais de 30 dias</b>
+      <span>C-2026-FC1 · 14 registos de 3 recursos</span>
+    </div>
+    <div class="tipo">Higiene e auditoria</div>
+    <div class="qd"><b>21 dias</b><span>prazo de ato</span></div>
+    <div class="vlr">—</div>
+  </div>
+  <div class="aberto" hidden></div>
+</div>
+
+<!--
+  O resto da fila não desaparece: deixa de estar aberta. São 65 decisões sem
+  prazo iminente — a razão de o ecrã de hoje ter 13 metros de altura.
+-->
+<div class="sec">Mais tarde <span class="n">65</span></div>
+<div class="fila">
+  <button class="mais">Mostrar as 65 decisões sem prazo iminente</button>
+</div>
+
+<script src="casca.js"></script>
+</body>
+</html>

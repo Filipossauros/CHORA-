@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>Linguagem de desenho — proposta v2</title>
+<link rel="stylesheet" href="base.css">
+</head>
+<body data-ativo="" data-decisoes="7">
+
+<header class="cab">
+  <div>
+    <h1>Linguagem de desenho</h1>
+    <div class="sub">Sem ilustração, sem assistente — a identidade passa a vir da tipografia, do azul e do ritmo</div>
+  </div>
+</header>
+
+<div class="cx" style="margin-bottom:18px">
+  <div class="cx-t"><h2>Cor — a regra</h2></div>
+  <div class="cx-c">
+    <p style="margin:0 0 16px;color:var(--tinta-2);font-size:13.5px;max-width:78ch">
+      <b style="color:var(--tinta)">O azul é ação e só ação.</b> O vermelho, o âmbar e o verde são
+      estado e só estado. Tudo o resto é tinta sobre papel. Num ecrã onde tudo é
+      colorido, nada se destaca — e era o que acontecia com cinco famílias de
+      alerta, cada uma com a sua cor, ao lado de quatro ladrilhos coloridos.
+    </p>
+    <div class="amostras">
+      <div class="tom"><div class="ch" style="background:#142144"></div>
+        <div class="d"><b>Estrutura</b><span>#142144 · lateral, títulos</span></div></div>
+      <div class="tom"><div class="ch" style="background:#1D4ED8"></div>
+        <div class="d"><b>Ação</b><span>#1D4ED8 · botões, ligações</span></div></div>
+      <div class="tom"><div class="ch" style="background:#B42318"></div>
+        <div class="d"><b>Prazo perdido</b><span>#B42318 · só estado</span></div></div>
+      <div class="tom"><div class="ch" style="background:#B54708"></div>
+        <div class="d"><b>A expirar</b><span>#B54708 · só estado</span></div></div>
+      <div class="tom"><div class="ch" style="background:#067647"></div>
+        <div class="d"><b>Conforme</b><span>#067647 · só estado</span></div></div>
+      <div class="tom"><div class="ch" style="background:#F5F7FA;border-bottom:1px solid var(--linha)"></div>
+        <div class="d"><b>Papel</b><span>#F5F7FA · fundo</span></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="g2">
+  <div class="cx">
+    <div class="cx-t"><h2>Estado: contorno, não bloco</h2></div>
+    <div class="cx-c">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <span class="est v">Em vigor</span><span class="est a">Submetido</span>
+        <span class="est r">Rejeitado</span><span class="est n">Terminado</span>
+      </div>
+      <p style="margin:0;color:var(--tinta-2);font-size:13px">
+        Pastilha de contorno com ponto. Um bloco de cor sólida numa tabela grita
+        mais alto do que o número ao lado — e numa lista de registos o número é
+        que interessa.
+      </p>
+    </div>
+  </div>
+
+  <div class="cx">
+    <div class="cx-t"><h2>Números alinham</h2></div>
+    <div class="cx-c">
+      <table style="margin:-4px 0">
+        <colgroup><col><col style="width:142px"></colgroup>
+        <tbody>
+          <tr><td style="padding-left:0">Valor contratado</td><td class="num" style="padding-right:0">1 240 000,00 €</td></tr>
+          <tr><td style="padding-left:0">Executado</td><td class="num" style="padding-right:0">1 004 400,00 €</td></tr>
+          <tr><td style="padding-left:0">Por executar</td><td class="num" style="padding-right:0">235 600,00 €</td></tr>
+        </tbody>
+      </table>
+      <p style="margin:12px 0 0;color:var(--tinta-2);font-size:13px">
+        Algarismos tabulares e alinhamento à direita. Comparar valores é a
+        operação mais repetida da aplicação.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="cx" style="margin-top:18px">
+  <div class="cx-t"><h2>Densidade — tabela para listas, cartão para um objeto</h2></div>
+  <div class="cx-c">
+    <p style="margin:0;color:var(--tinta-2);font-size:13.5px;max-width:78ch">
+      A fila de decisões passa de cartões expandidos a linhas de tabela que abrem
+      uma de cada vez. A mesma informação, um nono da altura. O cartão fica para
+      o que é um objeto só: a decisão aberta, a ficha do contrato, o formulário
+      de registo.
+    </p>
+  </div>
+</div>
+
+<div class="cx" style="margin-top:18px">
+  <div class="cx-t"><h2>O que sai</h2></div>
+  <table>
+    <colgroup><col style="width:210px"><col></colgroup>
+    <tbody>
+      <tr><td><b>Mascote</b></td><td>Três ilustrações (início, faturas, aceno). Ganha-se
+        sobriedade institucional; perde-se a única marca de personalidade — passa a
+        ser carregada pela cor e pela tipografia.</td></tr>
+      <tr><td><b>Assistente</b></td><td>Lançador na lateral, janela, 426 linhas de
+        interface, catálogo de capacidades e configuração de modelo local. O domínio
+        fica intacto, em espera.</td></tr>
+      <tr><td><b>Conferência de faturas</b></td><td>Ecrã de 647 linhas com extração de
+        documentos e veredicto. Em espera — é a parte mais especulativa e a única que
+        depende de OCR.</td></tr>
+      <tr><td><b>Ladrilhos de resumo</b></td><td>Quatro caixas de 150 px para três
+        números, substituídas por uma linha de texto.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script src="casca.js"></script>
+</body>
+</html>

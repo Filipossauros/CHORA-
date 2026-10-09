@@ -1,0 +1,207 @@
+/*
+ * LINGUAGEM DE DESENHO v2 — sóbria, sem ilustração, sem assistente.
+ *
+ * Três decisões governam tudo o resto:
+ *
+ * 1. A cor não decora. O azul é ação, e só ação. O vermelho, o âmbar e o verde
+ *    são estado, e só estado. Tudo o resto é tinta sobre papel. Um ecrã onde
+ *    tudo é colorido é um ecrã onde nada se destaca.
+ * 2. Listas são tabelas. O cartão é para um objeto só — uma decisão aberta, um
+ *    contrato. Uma lista de cartões é uma tabela que ocupa seis vezes o espaço
+ *    e se lê pior.
+ * 3. O que está fechado por omissão não conta para a carga. O ecrã começa no
+ *    que é urgente; o resto está a um clique, não à vista.
+ */
+
+:root{
+  --tinta:#14213A;        /* texto principal e estrutura */
+  --tinta-2:#5A6782;      /* secundário, rótulos, metadados */
+  --tinta-3:#8B96AD;      /* terciário, marcas de água */
+  --linha:#E3E7EF;
+  --linha-2:#EFF2F7;
+  --fundo:#F5F7FA;
+  --superficie:#FFFFFF;
+  --rail:#142144;         /* a barra lateral: a única superfície escura */
+  --rail-2:#1E3059;
+
+  --acao:#1D4ED8;         /* azul = ação. Nunca ornamento. */
+  --acao-fraca:#EEF3FE;
+
+  --vermelho:#B42318; --vermelho-f:#FEF3F2;
+  --ambar:#B54708;   --ambar-f:#FFFAEB;
+  --verde:#067647;   --verde-f:#ECFDF3;
+
+  --raio:8px;
+  --sombra:0 1px 2px rgba(16,24,40,.05);
+  --fonte:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--fonte);background:var(--fundo);color:var(--tinta);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+/* Números alinham-se em coluna: é assim que se comparam valores. */
+.num,td.num,.val{font-variant-numeric:tabular-nums}
+
+/* ---------- casca ---------- */
+.app{display:grid;grid-template-columns:216px 1fr;min-height:100vh}
+.rail{background:var(--rail);color:#fff;padding:18px 12px;display:flex;flex-direction:column;gap:2px}
+.marca{display:flex;align-items:center;gap:10px;padding:4px 8px 22px}
+.marca .sig{width:32px;height:32px;border-radius:7px;background:var(--acao);color:#fff;
+  display:grid;place-items:center;font-weight:700;font-size:14px;letter-spacing:-.4px}
+.marca b{display:block;font-size:14px;letter-spacing:-.1px}
+.marca span{display:block;font-size:11px;color:#93A2C4;margin-top:1px}
+.grupo{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:#7D8CB0;padding:16px 8px 6px}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;
+  color:#C9D3E8;text-decoration:none;font-size:13.5px;font-weight:500}
+.nav:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav.on{background:var(--rail-2);color:#fff;font-weight:600}
+.nav .ct{margin-left:auto;background:var(--acao);color:#fff;border-radius:9px;
+  padding:0 6px;font-size:11px;font-weight:700;min-width:19px;text-align:center}
+.nav .ct.urg{background:var(--vermelho)}
+.rail .fim{margin-top:auto}
+.rail .quem{border-top:1px solid rgba(255,255,255,.1);padding:12px 8px 2px;font-size:12px;color:#93A2C4}
+.rail .quem b{display:block;color:#fff;font-size:13px;font-weight:600}
+
+.pal{padding:26px 30px 60px;max-width:1180px}
+
+/* ---------- cabeçalho de ecrã ---------- */
+.cab{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:20px}
+.cab h1{margin:0;font-size:25px;font-weight:700;letter-spacing:-.5px}
+.cab .sub{color:var(--tinta-2);font-size:13.5px;margin-top:3px}
+.cab .dir{display:flex;gap:8px;align-items:center}
+.volta{display:inline-block;color:var(--tinta-2);text-decoration:none;font-size:12.5px;
+  font-weight:500;margin-bottom:7px}
+
+/* ---------- botões ---------- */
+.btn{font-family:inherit;font-size:13px;font-weight:600;padding:7px 13px;border-radius:6px;
+  border:1px solid var(--linha);background:var(--superficie);color:var(--tinta);cursor:pointer;
+  box-shadow:var(--sombra);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:#CED5E2}
+.btn.pri{background:var(--acao);border-color:var(--acao);color:#fff}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn.lim{border-color:transparent;box-shadow:none;background:none;color:var(--tinta-2)}
+
+/* ---------- caixa ---------- */
+.cx{background:var(--superficie);border:1px solid var(--linha);border-radius:var(--raio);
+  box-shadow:var(--sombra)}
+.cx-t{padding:13px 16px;border-bottom:1px solid var(--linha-2);display:flex;align-items:center;
+  justify-content:space-between;gap:12px}
+.cx-t h2{margin:0;font-size:14px;font-weight:650}
+.cx-c{padding:16px}
+
+/* ---------- resumo numa linha, não em ladrilhos ----------
+   Quatro ladrilhos de 140 px para dizer três números é mobiliário. */
+.resumo{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;color:var(--tinta-2);
+  font-size:13.5px;margin:-6px 0 18px}
+.resumo b{color:var(--tinta);font-weight:650}
+.resumo .pt{color:var(--tinta-3)}
+.resumo .al{color:var(--vermelho)}
+
+/* ---------- filtros ---------- */
+.filtros{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+select,input[type=text],input[type=date],input[type=number]{font-family:inherit;font-size:13px;
+  padding:6px 10px;border:1px solid var(--linha);border-radius:6px;background:var(--superficie);
+  color:var(--tinta);box-shadow:var(--sombra)}
+.filtros .et{font-size:12.5px;color:var(--tinta-2);font-weight:500}
+
+/* ---------- tabela ---------- */
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{text-align:left;font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--tinta-3);padding:0 16px 9px;border-bottom:1px solid var(--linha-2)}
+td{padding:11px 16px;border-bottom:1px solid var(--linha-2);font-size:13.5px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#FAFBFD}
+td.num,th.num{text-align:right}
+a.ref{color:var(--tinta);text-decoration:none;font-weight:600}
+a.ref:hover{color:var(--acao);text-decoration:underline}
+.cod{font-size:12px;color:var(--tinta-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---------- estado: contorno, não bloco ----------
+   Um bloco de cor sólida numa tabela grita mais alto do que o número ao lado. */
+.est{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+  padding:2px 8px;border-radius:11px;border:1px solid;white-space:nowrap}
+.est::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+.est.v{color:var(--verde);border-color:#ABEFC6;background:var(--verde-f)}
+.est.a{color:var(--ambar);border-color:#FEDF89;background:var(--ambar-f)}
+.est.r{color:var(--vermelho);border-color:#FECDCA;background:var(--vermelho-f)}
+.est.n{color:var(--tinta-2);border-color:var(--linha);background:var(--fundo)}
+
+/* ---------- barra de consumo ---------- */
+.barra{height:5px;border-radius:3px;background:var(--linha);overflow:hidden;min-width:92px}
+.barra i{display:block;height:100%;background:var(--acao)}
+.barra i.a{background:var(--ambar)} .barra i.r{background:var(--vermelho)}
+.consumo{display:flex;align-items:center;gap:9px}
+.consumo span{font-size:12.5px;color:var(--tinta-2);font-variant-numeric:tabular-nums;
+  min-width:38px;white-space:nowrap}
+
+/* ---------- fila de decisões ---------- */
+.sec{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--tinta-3);margin:22px 0 8px;display:flex;align-items:center;gap:8px}
+.sec .n{color:var(--tinta-2);font-weight:700}
+.fila{background:var(--superficie);border:1px solid var(--linha);border-radius:var(--raio);
+  box-shadow:var(--sombra);overflow:hidden}
+.dec{display:grid;grid-template-columns:3px 1fr 142px 92px 108px;align-items:center;gap:14px;
+  padding:0;border-bottom:1px solid var(--linha-2);cursor:pointer}
+.dec:last-child{border-bottom:none}
+.dec:hover{background:#FAFBFD}
+.dec .urg{align-self:stretch;background:var(--linha)}
+.dec.r .urg{background:var(--vermelho)} .dec.a .urg{background:var(--ambar)}
+.dec .ttl{padding:12px 0;min-width:0}
+.dec .ttl b{display:block;font-size:13.5px;font-weight:600;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.dec .ttl span{display:block;font-size:12px;color:var(--tinta-2);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dec .tipo{font-size:12px;color:var(--tinta-2)}
+.dec .qd{font-size:12.5px;font-variant-numeric:tabular-nums;text-align:right}
+.dec .qd b{font-weight:650} .dec.r .qd b{color:var(--vermelho)} .dec.a .qd b{color:var(--ambar)}
+.dec .qd span{display:block;font-size:11px;color:var(--tinta-3)}
+.dec .vlr{padding-right:16px;text-align:right;font-size:13px;font-weight:600;
+  font-variant-numeric:tabular-nums}
+
+/* painel que abre dentro da fila — uma decisão de cada vez */
+.aberto{padding:2px 16px 18px;border-bottom:1px solid var(--linha-2);background:#FCFDFE}
+.aberto p{margin:0 0 14px;font-size:13.5px;color:#3C4A66;max-width:76ch}
+.opcs{display:flex;flex-direction:column;gap:1px;background:var(--linha-2);
+  border:1px solid var(--linha);border-radius:7px;overflow:hidden}
+.opc{background:var(--superficie);padding:11px 14px;display:flex;align-items:center;gap:12px}
+.opc .o-t{flex:1;min-width:0}
+.opc b{font-size:13px;font-weight:600;display:block}
+.opc span{font-size:12px;color:var(--tinta-2)}
+.mais{display:block;width:100%;text-align:left;padding:11px 16px;background:none;border:none;
+  font-family:inherit;font-size:12.5px;font-weight:600;color:var(--acao);cursor:pointer}
+
+/* ---------- separadores ---------- */
+.abas{display:flex;gap:2px;border-bottom:1px solid var(--linha);margin-bottom:18px}
+.aba{font-family:inherit;font-size:13.5px;font-weight:550;padding:9px 14px;border:none;
+  background:none;color:var(--tinta-2);cursor:pointer;border-bottom:2px solid transparent;
+  margin-bottom:-1px}
+.aba:hover{color:var(--tinta)}
+.aba.on{color:var(--acao);border-bottom-color:var(--acao);font-weight:650}
+
+/* ---------- ficha: pares rótulo/valor ---------- */
+.pares{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:18px 26px}
+.par .r{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--tinta-3);margin-bottom:3px}
+.par .v{font-size:14px;font-weight:550;font-variant-numeric:tabular-nums}
+
+/* ---------- avisos ---------- */
+.aviso{border:1px solid #FEDF89;background:var(--ambar-f);border-radius:var(--raio);
+  padding:12px 15px;font-size:13px;color:#7A3A0A;display:flex;gap:10px;align-items:flex-start}
+.aviso.r{border-color:#FECDCA;background:var(--vermelho-f);color:#7A271A}
+.aviso b{font-weight:650}
+
+/* ---------- grelha ---------- */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.g32{display:grid;grid-template-columns:1.55fr 1fr;gap:18px}
+
+/* ---------- folha de linguagem ---------- */
+.amostras{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px}
+.tom{border:1px solid var(--linha);border-radius:7px;overflow:hidden;background:var(--superficie)}
+.tom .ch{height:54px}
+.tom .d{padding:8px 11px;font-size:12px}
+.tom .d b{display:block;font-size:12.5px}
+.tom .d span{color:var(--tinta-3);font-variant-numeric:tabular-nums;font-size:11.5px}
+.vazio{text-align:center;padding:34px 20px;color:var(--tinta-2);font-size:13.5px}
+.vazio b{display:block;color:var(--tinta);font-size:14.5px;margin-bottom:4px}

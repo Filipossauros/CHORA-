@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>Contrato — proposta v2</title>
+<link rel="stylesheet" href="base.css">
+</head>
+<body data-ativo="Contratos" data-decisoes="7">
+
+<header class="cab">
+  <div>
+    <a class="volta" href="contratos.html">← Contratos</a>
+    <h1>Fornecimento contínuo — manutenção aplicacional</h1>
+    <div class="sub">C-2026-FC1 · INFOSISTEMAS, S.A. · gestor: Ana Prazeres</div>
+  </div>
+  <div class="dir">
+    <span class="est v">Em vigor</span>
+    <button class="btn">Editar</button>
+  </div>
+</header>
+
+<!--
+  As decisões abertas do contrato deixam de ser um separador («Ações») e passam
+  a ser uma faixa: um separador escondia o que é justamente o que não deve ser
+  preciso procurar.
+-->
+<div class="aviso" style="margin-bottom:18px">
+  <div style="flex:1">
+    <b>4 decisões abertas</b>, 2 com prazo esgotado — perfil a esgotar-se, novo
+    procedimento por lançar.
+  </div>
+  <a class="btn sm" href="decisoes.html">Ver decisões</a>
+</div>
+
+<div class="abas">
+  <button class="aba on">Ficha</button>
+  <button class="aba">Equipa e perfis</button>
+  <button class="aba">Execução</button>
+</div>
+
+<div class="g32">
+  <div class="cx">
+    <div class="cx-t"><h2>Identificação e vigência</h2></div>
+    <div class="cx-c">
+      <div class="pares">
+        <div class="par"><div class="r">Número</div><div class="v">C-2026-FC1</div></div>
+        <div class="par"><div class="r">Procedimento</div><div class="v">Concurso público</div></div>
+        <div class="par"><div class="r">Adjudicatário</div><div class="v">INFOSISTEMAS, S.A.</div></div>
+        <div class="par"><div class="r">NIF</div><div class="v">501 234 567</div></div>
+        <div class="par"><div class="r">Início</div><div class="v">2025-10-10</div></div>
+        <div class="par"><div class="r">Término</div><div class="v">2026-10-10</div></div>
+        <div class="par"><div class="r">Valor contratado</div><div class="v">1 240 000,00 €</div></div>
+        <div class="par"><div class="r">Visto do TdC</div><div class="v">2025-09-18</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cx">
+    <div class="cx-t"><h2>Execução</h2></div>
+    <div class="cx-c">
+      <div class="pares" style="grid-template-columns:1fr">
+        <div class="par"><div class="r">Executado</div><div class="v">1 004 400,00 €</div></div>
+        <div class="par"><div class="r">Por executar</div><div class="v">235 600,00 €</div></div>
+      </div>
+      <div class="consumo" style="margin-top:16px">
+        <div class="barra" style="flex:1"><i class="a" style="width:81%"></i></div><span>81 %</span>
+      </div>
+      <div style="margin-top:14px;font-size:12.5px;color:var(--tinta-2)">
+        Restam <b style="color:var(--tinta)">51 dias úteis</b> de vigência para
+        consumir <b style="color:var(--tinta)">1 180 h</b>.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cx" style="margin-top:18px">
+  <div class="cx-t">
+    <h2>Modificações e ocorrências</h2>
+    <button class="btn sm">Registar modificação</button>
+  </div>
+  <table>
+    <colgroup><col style="width:116px"><col style="width:168px"><col><col style="width:132px"></colgroup>
+    <thead><tr><th>Data</th><th>Tipo</th><th>Fundamento</th><th class="num">Efeito no valor</th></tr></thead>
+    <tbody>
+      <tr><td class="cod">2026-04-30</td><td>Prorrogação</td>
+        <td>Prorrogação do prazo de execução por 3 meses, ao abrigo da cláusula 7.ª</td>
+        <td class="num">—</td></tr>
+      <tr><td class="cod">2026-02-11</td><td>Suspensão</td>
+        <td>Suspensão parcial por indisponibilidade de ambiente de pré-produção</td>
+        <td class="num">—</td></tr>
+      <tr><td class="cod">2025-11-20</td><td>Trabalhos a mais</td>
+        <td>Acréscimo de 120 h no perfil «Analista Sénior»</td>
+        <td class="num">+ 9 600,00 €</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script src="casca.js"></script>
+</body>
+</html>
